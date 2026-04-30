@@ -10,6 +10,9 @@ import inventoryRoutes from "./modules/inventory/inventory.routes";
 import labsRoutes from "./modules/labs/labs.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import adminRoutes from "./modules/admin/admin.routes";
+import academicRoutes from "./modules/academic/academic.routes";
+import submissionsRoutes from "./modules/submissions/submissions.routes";
+import attendanceRoutes from "./modules/attendance/attendance.routes";
 
 export const app = express();
 
@@ -27,3 +30,6 @@ app.use("/inventory", inventoryRoutes);
 app.use("/labs", labsRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/admin", adminRoutes);
+app.use("/academic", academicRoutes);
+app.use("/submissions", submissionsRoutes);
+app.use("/attendance", attendanceRoutes);

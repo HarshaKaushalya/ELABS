@@ -15,5 +15,6 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest) -> ChatResponse:
-    answer = f"AI placeholder response to: {payload.message}"
+    from ..core.rag import ask_question
+    answer = ask_question(payload.message)
     return ChatResponse(answer=answer)

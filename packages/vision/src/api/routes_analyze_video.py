@@ -82,6 +82,37 @@ async def analyze_video_endpoint(
     # Flatten nested dataclasses that asdict already handles recursively
     return JSONResponse(content={"status": "ok", "result": payload})
 
+@router.post("/analyze-attendance", summary="Upload a CCTV clip to log attendance")
+async def analyze_attendance_endpoint(
+    lab_id: int,
+    file: UploadFile = File(...),
+) -> JSONResponse:
+    from ..pipelines.face_recognition import recognize_faces
+    
+    uploads_dir = _ensure_dirs()
+    tmp_name = f"att_{uuid.uuid4().hex}_{file.filename}"
+    tmp_path = uploads_dir / tmp_name
+    
+    try:
+        with tmp_path.open("wb") as dst:
+            while chunk := await file.read(1024 * 1024):
+                dst.write(chunk)
+                
+        student_ids = recognize_faces(str(tmp_path))
+        
+        # In a complete implementation, this microservice would make an HTTP call 
+        # to the core API (e.g., POST http://api:4000/attendance/log) 
+        # to record the recognized students in the database.
+        
+        return JSONResponse(content={
+            "status": "ok", 
+            "lab_id": lab_id,
+            "detected_students": student_ids
+        })
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
 
 @router.get("/status", summary="Vision service health + model status")
 def vision_status() -> dict:

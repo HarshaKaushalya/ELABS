@@ -7,10 +7,119 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  TECHNICIAN
+  COORDINATOR
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  BORROWED
+  MAINTENANCE
+}
+
+enum SubmissionType {
+  PRELAB
+  REPORT
+  QUIZ
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
+  password  String   @default("") // Added for auth, default empty string for now to not break existing data
   fullName  String
-  role      String
+  regNo     String?  @unique // e.g., EG/2022/5401
+  role      Role     @default(STUDENT)
+  
+  // Relations
+  equipmentLogs  EquipmentLog[] @relation("Borrower")
+  issuedLogs     EquipmentLog[] @relation("Issuer")
+  submissions    Submission[]   @relation("StudentSubmission")
+  gradedItems    Submission[]   @relation("Grader")
+  attendance     AttendanceRecord[]
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
+}
+
+model Semester {
+  id        Int      @id @default(autoincrement())
+  name      String   // e.g., "Semester 5"
+  level     Int      // e.g., 5
+  modules   Module[]
+}
+
+model Module {
+  id         Int      @id @default(autoincrement())
+  code       String   @unique // e.g., "EE3301"
+  name       String   
+  semesterId Int
+  semester   Semester @relation(fields: [semesterId], references: [id])
+  laboratories Laboratory[]
+}
+
+model Laboratory {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  manualUrl   String?
+  moduleId    Int
+  module      Module   @relation(fields: [moduleId], references: [id])
+  submissions Submission[]
+  attendance  AttendanceRecord[]
+}
+
+model Equipment {
+  id           Int             @id @default(autoincrement())
+  name         String
+  type         String
+  barcodeId    String          @unique
+  manualUrl    String?
+  datasheetUrl String?
+  status       EquipmentStatus @default(AVAILABLE)
+  logs         EquipmentLog[]
+}
+
+model EquipmentLog {
+  id           Int       @id @default(autoincrement())
+  equipmentId  Int
+  equipment    Equipment @relation(fields: [equipmentId], references: [id])
+  borrowerId   Int
+  borrower     User      @relation("Borrower", fields: [borrowerId], references: [id])
+  issuedById   Int?
+  issuedBy     User?     @relation("Issuer", fields: [issuedById], references: [id])
+  borrowedAt   DateTime  @default(now())
+  returnedAt   DateTime?
+}
+
+model Submission {
+  id           Int            @id @default(autoincrement())
+  type         SubmissionType
+  fileUrl      String?
+  marks        Float?
+  submittedAt  DateTime       @default(now())
+
+  studentId    Int
+  student      User           @relation("StudentSubmission", fields: [studentId], references: [id])
+  
+  laboratoryId Int
+  laboratory   Laboratory     @relation(fields: [laboratoryId], references: [id])
+  
+  gradedById   Int?
+  gradedBy     User?          @relation("Grader", fields: [gradedById], references: [id])
+}
+
+model AttendanceRecord {
+  id           Int        @id @default(autoincrement())
+  entryTime    DateTime   @default(now())
+  exitTime     DateTime?
+  
+  studentId    Int
+  student      User       @relation(fields: [studentId], references: [id])
+  
+  laboratoryId Int
+  laboratory   Laboratory @relation(fields: [laboratoryId], references: [id])
 }

@@ -26,6 +26,26 @@ router.get("/items", requireAuth, async (req, res) => {
   res.json({ items: rows });
 });
 
+router.get("/items/barcode/:tag", requireAuth, async (req, res) => {
+  const tag = req.params.tag;
+  const [rows] = await pool.query(
+    `
+    SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
+           i.status, i.condition_note as conditionNote, i.updated_at as updatedAt,
+           l.name as labName
+    FROM inventory_items i
+    JOIN labs l ON l.id = i.lab_id
+    WHERE i.elabs_tag = :tag
+    `,
+    { tag }
+  );
+
+  const item = (rows as any[])[0];
+  if (!item) return res.status(404).json({ error: "Item not found" });
+
+  res.json({ item });
+});
+
 router.get("/transactions", requireAuth, requirePermission("inventory:borrow"), async (req, res) => {
   const labId = req.query.labId ? Number(req.query.labId) : null;
 

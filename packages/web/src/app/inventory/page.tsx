@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { inventoryRows as demoRows } from "@/lib/demoData";
+import { BarcodeScanner } from "@/components/inventory/BarcodeScanner";
+import { ItemDetailsModal } from "@/components/inventory/ItemDetailsModal";
+import { QrCode } from "lucide-react";
 
 type InventoryItem = {
   tag: string;
@@ -23,7 +26,31 @@ function statusBadge(status: string) {
 
 export default function InventoryPage() {
   const [search, setSearch] = useState("");
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannedItem, setScannedItem] = useState<any>(null);
   const items: InventoryItem[] = demoRows;
+
+  const handleScan = async (decodedText: string) => {
+    setIsScanning(false);
+    try {
+      // In a real app, this would use a proper API client with the auth token.
+      // For now, we mock the fetch to demonstrate the flow.
+      const res = await fetch(`http://localhost:4000/inventory/items/barcode/${decodedText}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('elabs_token') || ''}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setScannedItem(data.item);
+      } else {
+        alert("Item not found in database.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to fetch item details.");
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -44,7 +71,10 @@ export default function InventoryPage() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="primary-btn" type="button">+ Add Item</button>
+            <button className="primary-btn flex items-center gap-2" type="button" onClick={() => setIsScanning(true)}>
+              <QrCode className="w-4 h-4" />
+              Scan Barcode
+            </button>
             <button className="secondary-btn" type="button">Export</button>
           </div>
         </div>
@@ -78,6 +108,20 @@ export default function InventoryPage() {
           </table>
         </div>
       </section>
+
+      {isScanning && (
+        <BarcodeScanner 
+          onScan={handleScan} 
+          onClose={() => setIsScanning(false)} 
+        />
+      )}
+
+      {scannedItem && (
+        <ItemDetailsModal 
+          item={scannedItem} 
+          onClose={() => setScannedItem(null)} 
+        />
+      )}
     </AppShell>
   );
 }

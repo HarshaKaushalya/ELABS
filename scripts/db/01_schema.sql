@@ -184,3 +184,68 @@ CREATE TABLE IF NOT EXISTS barcode_events (
   FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE SET NULL,
   FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
+
+-- ACADEMIC STRUCTURE
+
+CREATE TABLE IF NOT EXISTS semesters (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(50) NOT NULL,
+  level INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS modules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(20) NOT NULL UNIQUE,
+  name VARCHAR(120) NOT NULL,
+  semester_id INT NOT NULL,
+  FOREIGN KEY (semester_id) REFERENCES semesters(id) ON DELETE RESTRICT
+);
+
+-- Link labs to modules
+-- Link labs to modules
+CREATE TABLE IF NOT EXISTS module_labs (
+  module_id INT NOT NULL,
+  lab_id INT NOT NULL,
+  PRIMARY KEY (module_id, lab_id),
+  FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
+  FOREIGN KEY (lab_id) REFERENCES labs(id) ON DELETE CASCADE
+);
+
+-- Student Module Enrollments
+CREATE TABLE IF NOT EXISTS module_enrollments (
+  module_id INT NOT NULL,
+  student_id BIGINT NOT NULL,
+  enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (module_id, student_id),
+  FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- SUBMISSIONS
+
+CREATE TABLE IF NOT EXISTS submissions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  type ENUM('PRELAB','REPORT','QUIZ') NOT NULL,
+  lab_id INT NOT NULL,
+  student_id BIGINT NOT NULL,
+  file_url VARCHAR(255),
+  marks DECIMAL(5,2),
+  graded_by_id BIGINT,
+  submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (lab_id) REFERENCES labs(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (graded_by_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- ATTENDANCE (COMPUTER VISION)
+
+CREATE TABLE IF NOT EXISTS attendance_records (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  lab_id INT NOT NULL,
+  student_id BIGINT NOT NULL,
+  entry_time DATETIME NOT NULL,
+  exit_time DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (lab_id) REFERENCES labs(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+);

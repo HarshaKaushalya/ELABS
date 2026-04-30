@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { Chatbot } from "../chat/Chatbot";
 
 type AppShellProps = {
   title: string;
@@ -16,6 +17,7 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
         <Topbar title={title} subtitle={subtitle} />
         <main className="content page-stage">{children}</main>
       </div>
+      <Chatbot />
     </div>
   );
 }
