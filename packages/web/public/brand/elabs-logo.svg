@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="64" viewBox="0 0 240 64" fill="none">
+  <rect width="64" height="64" rx="12" fill="#0F766E"/>
+  <path d="M16 46V18H46V24H24V29H42V35H24V40H46V46H16Z" fill="white"/>
+  <text x="78" y="39" font-family="Verdana, sans-serif" font-size="28" font-weight="700" fill="#0F172A">ELABS</text>
+</svg>

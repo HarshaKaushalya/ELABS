@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elabs-ai"
+version = "0.1.0"
+description = "ELABS AI assistant service"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115.6",
+  "uvicorn[standard]>=0.32.1",
+  "python-multipart>=0.0.19",
+  "pydantic-settings>=2.7.0"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.4"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

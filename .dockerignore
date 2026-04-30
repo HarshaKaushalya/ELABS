@@ -1,0 +1,26 @@
+# VCS and editor files
+.git
+.gitignore
+.vscode
+
+# Node / web build artifacts
+**/node_modules
+**/.next
+**/dist
+**/coverage
+npm-debug.log*
+
+# Python artifacts
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/.venv
+
+# Local env/config files
+.env
+**/.env
+**/.env.*
+
+# OS files
+.DS_Store
+Thumbs.db

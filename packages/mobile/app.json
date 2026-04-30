@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "ELABS Mobile",
+    "slug": "elabs-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "entryPoint": "./src/App.tsx",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "assetBundlePatterns": ["**/*"]
+  }
+}

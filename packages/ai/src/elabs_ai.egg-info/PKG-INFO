@@ -1,0 +1,6 @@
+Metadata-Version: 2.1
+Name: elabs-ai
+Version: 0.1.0
+Summary: ELABS AI assistant service
+Requires-Python: >=3.10
+Provides-Extra: dev

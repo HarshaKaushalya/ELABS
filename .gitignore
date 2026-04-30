@@ -1,0 +1,33 @@
+# Node
+node_modules/
+.npm/
+
+# Build outputs
+dist/
+.next/
+out/
+coverage/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Env
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# Logs
+*.log
+
+# IDE
+.DS_Store
+Thumbs.db

@@ -1,0 +1,6 @@
+Metadata-Version: 2.1
+Name: elabs-vision
+Version: 0.1.0
+Summary: ELABS vision demo analysis service
+Requires-Python: >=3.10
+Provides-Extra: dev
