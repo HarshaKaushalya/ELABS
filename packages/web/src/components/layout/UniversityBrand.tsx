@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 type UniversityBrandProps = {
   compact?: boolean;
 };
@@ -5,10 +7,15 @@ type UniversityBrandProps = {
 export function UniversityBrand({ compact = false }: UniversityBrandProps) {
   return (
     <div className={`uni-brand ${compact ? "uni-brand-compact" : ""}`}>
-      <div className="brand-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-        </svg>
+      <div className="brand-icon brand-logo-wrapper">
+        <Image
+          src="/logo.png"
+          alt="Faculty of Engineering, University of Ruhuna"
+          width={36}
+          height={36}
+          className="brand-logo-img"
+          priority
+        />
       </div>
       <div>
         <div className="uni-brand-title">ELABS</div>

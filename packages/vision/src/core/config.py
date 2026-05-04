@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     vision_host: str = "0.0.0.0"
-    vision_port: int = 8000
+    vision_port: int = 8001
     log_level: str = "INFO"
 
     # Storage paths (relative to package root when running inside container)

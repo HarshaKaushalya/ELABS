@@ -416,3 +416,53 @@ def analyze_video(video_path: str | Path) -> AnalysisResult:
         video_duration_sec   = round(duration, 2),
         frames_analysed      = frames_analysed,
     )
+
+def stream_video_frames(video_path: str | Path):
+    """
+    Generator that processes a video frame-by-frame and yields MJPEG chunks.
+    This provides real-time viewing with bounding boxes.
+    """
+    _load_models()
+
+    path = Path(video_path)
+    if not path.exists():
+        logger.error(f"Cannot stream, file not found: {path}")
+        return
+
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        logger.error(f"Cannot stream, failed to open: {path}")
+        return
+
+    logger.info(f"Starting live MJPEG stream for {path.name}")
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Run YOLO detection for people tracking
+        if _people_model is not None:
+            results = _people_model.track(
+                frame,
+                classes=[PERSON_CLASS_ID],
+                conf=CONF_THRESHOLD,
+                persist=True,
+                verbose=False,
+                tracker="bytetrack.yaml",
+            )
+            if results:
+                # Plot the bounding boxes onto the frame
+                frame = results[0].plot()
+
+        # Encode frame as JPEG
+        success, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if not success:
+            continue
+
+        # Yield frame in multipart/x-mixed-replace format
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
+    cap.release()
+    logger.info(f"Live MJPEG stream finished for {path.name}")

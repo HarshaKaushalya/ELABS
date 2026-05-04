@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..core.config import settings
 from ..pipelines.yolo_analyzer import analyze_video
@@ -47,6 +47,9 @@ async def analyze_video_endpoint(
     tmp_path = uploads_dir / tmp_name
     bytes_written = 0
 
+    # Keep the file for streaming visualization
+    keep_file = False
+
     try:
         with tmp_path.open("wb") as dst:
             while chunk := await file.read(1024 * 1024):   # 1 MB chunks
@@ -64,6 +67,7 @@ async def analyze_video_endpoint(
 
         # ── run YOLO analysis ─────────────────────────────────────────────
         result = analyze_video(tmp_path)
+        keep_file = True  # Keep file for streaming
 
     except HTTPException:
         raise
@@ -74,13 +78,14 @@ async def analyze_video_endpoint(
             detail=f"Analysis failed: {exc}",
         )
     finally:
-        # Always clean up the temp file
-        tmp_path.unlink(missing_ok=True)
+        # Clean up only if analysis failed
+        if not keep_file:
+            tmp_path.unlink(missing_ok=True)
 
     # ── serialise result ──────────────────────────────────────────────────
     payload = asdict(result)
-    # Flatten nested dataclasses that asdict already handles recursively
-    return JSONResponse(content={"status": "ok", "result": payload})
+    # Include the video path for streaming visualization
+    return JSONResponse(content={"status": "ok", "result": payload, "video_path": str(tmp_path)})
 
 @router.post("/analyze-attendance", summary="Upload a CCTV clip to log attendance")
 async def analyze_attendance_endpoint(
@@ -112,7 +117,21 @@ async def analyze_attendance_endpoint(
     finally:
         tmp_path.unlink(missing_ok=True)
 
+@router.get("/stream", summary="Stream MJPEG video with live YOLO bounding boxes")
+async def stream_video_endpoint(video_path: str):
+    from ..pipelines.yolo_analyzer import stream_video_frames
 
+    path = Path(video_path)
+    if not path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Video file not found: {video_path}"
+        )
+
+    return StreamingResponse(
+        stream_video_frames(path),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
 
 @router.get("/status", summary="Vision service health + model status")
 def vision_status() -> dict:

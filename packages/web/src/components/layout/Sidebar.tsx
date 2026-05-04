@@ -78,29 +78,34 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Sidebar() {
+type SidebarProps = {
+  isCollapsed: boolean;
+  onToggle: () => void;
+};
+
+export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isCollapsed ? "sidebar-collapsed" : ""}`}>
       <div className="brand">
-        <UniversityBrand compact />
+        <UniversityBrand compact={isCollapsed} />
       </div>
 
       <nav>
         {sections.map((section) => (
           <div key={section.title} className="sidebar-section">
-            <p className="sidebar-section-title">{section.title}</p>
+            {!isCollapsed && <p className="sidebar-section-title">{section.title}</p>}
             {section.links.map((link) => {
               const active = isActive(pathname, link.href);
               const badge = "badge" in link ? (link as any).badge : undefined;
               return (
-                <Link key={link.href + link.label} href={link.href} className={`sidebar-link ${active ? "active" : ""}`}>
+                <Link key={link.href + link.label} href={link.href} className={`sidebar-link ${active ? "active" : ""}`} title={isCollapsed ? link.label : undefined}>
                   <span className="sidebar-link-icon" aria-hidden>
                     <NavIcon type={link.icon} />
                   </span>
-                  <span>{link.label}</span>
-                  {badge != null && <span className="sidebar-badge">{badge}</span>}
+                  {!isCollapsed && <span>{link.label}</span>}
+                  {!isCollapsed && badge != null && <span className="sidebar-badge">{badge}</span>}
                 </Link>
               );
             })}
@@ -109,18 +114,26 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-user">
-          <div className="sidebar-avatar" style={{ background: "linear-gradient(135deg, #18d18f, #1dd5e6)" }}>AR</div>
-          <div className="sidebar-user-info">
-            <strong>Dr. Ahmad</strong>
-            <span>Admin</span>
+        {!isCollapsed && (
+          <div className="sidebar-user">
+            <div className="sidebar-avatar" style={{ background: "linear-gradient(135deg, #18d18f, #1dd5e6)" }}>AR</div>
+            <div className="sidebar-user-info">
+              <strong>Dr. Ahmad</strong>
+              <span>Admin</span>
+            </div>
+            <button className="sidebar-logout" type="button" title="Sign out">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
           </div>
-          <button className="sidebar-logout" type="button" title="Sign out">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </button>
-        </div>
-        <button className="sidebar-collapse-btn" type="button" title="Collapse sidebar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        )}
+        <button className="sidebar-collapse-btn" type="button" title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={onToggle}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {isCollapsed ? (
+              <polyline points="9 18 15 12 9 6"/>
+            ) : (
+              <polyline points="15 18 9 12 15 6"/>
+            )}
+          </svg>
         </button>
       </div>
     </aside>

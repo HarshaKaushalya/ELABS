@@ -54,11 +54,11 @@ const STAGES = [
 ];
 
 // ── Vision service URL ───────────────────────────────────────────────────────
-// Uses Next.js public env var (falls back to port 8002 in dev)
+// Uses Next.js public env var (falls back to port 8001 in dev)
 const VISION_URL =
   typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_VISION_BASE ?? "http://localhost:8002")
-    : "http://localhost:8002";
+    ? (process.env.NEXT_PUBLIC_VISION_BASE ?? "http://localhost:8001")
+    : "http://localhost:8001";
 
 // ── component ────────────────────────────────────────────────────────────────
 
@@ -70,6 +70,7 @@ export function VisionMonitoringPanel() {
   const [stageIdx, setStageIdx]   = useState(0);
   const [progress, setProgress]   = useState(0);
   const [result, setResult]       = useState<AnalysisResult | null>(null);
+  const [videoPath, setVideoPath] = useState<string | null>(null);
   const [errorMsg, setErrorMsg]   = useState("");
   const [abortCtrl, setAbortCtrl] = useState<AbortController | null>(null);
 
@@ -117,6 +118,7 @@ export function VisionMonitoringPanel() {
 
       const data = await resp.json();
       setResult(data.result as AnalysisResult);
+      setVideoPath(data.video_path);
       setProgress(100);
       setPhase("done");
     } catch (err: unknown) {
@@ -140,6 +142,7 @@ export function VisionMonitoringPanel() {
     setPhase("idle");
     setFile(null);
     setResult(null);
+    setVideoPath(null);
     setProgress(0);
     setStageIdx(0);
     setErrorMsg("");
@@ -272,6 +275,30 @@ export function VisionMonitoringPanel() {
             videoDuration={result.video_duration_sec}
             processingTime={result.processing_time_sec}
           />
+
+          {/* Video Stream with YOLO Annotations */}
+          {videoPath && (
+            <div style={{ marginTop: 24, borderRadius: 12, overflow: "hidden", border: "1px solid #334155", backgroundColor: "#0f172a" }}>
+              <div style={{ padding: 16, borderBottom: "1px solid #334155" }}>
+                <div style={{ fontSize: "0.95rem", fontWeight: 500, color: "#e2e8f0", marginBottom: 8 }}>
+                  📹 Live YOLO Annotations
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  Real-time people detection, activity classification, and fire/smoke detection with bounding boxes
+                </div>
+              </div>
+              <div style={{ backgroundColor: "#000", aspectRatio: "16/9", overflow: "hidden" }}>
+                <img
+                  src={`${VISION_URL}/vision/stream?video_path=${encodeURIComponent(videoPath)}`}
+                  alt="YOLO Analysis Stream"
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  onError={() => {
+                    console.error("Failed to load video stream");
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Safety */}
           <SafetyPanel
