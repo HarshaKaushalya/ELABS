@@ -170,7 +170,7 @@ def ask_question(question: str) -> str:
     ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
     try:
-        health = requests.get(f"{ollama_base_url}/api/tags", timeout=0.5)
+        health = requests.get(f"{ollama_base_url}/api/tags", timeout=(0.2, 0.3))
         if health.status_code == 200:
             models = health.json().get("models", [])
             if models:
@@ -187,7 +187,7 @@ def ask_question(question: str) -> str:
                         "stream": False,
                         "options": {"temperature": 0.7, "num_predict": 500},
                     },
-                    timeout=120,
+                    timeout=15,
                 )
                 response.raise_for_status()
                 answer = response.json().get("response", "").strip()

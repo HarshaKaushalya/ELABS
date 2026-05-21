@@ -21,7 +21,12 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
       />
       <div className="shell-main">
-        <Topbar title={title} subtitle={subtitle} />
+        <Topbar 
+          title={title} 
+          subtitle={subtitle} 
+          onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          isSidebarCollapsed={isSidebarCollapsed}
+        />
         <main className="content page-stage">{children}</main>
       </div>
     </div>

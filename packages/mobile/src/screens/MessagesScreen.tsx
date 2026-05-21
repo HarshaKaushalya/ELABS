@@ -1,19 +1,25 @@
 import { StyleSheet, Text, View } from "react-native";
-import { Card } from "../components/Card";
+import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
 
 export default function MessagesScreen() {
   return (
     <View style={styles.container}>
-      <Card>
-        <Text style={styles.title}>Messages</Text>
-        <Text style={styles.text}>Mobile messaging placeholder.</Text>
-      </Card>
+      <View style={styles.empty}>
+        <Text style={styles.emptyIcon}>💬</Text>
+        <Text style={styles.emptyTitle}>Messages</Text>
+        <Text style={styles.emptyText}>
+          Internal messaging coming soon.{"\n"}
+          Contact your lab technician for urgent requests.
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f1f5f9", padding: 16 },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 8 },
-  text: { color: "#334155" }
+  container: { flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: spacing.lg },
+  empty: { alignItems: "center" },
+  emptyIcon: { fontSize: 56, marginBottom: spacing.md },
+  emptyTitle: { fontSize: fontSize.xl, fontWeight: "700", color: colors.textPrimary, marginBottom: spacing.sm },
+  emptyText: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: "center", lineHeight: 24 },
 });

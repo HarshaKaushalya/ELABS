@@ -10,14 +10,18 @@ export function setAccessToken(token: string | null) {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  setAccessToken(data.accessToken);
-  return data.accessToken;
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    setAccessToken(data.accessToken);
+    return data.accessToken;
+  } catch {
+    return null;
+  }
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}) {
@@ -27,23 +31,33 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
     headers.set("Content-Type", "application/json");
   }
 
-  let res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers,
-    credentials: "include",
-  });
+  try {
+    let res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers,
+      credentials: "include",
+    });
 
-  if (res.status === 401) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      const retryHeaders = new Headers(init.headers || {});
-      retryHeaders.set("Authorization", `Bearer ${newToken}`);
-      if (!retryHeaders.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
-        retryHeaders.set("Content-Type", "application/json");
+    if (res.status === 401) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        const retryHeaders = new Headers(init.headers || {});
+        retryHeaders.set("Authorization", `Bearer ${newToken}`);
+        if (!retryHeaders.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
+          retryHeaders.set("Content-Type", "application/json");
+        }
+        res = await fetch(`${API_BASE}${path}`, { ...init, headers: retryHeaders, credentials: "include" });
       }
-      res = await fetch(`${API_BASE}${path}`, { ...init, headers: retryHeaders, credentials: "include" });
     }
-  }
 
-  return res;
+    return res;
+  } catch (err) {
+    // Return a fake Response when the API server is unreachable
+    console.warn(`API unreachable for ${path}:`, err);
+    return new Response(JSON.stringify({ error: "API server is unreachable" }), {
+      status: 503,
+      statusText: "Service Unavailable",
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }

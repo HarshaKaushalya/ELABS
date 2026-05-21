@@ -1,5 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "./routes";
+import { colors } from "../lib/theme";
+
 import LoginScreen from "../screens/LoginScreen";
 import DashboardScreen from "../screens/DashboardScreen";
 import ScanEntryScreen from "../screens/ScanEntryScreen";
@@ -15,21 +17,43 @@ import SettingsScreen from "../screens/SettingsScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const darkHeader = {
+  headerStyle: { backgroundColor: colors.surface },
+  headerTintColor: colors.textPrimary,
+  headerTitleStyle: { fontWeight: "600" as const },
+  headerShadowVisible: false,
+};
+
 export function RootNavigator() {
   return (
-    <Stack.Navigator initialRouteName="Login" screenOptions={{ headerStyle: { backgroundColor: "#0f172a" }, headerTintColor: "#f8fafc" }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Dashboard" component={DashboardScreen} />
+    <Stack.Navigator
+      initialRouteName="Login"
+      screenOptions={{
+        ...darkHeader,
+        contentStyle: { backgroundColor: colors.bg },
+        animation: "slide_from_right",
+      }}
+    >
+      <Stack.Screen
+        name="Login"
+        component={LoginScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{ title: "ELABS", headerBackVisible: false }}
+      />
       <Stack.Screen name="ScanEntry" component={ScanEntryScreen} options={{ title: "Scan Entry" }} />
       <Stack.Screen name="ScanExit" component={ScanExitScreen} options={{ title: "Scan Exit" }} />
-      <Stack.Screen name="ScanBorrow" component={ScanBorrowScreen} options={{ title: "Borrow Scan" }} />
-      <Stack.Screen name="ScanReturn" component={ScanReturnScreen} options={{ title: "Return Scan" }} />
-      <Stack.Screen name="Inventory" component={InventoryScreen} />
+      <Stack.Screen name="ScanBorrow" component={ScanBorrowScreen} options={{ title: "Borrow Equipment" }} />
+      <Stack.Screen name="ScanReturn" component={ScanReturnScreen} options={{ title: "Return Equipment" }} />
+      <Stack.Screen name="Inventory" component={InventoryScreen} options={{ title: "Inventory" }} />
       <Stack.Screen name="MyLabs" component={MyLabsScreen} options={{ title: "My Labs" }} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
-      <Stack.Screen name="Messages" component={MessagesScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: "Notifications" }} />
+      <Stack.Screen name="Messages" component={MessagesScreen} options={{ title: "Messages" }} />
       <Stack.Screen name="AiAssistant" component={AiAssistantScreen} options={{ title: "AI Assistant" }} />
-      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
     </Stack.Navigator>
   );
 }

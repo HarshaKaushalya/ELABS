@@ -1,6 +1,17 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: elabs-ai
 Version: 0.1.0
 Summary: ELABS AI assistant service
 Requires-Python: >=3.10
+Requires-Dist: fastapi>=0.115.6
+Requires-Dist: uvicorn[standard]>=0.32.1
+Requires-Dist: python-multipart>=0.0.19
+Requires-Dist: pydantic-settings>=2.7.0
+Requires-Dist: langchain>=0.1.0
+Requires-Dist: langchain-community>=0.0.10
+Requires-Dist: chromadb>=0.4.22
+Requires-Dist: sentence-transformers>=2.3.1
+Requires-Dist: pypdf>=4.0.1
+Requires-Dist: ollama>=0.1.6
 Provides-Extra: dev
+Requires-Dist: pytest>=8.3.4; extra == "dev"

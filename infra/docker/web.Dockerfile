@@ -12,9 +12,9 @@ ENV NO_PROXY="*"
 COPY packages/shared/package*.json /app/packages/shared/
 COPY packages/web/package*.json /app/packages/web/
 WORKDIR /app/packages/shared
-RUN npm ci --no-audit --no-fund
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && npm config rm proxy || true && npm config rm https-proxy || true && npm ci --no-audit --no-fund
 WORKDIR /app/packages/web
-RUN npm ci --no-audit --no-fund
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && npm config rm proxy || true && npm config rm https-proxy || true && npm ci --no-audit --no-fund
 COPY packages/shared /app/packages/shared
 COPY packages/web /app/packages/web
 EXPOSE 3000

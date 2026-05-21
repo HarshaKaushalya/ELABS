@@ -68,7 +68,7 @@ RUN mkdir -p /app/packages/vision/src/storage/uploads \
 WORKDIR /app/packages/vision
 
 # ── Step 6: install the package itself (no-deps, already installed above) ──
-RUN pip install --no-cache-dir --no-deps /app/packages/vision
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && pip install --no-cache-dir --no-deps --no-build-isolation /app/packages/vision
 
 EXPOSE 8000
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "120"]

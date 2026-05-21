@@ -3,8 +3,10 @@ src/main.py
 src/api/routes_chat.py
 src/api/routes_docs.py
 src/api/routes_health.py
+src/api/routes_upload.py
 src/core/config.py
 src/core/logging.py
+src/core/rag.py
 src/core/security.py
 src/elabs_ai.egg-info/PKG-INFO
 src/elabs_ai.egg-info/SOURCES.txt
@@ -20,3 +22,4 @@ src/rag/vectorstore.py
 src/tools/inventory_tool.py
 src/tools/location_tool.py
 src/tools/schedule_tool.py
+tests/test_chat.py

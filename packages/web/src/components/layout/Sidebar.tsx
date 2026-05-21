@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UniversityBrand } from "./UniversityBrand";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const sections = [
   {
@@ -85,6 +86,13 @@ type SidebarProps = {
 
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const { me, logout } = useAuth();
+
+  const initials = me?.fullName
+    ? me.fullName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
+
+  const displayRole = me?.roles?.[0] ?? "User";
 
   return (
     <aside className={`sidebar ${isCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -116,14 +124,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       <div className="sidebar-footer">
         {!isCollapsed && (
           <div className="sidebar-user">
-            <div className="sidebar-avatar" style={{ background: "linear-gradient(135deg, #18d18f, #1dd5e6)" }}>AR</div>
-            <div className="sidebar-user-info">
-              <strong>Dr. Ahmad</strong>
-              <span>Admin</span>
-            </div>
-            <button className="sidebar-logout" type="button" title="Sign out">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </button>
+            {me ? (
+              <>
+                <div className="sidebar-avatar" style={{ background: "linear-gradient(135deg, #18d18f, #1dd5e6)" }}>{initials}</div>
+                <div className="sidebar-user-info">
+                  <strong>{me.fullName}</strong>
+                  <span>{displayRole}</span>
+                </div>
+                <button className="sidebar-logout" type="button" title="Sign out" onClick={logout}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </button>
+              </>
+            ) : (
+              <Link href="/login" className="sidebar-signin-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                Sign In
+              </Link>
+            )}
           </div>
         )}
         <button className="sidebar-collapse-btn" type="button" title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={onToggle}>

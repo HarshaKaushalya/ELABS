@@ -22,19 +22,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function bootstrap() {
     setLoading(true);
 
-    // First: attempt refresh to get access token from cookie
-    const r = await apiFetch("/auth/refresh", { method: "POST" });
-    if (r.ok) {
-      const data = await r.json();
-      setAccessToken(data.accessToken);
-    }
+    try {
+      // First: attempt refresh to get access token from cookie
+      const r = await apiFetch("/auth/refresh", { method: "POST" });
+      if (r.ok) {
+        const data = await r.json();
+        setAccessToken(data.accessToken);
+      }
 
-    // Then: call /me (if refresh failed, /me will likely fail)
-    const m = await apiFetch("/auth/me");
-    if (m.ok) {
-      const user = await m.json();
-      setMe(user);
-    } else {
+      // Then: call /me (if refresh failed, /me will likely fail)
+      const m = await apiFetch("/auth/me");
+      if (m.ok) {
+        const user = await m.json();
+        setMe(user);
+      } else {
+        setMe(null);
+      }
+    } catch (e) {
+      console.warn("Auth bootstrap failed (API may be unavailable):", e);
       setMe(null);
     }
 
@@ -56,7 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
-    await apiFetch("/auth/logout", { method: "POST" });
+    try {
+      await apiFetch("/auth/logout", { method: "POST" });
+    } catch (e) {
+      console.warn("Logout API call failed, clearing local session anyway");
+    }
     setAccessToken(null);
     setMe(null);
     window.location.href = "/login";
