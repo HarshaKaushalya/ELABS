@@ -1,79 +1,130 @@
-import { AppShell } from "@/components/layout/AppShell";
-import { labs } from "@/lib/demoData";
+"use client";
 
-const labIcons: Record<string, JSX.Element> = {
-  "Electronics Laboratory": <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1dd5e6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/></svg>,
-  "Power Systems Laboratory": <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f3ae2a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
-  "Communication Laboratory": <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7d5cff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>,
-  "Biomedical Laboratory": <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff4d57" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>,
-  "Software Laboratory": <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a798ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>,
-  "Undergraduate Research Lab": <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#18d18f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>,
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/layout/AppShell";
+import { apiFetch } from "@/lib/api";
+import Link from "next/link";
+
+type Semester = {
+  id: number;
+  name: string;
+  level: number;
+  moduleCount: number;
+};
+
+const groupColors: Record<number, string> = {
+  1: "#1dd5e6", 2: "#3d83f6", 3: "#7d5cff", 4: "#f3ae2a",
+  5: "#ff7043", 6: "#18d18f", 7: "#e040fb", 8: "#ff4d57", 9: "#a798ff",
+};
+
+const groupIcons: Record<number, string> = {
+  1: "🔬", 2: "⚡", 3: "📡", 4: "🔌",
+  5: "📊", 6: "☀️", 7: "📶", 8: "🚀", 9: "🧪",
 };
 
 export default function LabsPage() {
+  const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    apiFetch("/academic/semesters")
+      .then((r) => r.json())
+      .then((d) => setSemesters(d.semesters ?? []))
+      .catch(() => setError("Failed to load semester groups"))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
-    <AppShell title="Laboratories" subtitle="Lab operations, occupancy, and utilization">
-      <section className="lab-card-grid">
-        {labs.map((lab) => {
-          const [current, max] = lab.occupancy.split("/").map(Number);
-          const isActive = lab.fill > 0;
-          const fillPct = max > 0 ? Math.round((current / max) * 100) : 0;
+    <AppShell title="Lab Groups" subtitle="Select your semester group to view modules and lab sessions">
+      {loading && (
+        <div style={{ padding: 40, textAlign: "center", color: "#7ea5d6" }}>
+          Loading semester groups…
+        </div>
+      )}
+      {error && (
+        <div style={{ padding: 40, textAlign: "center", color: "#ff4d57" }}>{error}</div>
+      )}
 
-          return (
-            <article key={lab.name} className="lab-card">
-              <div className="lab-card-header">
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div className="lab-card-icon" style={{ background: `${lab.color}15`, color: lab.color }}>
-                    {labIcons[lab.name] || <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>}
+      {!loading && !error && (
+        <section style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+          gap: 20,
+          padding: "0 0 32px",
+        }}>
+          {semesters.map((sem) => {
+            const color = groupColors[sem.level] ?? "#7ea5d6";
+            const icon = groupIcons[sem.level] ?? "🔭";
+            const isRnD = sem.level === 9;
+            return (
+              <Link key={sem.id} href={`/labs/${sem.id}`} style={{ textDecoration: "none" }}>
+                <article
+                  style={{
+                    background: "linear-gradient(135deg, #0d1b2e 0%, #0a1628 100%)",
+                    border: `1px solid ${color}30`,
+                    borderRadius: 16,
+                    padding: 24,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = `${color}80`;
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px ${color}20`;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = `${color}30`;
+                    (e.currentTarget as HTMLElement).style.transform = "none";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "none";
+                  }}
+                >
+                  {/* Background glow */}
+                  <div style={{
+                    position: "absolute", top: -30, right: -30,
+                    width: 120, height: 120,
+                    background: `${color}10`, borderRadius: "50%",
+                  }} />
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 14,
+                      background: `${color}18`, border: `1px solid ${color}40`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 24,
+                    }}>
+                      {icon}
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, color: "#e8f0fe", fontWeight: 700, fontSize: "1.05rem" }}>
+                        {sem.name}
+                      </h3>
+                      <span style={{
+                        fontSize: "0.78rem", color: color, fontWeight: 600,
+                        background: `${color}15`, padding: "2px 10px", borderRadius: 20,
+                      }}>
+                        {isRnD ? "Research & Development" : `Year ${Math.ceil(sem.level / 2)}`}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="lab-card-title">{lab.name}</h4>
-                    <span className="lab-card-block">{lab.block}</span>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ color: "#7ea5d6", fontSize: "0.82rem" }}>Modules</div>
+                      <div style={{ color: color, fontWeight: 700, fontSize: "1.6rem" }}>
+                        {sem.moduleCount}
+                      </div>
+                    </div>
+                    <div style={{ color: color, fontSize: "1.4rem", opacity: 0.6 }}>→</div>
                   </div>
-                </div>
-                <span className={`badge ${isActive ? "success" : "warn"}`} style={{ fontSize: "0.75rem" }}>
-                  {isActive ? "Active" : "Idle"}
-                </span>
-              </div>
-
-              <div className="lab-card-occupancy">
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ color: "#7ea5d6", fontSize: "0.85rem" }}>Occupancy</span>
-                  <span style={{ color: lab.color, fontWeight: 600, fontSize: "0.85rem" }}>{current}/{max}</span>
-                </div>
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${fillPct}%`, background: lab.color }}/>
-                </div>
-              </div>
-
-              <div className="lab-card-stats">
-                <div className="lab-card-stat">
-                  <strong>{lab.items}</strong>
-                  <span>Items</span>
-                </div>
-                <div className="lab-card-stat">
-                  <strong>{lab.available}</strong>
-                  <span>Available</span>
-                </div>
-                <div className="lab-card-stat">
-                  <strong>{lab.courses}</strong>
-                  <span>Courses</span>
-                </div>
-              </div>
-
-              <div className="lab-card-footer">
-                <span style={{ color: "#7ea5d6", fontSize: "0.85rem" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "middle", marginRight: 4 }}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  Manager: {lab.manager}
-                </span>
-                <a href={`/labs/${lab.name.toLowerCase().replace(/\s+/g, "-")}`} className="view-all">
-                  View Details &rsaquo;
-                </a>
-              </div>
-            </article>
-          );
-        })}
-      </section>
+                </article>
+              </Link>
+            );
+          })}
+        </section>
+      )}
     </AppShell>
   );
 }

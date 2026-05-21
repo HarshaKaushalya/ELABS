@@ -42,6 +42,13 @@ const sections = [
       { label: "Analytics", href: "/analytics", icon: "analytics" },
     ],
   },
+  {
+    title: "ADMIN",
+    links: [
+      { label: "Lab Management", href: "/admin/semester-groups", icon: "admin" },
+      { label: "RBAC & Users", href: "/admin/rbac", icon: "rbac" },
+    ],
+  },
 ] as const;
 
 function NavIcon({ type }: { type: string }) {
@@ -69,6 +76,10 @@ function NavIcon({ type }: { type: string }) {
       return <svg {...props}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>;
     case "vision":
       return <svg {...props}><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
+    case "admin":
+      return <svg {...props}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>;
+    case "rbac":
+      return <svg {...props}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>;
     default:
       return <svg {...props}><circle cx="12" cy="12" r="10"/></svg>;
   }
