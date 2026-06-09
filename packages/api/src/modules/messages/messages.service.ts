@@ -60,20 +60,28 @@ export async function sendMessage(
   );
   const senderName = (senderRows as any[])[0]?.full_name ?? "Admin";
 
-  // Insert message_recipients + create notifications + push socket
-  for (const uid of recipientIds) {
+  // Bulk Insert & push socket
+  if (recipientIds.length > 0) {
+    // Bulk message_recipients
+    const mrValues = recipientIds.map((uid) => [messageId, uid]);
     await pool.query(
-      `INSERT IGNORE INTO message_recipients (message_id, user_id) VALUES (:mid, :uid)`,
-      { mid: messageId, uid }
+      `INSERT IGNORE INTO message_recipients (message_id, user_id) VALUES ?`,
+      [mrValues]
     );
 
-    // Notification
-    await createNotification(uid, "BROADCAST", `📢 ${subject}`, body, {
-      messageId,
-      senderName,
-    });
+    // Bulk notifications
+    const notifType = "BROADCAST";
+    const notifTitle = `📢 ${subject}`;
+    const metaObj = { messageId, senderName };
+    const metaStr = JSON.stringify(metaObj);
+    const notifValues = recipientIds.map((uid) => [uid, notifType, notifTitle, body, metaStr]);
 
-    // Direct socket push to user room
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body, meta) VALUES ?`,
+      [notifValues]
+    );
+
+    // Socket payloads
     const payload = {
       id: messageId,
       subject,
@@ -83,10 +91,24 @@ export async function sendMessage(
       createdAt: new Date().toISOString(),
       isRead: false,
     };
-    try {
-      getIO().to(`user:${uid}`).emit(SOCKET_EVENTS.NEW_MESSAGE, payload);
-    } catch {
-      // ignore if socket not ready
+
+    const notifPayload = {
+      type: notifType,
+      title: notifTitle,
+      body,
+      meta: metaObj,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Fast socket emit
+    for (const uid of recipientIds) {
+      try {
+        getIO().to(`user:${uid}`).emit(SOCKET_EVENTS.NEW_MESSAGE, payload);
+        getIO().to(`user:${uid}`).emit(SOCKET_EVENTS.NEW_NOTIFICATION, { ...notifPayload, userId: uid });
+      } catch {
+        // ignore if socket not ready
+      }
     }
   }
 

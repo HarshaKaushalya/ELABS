@@ -12,25 +12,29 @@ router.post(
   "/send",
   requireAuth,
   requirePermission("admin:manage"),
-  async (req: AuthedRequest, res) => {
-    const body = z.object({
-      subject:     z.string().min(1).max(255),
-      body:        z.string().min(1),
-      targetType:  z.enum(["ALL", "GROUP", "USER"]),
-      targetGroup: z.string().optional(),
-      targetUser:  z.coerce.number().optional(),
-    }).parse(req.body);
+  async (req: AuthedRequest, res, next) => {
+    try {
+      const body = z.object({
+        subject:     z.string().min(1).max(255),
+        body:        z.string().min(1),
+        targetType:  z.enum(["ALL", "GROUP", "USER"]),
+        targetGroup: z.string().optional(),
+        targetUser:  z.coerce.number().optional(),
+      }).parse(req.body);
 
-    const messageId = await sendMessage(
-      req.user!.id,
-      body.subject,
-      body.body,
-      body.targetType,
-      body.targetGroup,
-      body.targetUser
-    );
+      const messageId = await sendMessage(
+        req.user!.id,
+        body.subject,
+        body.body,
+        body.targetType,
+        body.targetGroup,
+        body.targetUser
+      );
 
-    res.json({ ok: true, messageId });
+      res.json({ ok: true, messageId });
+    } catch (err) {
+      next(err);
+    }
   }
 );
 
