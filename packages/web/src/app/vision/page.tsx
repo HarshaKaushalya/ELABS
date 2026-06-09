@@ -274,7 +274,7 @@ export default function VisionMonitoringPage() {
             resolve(r.path);
           } catch { reject(new Error("Upload failed")); }
         };
-        xhr.onerror = () => reject(new Error("Upload network error"));
+        xhr.onerror = () => reject(new Error("Network Error: Could not connect to the Vision Service. Please ensure the Vision backend is running on port 8002 (e.g. `python -m uvicorn src.main:app --port 8002`)."));
         xhr.send(form);
       });
 
