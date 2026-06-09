@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useSocket } from "@/hooks/useSocket";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
+// ─── Types ─────────────────────────────────────────────────────────────────
 interface Message {
   id: number;
   subject: string;
   body: string;
   senderName: string;
+  senderId?: number;
   targetType: "ALL" | "GROUP" | "USER";
   targetGroup?: string;
   recipientCount?: number;
@@ -19,8 +21,16 @@ interface Message {
   isRead: boolean;
 }
 
-interface Student { id: number; fullName: string; regNumber: string; groupCode: string; }
+interface Contact {
+  id: number;
+  fullName: string;
+  email: string;
+  role: string;
+  regNumber?: string;
+  groupCode?: string;
+}
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -31,139 +41,59 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function readFromStorage(key: string): string | null {
-  try { return localStorage.getItem(key) ?? sessionStorage.getItem(key); }
-  catch { return null; }
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+  });
 }
 
-export default function MessagesPage() {
-  // ── Auth state (populated after first render to avoid hydration mismatch) ──
-  const [mounted, setMounted] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+function readStorage(key: string): string | null {
+  try { return localStorage.getItem(key) ?? sessionStorage.getItem(key); } catch { return null; }
+}
 
-  useEffect(() => {
-    const t = readFromStorage("elabs_access_token");
-    setToken(t);
-    try {
-      const u = JSON.parse(readFromStorage("elabs_user") ?? "{}");
-      setIsAdmin(u?.roles?.includes("SYSTEM_ADMIN") ?? false);
-    } catch { /* ignore */ }
-    setMounted(true);
-  }, []);
+const ROLE_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  SYSTEM_ADMIN:       { label: "Admin",       color: "#ff4d57", bg: "#ff4d5720" },
+  MODULE_COORDINATOR: { label: "Coordinator", color: "#f3ae2a", bg: "#f3ae2a20" },
+  LECTURER:           { label: "Lecturer",    color: "#a78bfa", bg: "#a78bfa20" },
+  STUDENT:            { label: "Student",     color: "#1dd5e6", bg: "#1dd5e620" },
+};
 
-  const { on } = useSocket(token);
-
-  // ── UI state ──
-  const [tab, setTab] = useState<"inbox" | "sent">("inbox");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sentMessages, setSentMessages] = useState<Message[]>([]);
-  const [activeMsg, setActiveMsg] = useState<Message | null>(null);
-  const [unread, setUnread] = useState(0);
-  const [loading, setLoading] = useState(false);
-
-  // Compose state
-  const [composeOpen, setComposeOpen] = useState(false);
+// ─── Compose Modal ──────────────────────────────────────────────────────────
+function ComposeModal({
+  isAdmin, contacts, groups, students,
+  onClose, onSent, token,
+}: {
+  isAdmin: boolean;
+  contacts: Contact[];
+  groups: string[];
+  students: Contact[];
+  onClose: () => void;
+  onSent: () => void;
+  token: string;
+}) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [targetType, setTargetType] = useState<"ALL" | "GROUP" | "USER">("ALL");
+  const [targetType, setTargetType] = useState<"ALL" | "GROUP" | "USER">("USER");
   const [targetGroup, setTargetGroup] = useState("");
   const [targetUser, setTargetUser] = useState<number | "">("");
-  const [groups, setGroups] = useState<string[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
   const [sending, setSending] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [error, setError] = useState("");
 
-  const showToast = (msg: string, ok: boolean) => {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 4000);
-  };
+  const filteredContacts = contacts.filter(c =>
+    c.fullName.toLowerCase().includes(contactSearch.toLowerCase()) ||
+    c.email.toLowerCase().includes(contactSearch.toLowerCase()) ||
+    (c.regNumber ?? "").toLowerCase().includes(contactSearch.toLowerCase())
+  );
 
-  // ── Load inbox — only runs after token is available ──
-  const loadInbox = useCallback(async (tkn: string) => {
-    setLoading(true);
-    try {
-      const r = await fetch(`${API}/messages/inbox`, {
-        headers: { Authorization: `Bearer ${tkn}` }
-      });
-      if (r.ok) {
-        const data = await r.json();
-        const msgs: Message[] = data.messages ?? [];
-        setMessages(msgs);
-        setUnread(data.unreadCount ?? 0);
-        setActiveMsg(prev => prev ?? (msgs[0] ?? null));
-      } else {
-        console.error("Inbox fetch failed:", r.status, await r.text());
-      }
-    } catch (e) {
-      console.error("Inbox fetch error:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const selectedContact = contacts.find(c => c.id === targetUser);
 
-  // ── Load sent (admin only) ──
-  const loadSent = useCallback(async (tkn: string) => {
-    setLoading(true);
-    try {
-      const r = await fetch(`${API}/messages/sent`, {
-        headers: { Authorization: `Bearer ${tkn}` }
-      });
-      if (r.ok) {
-        const data = await r.json();
-        setSentMessages(data.messages ?? []);
-      }
-    } finally { setLoading(false); }
-  }, []);
+  const send = async () => {
+    if (!subject.trim() || !body.trim()) { setError("Subject and message are required"); return; }
+    if (targetType === "USER" && !targetUser) { setError("Please select a recipient"); return; }
+    if (targetType === "GROUP" && !targetGroup) { setError("Please select a group"); return; }
 
-  // ── Trigger fetches when token becomes available ──
-  useEffect(() => {
-    if (!token) return;
-    loadInbox(token);
-    if (isAdmin) {
-      // Load admin compose helpers
-      fetch(`${API}/messages/groups`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.json()).then(d => setGroups(d.groups ?? [])).catch(() => {});
-      fetch(`${API}/messages/students`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.json()).then(d => setStudents(d.students ?? [])).catch(() => {});
-    }
-  }, [token, isAdmin, loadInbox]);
-
-  // Load sent tab when switched to
-  useEffect(() => {
-    if (tab === "sent" && token && isAdmin) {
-      loadSent(token);
-      setActiveMsg(null);
-    } else if (tab === "inbox" && token) {
-      loadInbox(token);
-    }
-  }, [tab]);
-
-  // ── Real-time: new message pushed via socket ──
-  useEffect(() => {
-    const off = on("new_message", (msg: Message) => {
-      setMessages(prev => [msg, ...prev]);
-      setUnread(prev => prev + 1);
-      showToast(`📨 New message: ${msg.subject}`, true);
-    });
-    return () => { off(); };
-  }, [on]);
-
-  const markRead = async (msg: Message) => {
-    setActiveMsg(msg);
-    if (!msg.isRead && token) {
-      await fetch(`${API}/messages/${msg.id}/read`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
-      setUnread(prev => Math.max(0, prev - 1));
-    }
-  };
-
-  const sendBroadcast = async () => {
-    if (!subject.trim() || !body.trim() || !token) return;
-    setSending(true);
+    setSending(true); setError("");
     try {
       const payload: Record<string, unknown> = { subject, body, targetType };
       if (targetType === "GROUP") payload.targetGroup = targetGroup;
@@ -176,238 +106,479 @@ export default function MessagesPage() {
       });
 
       if (r.ok) {
-        showToast("✅ Message sent successfully!", true);
-        setSubject(""); setBody(""); setTargetUser(""); setComposeOpen(false);
-        // Refresh sent tab
-        loadSent(token);
+        onSent();
+        onClose();
       } else {
         const err = await r.json().catch(() => ({}));
-        showToast(`❌ ${err.error ?? "Failed to send"}`, false);
+        setError(err.error ?? "Failed to send");
       }
-    } catch {
-      showToast("❌ Network error", false);
-    } finally {
-      setSending(false);
+    } catch { setError("Network error"); }
+    finally { setSending(false); }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      backdropFilter: "blur(4px)", animation: "fadeIn 0.15s ease"
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{
+        background: "#0d1b2e", border: "1px solid #1a2d4a", borderRadius: 16,
+        width: "min(640px, 95vw)", maxHeight: "90vh", overflow: "auto",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.6)"
+      }}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a2d4a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2 style={{ margin: 0, color: "#e8f0fe", fontSize: "1.05rem", fontWeight: 700 }}>✉️ New Message</h2>
+            <p style={{ margin: "4px 0 0", color: "#4a6580", fontSize: "0.8rem" }}>
+              {isAdmin ? "Broadcast to everyone or send a direct message" : "Send a message to admin, staff, or a student"}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#4a6580", fontSize: "1.4rem", cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>
+
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Audience — admin only shows ALL/GROUP */}
+          {isAdmin && (
+            <div>
+              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>AUDIENCE</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["ALL", "GROUP", "USER"] as const).map(t => (
+                  <button key={t} onClick={() => setTargetType(t)}
+                    style={{
+                      flex: 1, padding: "9px 8px", borderRadius: 10, fontWeight: 600, fontSize: "0.8rem", cursor: "pointer", transition: "all 0.2s",
+                      background: targetType === t ? "linear-gradient(135deg,#3d83f630,#1dd5e630)" : "transparent",
+                      border: `1px solid ${targetType === t ? "#3d83f6" : "#1a2d4a"}`,
+                      color: targetType === t ? "#e8f0fe" : "#4a6580"
+                    }}>
+                    {t === "ALL" ? "🌐 All Students" : t === "GROUP" ? "👥 Group" : "👤 Direct"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Group picker */}
+          {targetType === "GROUP" && isAdmin && (
+            <div>
+              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>LAB GROUP</label>
+              <select value={targetGroup} onChange={e => setTargetGroup(e.target.value)}
+                style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.9rem" }}>
+                <option value="">— Select group —</option>
+                {groups.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Recipient picker — direct message */}
+          {targetType === "USER" && (
+            <div>
+              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>TO</label>
+              {selectedContact ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#3d83f615", border: "1px solid #3d83f640", borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: "0.85rem", flexShrink: 0 }}>
+                    {selectedContact.fullName.charAt(0)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.9rem" }}>{selectedContact.fullName}</div>
+                    <div style={{ color: "#4a6580", fontSize: "0.75rem" }}>{selectedContact.email}</div>
+                  </div>
+                  <span style={{ background: ROLE_BADGE[selectedContact.role]?.bg, color: ROLE_BADGE[selectedContact.role]?.color, borderRadius: 20, padding: "2px 10px", fontSize: "0.7rem", fontWeight: 700 }}>
+                    {ROLE_BADGE[selectedContact.role]?.label ?? selectedContact.role}
+                  </span>
+                  <button onClick={() => { setTargetUser(""); setContactSearch(""); }}
+                    style={{ background: "transparent", border: "none", color: "#4a6580", cursor: "pointer", fontSize: "1.1rem" }}>✕</button>
+                </div>
+              ) : (
+                <>
+                  <input value={contactSearch} onChange={e => setContactSearch(e.target.value)}
+                    placeholder="Search by name, email, or reg number…"
+                    style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+                  {contactSearch && (
+                    <div style={{ marginTop: 6, background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, maxHeight: 220, overflowY: "auto" }}>
+                      {filteredContacts.length === 0 ? (
+                        <div style={{ padding: "14px 16px", color: "#4a6580", fontSize: "0.85rem", textAlign: "center" }}>No contacts found</div>
+                      ) : filteredContacts.slice(0, 20).map(c => {
+                        const rb = ROLE_BADGE[c.role] ?? { label: c.role, color: "#7ea5d6", bg: "#7ea5d620" };
+                        return (
+                          <div key={c.id} onClick={() => { setTargetUser(c.id); setContactSearch(""); }}
+                            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #0d1b2e", transition: "background 0.15s" }}
+                            onMouseEnter={e => (e.currentTarget.style.background = "#3d83f610")}
+                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: rb.bg, border: `1px solid ${rb.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: rb.color, fontSize: "0.82rem", flexShrink: 0 }}>
+                              {c.fullName.charAt(0)}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.fullName}</div>
+                              <div style={{ color: "#4a6580", fontSize: "0.72rem" }}>{c.regNumber ?? c.email}</div>
+                            </div>
+                            <span style={{ background: rb.bg, color: rb.color, borderRadius: 20, padding: "2px 8px", fontSize: "0.68rem", fontWeight: 700, flexShrink: 0 }}>{rb.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Subject */}
+          <div>
+            <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>SUBJECT</label>
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Enter subject…"
+              style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+          </div>
+
+          {/* Body */}
+          <div>
+            <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>MESSAGE</label>
+            <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Type your message…" rows={5}
+              style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.88rem", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }} />
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{ background: "#ff4d5720", border: "1px solid #ff4d5740", borderRadius: 8, padding: "10px 14px", color: "#ff4d57", fontSize: "0.85rem" }}>⚠️ {error}</div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button onClick={onClose}
+              style={{ padding: "10px 24px", background: "transparent", border: "1px solid #1a2d4a", borderRadius: 10, color: "#7ea5d6", fontWeight: 600, cursor: "pointer", fontSize: "0.88rem" }}>
+              Cancel
+            </button>
+            <button onClick={send} disabled={sending}
+              style={{ padding: "10px 28px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: "0.88rem", cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.7 : 1, display: "flex", alignItems: "center", gap: 8 }}>
+              {sending ? "⏳ Sending…" : "📤 Send Message"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
+export default function MessagesPage() {
+  const [mounted, setMounted] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const t = readStorage("elabs_access_token");
+    setToken(t);
+    try {
+      const u = JSON.parse(readStorage("elabs_user") ?? "{}");
+      setIsAdmin(u?.roles?.includes("SYSTEM_ADMIN") ?? false);
+    } catch { /* ignore */ }
+    setMounted(true);
+  }, []);
+
+  const { on } = useSocket(token);
+
+  // ── Data state ──
+  const [tab, setTab] = useState<"inbox" | "sent">("inbox");
+  const [inbox, setInbox] = useState<Message[]>([]);
+  const [sent, setSent] = useState<Message[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [activeMsg, setActiveMsg] = useState<Message | null>(null);
+  const [loadingInbox, setLoadingInbox] = useState(false);
+  const [loadingSent, setLoadingSent] = useState(false);
+
+  // Compose
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [groups, setGroups] = useState<string[]>([]);
+  const [students, setStudents] = useState<Contact[]>([]);
+
+  // Toast
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (msg: string, ok: boolean) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, ok });
+    toastTimer.current = setTimeout(() => setToast(null), 4500);
+  };
+
+  // ── Fetchers ──
+  const loadInbox = useCallback(async (tkn: string) => {
+    setLoadingInbox(true);
+    try {
+      const r = await fetch(`${API}/messages/inbox`, { headers: { Authorization: `Bearer ${tkn}` } });
+      if (r.ok) {
+        const d = await r.json();
+        const msgs: Message[] = d.messages ?? [];
+        setInbox(msgs);
+        setUnread(d.unreadCount ?? 0);
+      }
+    } catch (e) { console.error("Inbox error:", e); }
+    finally { setLoadingInbox(false); }
+  }, []);
+
+  const loadSent = useCallback(async (tkn: string) => {
+    setLoadingSent(true);
+    try {
+      const r = await fetch(`${API}/messages/sent`, { headers: { Authorization: `Bearer ${tkn}` } });
+      if (r.ok) { const d = await r.json(); setSent(d.messages ?? []); }
+    } catch { /* ignore */ }
+    finally { setLoadingSent(false); }
+  }, []);
+
+  // Load on token ready
+  useEffect(() => {
+    if (!token) return;
+    loadInbox(token);
+    // Load contacts for compose
+    fetch(`${API}/messages/contacts`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(d => setContacts(d.contacts ?? [])).catch(() => {});
+    if (isAdmin) {
+      fetch(`${API}/messages/groups`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json()).then(d => setGroups(d.groups ?? [])).catch(() => {});
+      fetch(`${API}/messages/students`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json()).then(d => setStudents(d.students ?? [])).catch(() => {});
+    }
+  }, [token, isAdmin, loadInbox]);
+
+  // Switch tab
+  useEffect(() => {
+    if (!token) return;
+    if (tab === "sent") { loadSent(token); setActiveMsg(null); }
+    else { loadInbox(token); }
+  }, [tab]);
+
+  // Real-time socket
+  useEffect(() => {
+    const off = on("new_message", (msg: Message) => {
+      setInbox(prev => [msg, ...prev]);
+      setUnread(prev => prev + 1);
+      showToast(`📨 New message: ${msg.subject}`, true);
+    });
+    return () => { off(); };
+  }, [on]);
+
+  const markRead = async (msg: Message) => {
+    setActiveMsg(msg);
+    if (!msg.isRead && token) {
+      fetch(`${API}/messages/${msg.id}/read`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      setInbox(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
+      setUnread(prev => Math.max(0, prev - 1));
     }
   };
 
-  // ── Display list depending on tab ──
-  const displayList = tab === "sent" ? sentMessages : messages;
-  const activeIsInSent = tab === "sent";
+  const markAllRead = async () => {
+    if (!token) return;
+    await fetch(`${API}/messages/mark-all-read`, { method: "PATCH", headers: { Authorization: `Bearer ${token}` } });
+    setInbox(prev => prev.map(m => ({ ...m, isRead: true })));
+    setUnread(0);
+  };
 
-  if (!mounted) {
-    return (
-      <AppShell title="Messages" subtitle="Live messaging & announcements">
-        <div style={{ padding: 40, textAlign: "center", color: "#4a6580" }}>Loading…</div>
-      </AppShell>
-    );
-  }
+  const handleSent = () => {
+    showToast("✅ Message sent successfully!", true);
+    if (token) { loadSent(token); loadInbox(token); }
+  };
+
+  const displayList = tab === "sent" ? sent : inbox;
+  const isLoading = tab === "sent" ? loadingSent : loadingInbox;
+
+  if (!mounted) return (
+    <AppShell title="Messages" subtitle="Live messaging & announcements">
+      <div style={{ padding: 60, textAlign: "center", color: "#4a6580" }}>Loading…</div>
+    </AppShell>
+  );
 
   return (
-    <AppShell title="Messages" subtitle="Live messaging & announcements — powered by WebSocket">
+    <AppShell title="Messages" subtitle="Real-time messaging — powered by WebSocket">
 
       {/* Toast */}
       {toast && (
         <div style={{
           position: "fixed", top: 24, right: 24, zIndex: 9999,
-          padding: "12px 20px", borderRadius: 10, fontWeight: 700, fontSize: "0.9rem",
-          background: toast.ok ? "#18d18f20" : "#ff4d5720",
+          padding: "14px 22px", borderRadius: 12, fontWeight: 700, fontSize: "0.9rem",
+          background: toast.ok ? "#0d1b2e" : "#1a0a0d",
           border: `1px solid ${toast.ok ? "#18d18f60" : "#ff4d5760"}`,
           color: toast.ok ? "#18d18f" : "#ff4d57",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-          animation: "slideIn 0.3s ease"
+          boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+          display: "flex", alignItems: "center", gap: 10,
+          animation: "slideIn 0.25s ease"
         }}>
           {toast.msg}
+          <button onClick={() => setToast(null)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.6, fontSize: "1rem", marginLeft: 4 }}>✕</button>
         </div>
       )}
 
-      {/* Admin compose panel */}
-      {isAdmin && (
-        <div className="panel" style={{ marginBottom: 16, padding: "16px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ margin: 0, color: "#e8f0fe", fontSize: "0.95rem" }}>📢 Send Announcement</h3>
-            <button onClick={() => setComposeOpen(o => !o)}
+      {/* Compose Modal */}
+      {composeOpen && token && (
+        <ComposeModal
+          isAdmin={isAdmin}
+          contacts={contacts}
+          groups={groups}
+          students={students}
+          token={token}
+          onClose={() => setComposeOpen(false)}
+          onSent={handleSent}
+        />
+      )}
+
+      {/* ── Toolbar ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 6 }}>
+          {(["inbox", "sent"] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
               style={{
-                background: composeOpen ? "#ff4d5720" : "linear-gradient(135deg,#3d83f6,#1dd5e6)",
-                border: composeOpen ? "1px solid #ff4d5760" : "none",
-                color: composeOpen ? "#ff4d57" : "#fff",
-                borderRadius: 8, padding: "8px 20px", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem"
+                padding: "9px 22px", borderRadius: 10, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s",
+                background: tab === t ? "#3d83f6" : "transparent",
+                border: `1px solid ${tab === t ? "#3d83f6" : "#1a2d4a"}`,
+                color: tab === t ? "#fff" : "#7ea5d6",
+                display: "flex", alignItems: "center", gap: 6
               }}>
-              {composeOpen ? "✕ Cancel" : "+ Compose"}
+              {t === "inbox" ? "📥 Inbox" : "📤 Sent"}
+              {t === "inbox" && unread > 0 && (
+                <span style={{ background: "#1dd5e6", color: "#0a1628", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem", fontWeight: 800 }}>{unread}</span>
+              )}
             </button>
-          </div>
-
-          {composeOpen && (
-            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-              {/* Audience */}
-              <div>
-                <label style={{ color: "#7ea5d6", fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 6 }}>AUDIENCE</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {(["ALL", "GROUP", "USER"] as const).map(t => (
-                    <button key={t} onClick={() => setTargetType(t)}
-                      style={{
-                        padding: "7px 16px", borderRadius: 8, fontWeight: 600, fontSize: "0.82rem", cursor: "pointer", transition: "all 0.2s",
-                        background: targetType === t ? "#3d83f620" : "transparent",
-                        border: `1px solid ${targetType === t ? "#3d83f6" : "#1a2d4a"}`,
-                        color: targetType === t ? "#3d83f6" : "#7ea5d6"
-                      }}>
-                      {t === "ALL" ? "🌐 All Students" : t === "GROUP" ? "👥 Group" : "👤 Individual"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {targetType === "GROUP" && (
-                <select value={targetGroup} onChange={e => setTargetGroup(e.target.value)}
-                  style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8, color: "#e8f0fe", padding: "9px 14px" }}>
-                  <option value="">— Select group —</option>
-                  {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-              )}
-
-              {targetType === "USER" && (
-                <select value={targetUser} onChange={e => setTargetUser(Number(e.target.value))}
-                  style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8, color: "#e8f0fe", padding: "9px 14px" }}>
-                  <option value="">— Select student —</option>
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.regNumber} — {s.fullName} ({s.groupCode})</option>
-                  ))}
-                </select>
-              )}
-
-              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject"
-                style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.9rem" }} />
-
-              <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Message body…" rows={4}
-                style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.88rem", resize: "vertical", fontFamily: "inherit" }} />
-
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button onClick={sendBroadcast} disabled={sending || !subject.trim() || !body.trim()}
-                  style={{
-                    padding: "10px 28px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)",
-                    border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: "0.88rem",
-                    cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.7 : 1
-                  }}>
-                  {sending ? "Sending…" : "📤 Send Message"}
-                </button>
-              </div>
-            </div>
-          )}
+          ))}
         </div>
-      )}
 
-      {/* Tab bar */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button onClick={() => setTab("inbox")}
-          style={{
-            padding: "8px 22px", borderRadius: 8, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
-            background: tab === "inbox" ? "#3d83f6" : "transparent",
-            border: `1px solid ${tab === "inbox" ? "#3d83f6" : "#1a2d4a"}`,
-            color: tab === "inbox" ? "#fff" : "#7ea5d6"
-          }}>
-          📥 Inbox {unread > 0 && <span style={{ background: "#1dd5e6", color: "#0a1628", borderRadius: 20, padding: "2px 8px", fontSize: "0.7rem", marginLeft: 6 }}>{unread}</span>}
-        </button>
-        {isAdmin && (
-          <button onClick={() => setTab("sent")}
-            style={{
-              padding: "8px 22px", borderRadius: 8, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer",
-              background: tab === "sent" ? "#3d83f6" : "transparent",
-              border: `1px solid ${tab === "sent" ? "#3d83f6" : "#1a2d4a"}`,
-              color: tab === "sent" ? "#fff" : "#7ea5d6"
-            }}>
-            📤 Sent
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 8 }}>
+          {tab === "inbox" && unread > 0 && (
+            <button onClick={markAllRead}
+              style={{ padding: "9px 18px", background: "transparent", border: "1px solid #1a2d4a", borderRadius: 10, color: "#7ea5d6", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>
+              ✓ Mark All Read
+            </button>
+          )}
+          <button onClick={() => setComposeOpen(true)}
+            style={{ padding: "9px 22px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            ✉️ New Message
           </button>
-        )}
+        </div>
       </div>
 
-      {/* Message list + detail */}
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 14, alignItems: "start" }}>
+      {/* ── Body: List + Detail ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 14, alignItems: "start" }}>
 
-        {/* List */}
-        <div className="panel" style={{ padding: 0 }}>
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid #1a2d4a" }}>
-            <span style={{ color: "#e8f0fe", fontWeight: 700, fontSize: "0.88rem" }}>
-              {tab === "inbox" ? "📥 Inbox" : "📤 Sent Messages"}
+        {/* Left: Message List */}
+        <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid #1a2d4a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, letterSpacing: 1 }}>
+              {tab === "inbox" ? `📥 INBOX (${inbox.length})` : `📤 SENT (${sent.length})`}
             </span>
+            {isLoading && <span style={{ color: "#4a6580", fontSize: "0.72rem" }}>Loading…</span>}
           </div>
 
-          <div style={{ maxHeight: 560, overflowY: "auto" }}>
-            {loading ? (
-              <div style={{ padding: 24, textAlign: "center", color: "#4a6580" }}>Loading…</div>
-            ) : displayList.length === 0 ? (
-              <div style={{ padding: 32, textAlign: "center", color: "#4a6580" }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>{tab === "inbox" ? "📭" : "📤"}</div>
-                <div style={{ fontSize: "0.85rem" }}>{tab === "inbox" ? "No messages yet" : "No sent messages"}</div>
+          <div style={{ maxHeight: 580, overflowY: "auto" }}>
+            {!isLoading && displayList.length === 0 ? (
+              <div style={{ padding: "48px 24px", textAlign: "center", color: "#4a6580" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>{tab === "inbox" ? "📭" : "📤"}</div>
+                <div style={{ fontSize: "0.88rem", fontWeight: 600, marginBottom: 4 }}>{tab === "inbox" ? "Your inbox is empty" : "No sent messages"}</div>
+                <div style={{ fontSize: "0.78rem" }}>Click <strong style={{ color: "#3d83f6" }}>New Message</strong> to get started</div>
               </div>
-            ) : displayList.map(msg => (
-              <div key={msg.id} onClick={() => setActiveMsg(msg)}
-                style={{
-                  padding: "14px 16px", borderBottom: "1px solid #0a1628", cursor: "pointer", transition: "all 0.15s",
-                  background: activeMsg?.id === msg.id ? "#3d83f615" : (msg.isRead || activeIsInSent) ? "transparent" : "#1dd5e608",
-                  borderLeft: `3px solid ${activeMsg?.id === msg.id ? "#3d83f6" : (msg.isRead || activeIsInSent) ? "transparent" : "#1dd5e6"}`
-                }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, gap: 8 }}>
-                  <span style={{
-                    color: (msg.isRead || activeIsInSent) ? "#7ea5d6" : "#e8f0fe",
-                    fontWeight: (msg.isRead || activeIsInSent) ? 500 : 700, fontSize: "0.88rem",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1
-                  }}>{msg.subject}</span>
-                  {!msg.isRead && !activeIsInSent && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#1dd5e6", flexShrink: 0, marginTop: 5 }} />}
+            ) : displayList.map(msg => {
+              const isActive = activeMsg?.id === msg.id;
+              const unreadMsg = !msg.isRead && tab === "inbox";
+              return (
+                <div key={msg.id} onClick={() => tab === "inbox" ? markRead(msg) : setActiveMsg(msg)}
+                  style={{
+                    padding: "13px 16px", cursor: "pointer", transition: "all 0.15s",
+                    borderBottom: "1px solid #0d1b2e",
+                    background: isActive ? "#3d83f615" : unreadMsg ? "#1dd5e605" : "transparent",
+                    borderLeft: `3px solid ${isActive ? "#3d83f6" : unreadMsg ? "#1dd5e6" : "transparent"}`
+                  }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, gap: 6 }}>
+                    <span style={{ color: unreadMsg ? "#e8f0fe" : "#7ea5d6", fontWeight: unreadMsg ? 700 : 500, fontSize: "0.86rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      {msg.subject}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                      {unreadMsg && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1dd5e6", display: "inline-block" }} />}
+                      <span style={{ color: "#4a6580", fontSize: "0.7rem", whiteSpace: "nowrap" }}>{timeAgo(msg.createdAt)}</span>
+                    </div>
+                  </div>
+                  <div style={{ color: "#4a6580", fontSize: "0.73rem", marginBottom: 4 }}>
+                    {tab === "inbox"
+                      ? `From ${msg.senderName}`
+                      : `To: ${msg.targetType === "ALL" ? "All Students" : msg.targetType === "GROUP" ? msg.targetGroup : "Individual"}`
+                    }
+                  </div>
+                  <div style={{ color: "#3d5a80", fontSize: "0.76rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {msg.body.substring(0, 70)}{msg.body.length > 70 ? "…" : ""}
+                  </div>
+                  {tab === "sent" && msg.recipientCount !== undefined && (
+                    <div style={{ marginTop: 5, display: "flex", gap: 6 }}>
+                      <span style={{ background: "#1dd5e620", color: "#1dd5e6", borderRadius: 20, padding: "1px 8px", fontSize: "0.67rem", fontWeight: 700 }}>
+                        {msg.readCount ?? 0}/{msg.recipientCount} read
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <div style={{ color: "#4a6580", fontSize: "0.75rem" }}>
-                  {activeIsInSent
-                    ? `To: ${msg.targetType === "ALL" ? "All Students" : msg.targetType === "GROUP" ? msg.targetGroup : "Individual"} · ${msg.recipientCount ?? 0} recipients`
-                    : `From ${msg.senderName}`
-                  } · {timeAgo(msg.createdAt)}
-                </div>
-                <div style={{ color: "#5a8abb", fontSize: "0.78rem", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {msg.body.substring(0, 60)}{msg.body.length > 60 ? "…" : ""}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* Detail */}
-        <div className="panel" style={{ padding: 0, minHeight: 420 }}>
+        {/* Right: Message Detail */}
+        <div className="panel" style={{ padding: 0, minHeight: 500 }}>
           {activeMsg ? (
             <>
-              <div style={{ padding: "18px 22px", borderBottom: "1px solid #1a2d4a", background: "#0f1e35" }}>
-                <h2 style={{ margin: "0 0 8px", color: "#e8f0fe", fontSize: "1.05rem" }}>{activeMsg.subject}</h2>
+              {/* Detail Header */}
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a2d4a", background: "linear-gradient(135deg,#0f1e35,#0d1b2e)" }}>
+                <h2 style={{ margin: "0 0 10px", color: "#e8f0fe", fontSize: "1.1rem", lineHeight: 1.4 }}>{activeMsg.subject}</h2>
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  {activeIsInSent
-                    ? <span style={{ color: "#7ea5d6", fontSize: "0.82rem" }}>Sent by You</span>
-                    : <span style={{ color: "#7ea5d6", fontSize: "0.82rem" }}>From {activeMsg.senderName}</span>
-                  }
-                  <span style={{ color: "#4a6580", fontSize: "0.75rem" }}>{new Date(activeMsg.createdAt).toLocaleString()}</span>
-                  <span style={{
-                    background: "#3d83f620", border: "1px solid #3d83f640", borderRadius: 20,
-                    color: "#3d83f6", fontSize: "0.7rem", fontWeight: 700, padding: "2px 10px"
-                  }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: "0.8rem", flexShrink: 0 }}>
+                      {tab === "sent" ? "Y" : activeMsg.senderName?.charAt(0) ?? "?"}
+                    </div>
+                    <div>
+                      <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.85rem" }}>
+                        {tab === "sent" ? "You" : activeMsg.senderName}
+                      </div>
+                      <div style={{ color: "#4a6580", fontSize: "0.72rem" }}>{formatDate(activeMsg.createdAt)}</div>
+                    </div>
+                  </div>
+                  <span style={{ background: "#3d83f620", border: "1px solid #3d83f640", borderRadius: 20, color: "#3d83f6", fontSize: "0.7rem", fontWeight: 700, padding: "3px 12px" }}>
                     {activeMsg.targetType === "ALL" ? "🌐 All Students" : activeMsg.targetType === "GROUP" ? `👥 ${activeMsg.targetGroup}` : "👤 Direct"}
                   </span>
-                  {activeIsInSent && activeMsg.recipientCount !== undefined && (
-                    <span style={{ background: "#1dd5e620", border: "1px solid #1dd5e640", borderRadius: 20, color: "#1dd5e6", fontSize: "0.7rem", fontWeight: 700, padding: "2px 10px" }}>
-                      {activeMsg.readCount ?? 0}/{activeMsg.recipientCount} read
+                  {tab === "sent" && activeMsg.recipientCount !== undefined && (
+                    <span style={{ background: "#18d18f20", border: "1px solid #18d18f40", borderRadius: 20, color: "#18d18f", fontSize: "0.7rem", fontWeight: 700, padding: "3px 12px" }}>
+                      {activeMsg.readCount ?? 0} / {activeMsg.recipientCount} read
                     </span>
                   )}
                 </div>
               </div>
-              <div style={{ padding: "24px", lineHeight: 1.8, color: "#c8daf0", fontSize: "0.95rem", whiteSpace: "pre-wrap" }}>
+
+              {/* Body */}
+              <div style={{ padding: "28px 28px", lineHeight: 1.85, color: "#c8daf0", fontSize: "0.95rem", whiteSpace: "pre-wrap", minHeight: 200 }}>
                 {activeMsg.body}
               </div>
+
+              {/* Footer actions */}
+              {tab === "inbox" && (
+                <div style={{ padding: "14px 24px", borderTop: "1px solid #1a2d4a", display: "flex", gap: 10 }}>
+                  <button onClick={() => {
+                    setComposeOpen(true);
+                  }}
+                    style={{ padding: "8px 18px", background: "transparent", border: "1px solid #3d83f640", borderRadius: 8, color: "#3d83f6", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>
+                    ↩ Reply
+                  </button>
+                </div>
+              )}
             </>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 420, color: "#4a6580", gap: 12 }}>
-              <div style={{ fontSize: 52 }}>💬</div>
-              <div style={{ fontSize: "0.9rem" }}>Select a message to read</div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 500, color: "#2d4a6a", gap: 14 }}>
+              <div style={{ fontSize: 60, opacity: 0.4 }}>💬</div>
+              <div style={{ fontWeight: 700, fontSize: "1rem", color: "#3d5a80" }}>Select a message</div>
+              <div style={{ fontSize: "0.82rem", color: "#2d4a6a" }}>or click <strong style={{ color: "#3d83f6", cursor: "pointer" }} onClick={() => setComposeOpen(true)}>New Message</strong> to compose</div>
             </div>
           )}
         </div>
       </div>
 
       <style>{`
-        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+        @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(20px) } to { opacity: 1; transform: none } }
       `}</style>
     </AppShell>
   );
