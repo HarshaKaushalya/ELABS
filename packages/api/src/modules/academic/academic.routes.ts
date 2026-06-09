@@ -46,14 +46,14 @@ router.post("/semesters", requireAuth, requirePermission("admin:manage"), async 
   }
 });
 
-// GET /academic/semesters/:id — semester detail with modules + lab session counts
+// GET /academic/semesters/:id — semester detail with modules + practicals count
 router.get("/semesters/:id", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "Invalid id" });
 
   try {
     const [semRows] = await pool.query(
-      `SELECT id, name, level FROM semesters WHERE id = :id`,
+      `SELECT id, name, level, coordinator_name AS coordinatorName FROM semesters WHERE id = :id`,
       { id }
     );
     const sem = (semRows as any[])[0];
@@ -61,10 +61,15 @@ router.get("/semesters/:id", requireAuth, async (req, res) => {
 
     const [modules] = await pool.query(`
       SELECT m.id, m.code, m.name,
-             COUNT(DISTINCT ls.id)                                         AS totalSessions,
-             SUM(CASE WHEN ls.status = 'UPCOMING'  THEN 1 ELSE 0 END)     AS upcomingSessions,
-             SUM(CASE WHEN ls.status = 'COMPLETED' THEN 1 ELSE 0 END)     AS completedSessions
+             m.coordinator_name  AS coordinatorName,
+             m.num_students      AS numStudents,
+             COUNT(DISTINCT mp.id)                                          AS labCount,
+             SUM(CASE WHEN mp.equip_status='Not Working' THEN 1 ELSE 0 END) AS brokenLabs,
+             COUNT(DISTINCT ls.id)                                          AS totalSessions,
+             SUM(CASE WHEN ls.status='UPCOMING'  THEN 1 ELSE 0 END)        AS upcomingSessions,
+             SUM(CASE WHEN ls.status='COMPLETED' THEN 1 ELSE 0 END)        AS completedSessions
       FROM modules m
+      LEFT JOIN module_practicals mp ON mp.module_code = m.code
       LEFT JOIN lab_sessions ls ON ls.module_id = m.id
       WHERE m.semester_id = :id
       GROUP BY m.id
@@ -119,14 +124,18 @@ router.post("/semesters/:id/modules", requireAuth, requirePermission("admin:mana
   }
 });
 
-// GET /academic/modules/:id — module detail with lab sessions
+// GET /academic/modules/:id — module detail with practicals, timetable + lab sessions
 router.get("/modules/:id", requireAuth, async (req: AuthedRequest, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "Invalid id" });
 
   try {
     const [modRows] = await pool.query(`
-      SELECT m.id, m.code, m.name, s.id AS semesterId, s.name AS semesterName
+      SELECT m.id, m.code, m.name,
+             m.coordinator_name AS coordinatorName,
+             m.num_students     AS numStudents,
+             s.id AS semesterId, s.name AS semesterName,
+             s.coordinator_name AS semesterCoordinator
       FROM modules m
       JOIN semesters s ON s.id = m.semester_id
       WHERE m.id = :id
@@ -134,7 +143,25 @@ router.get("/modules/:id", requireAuth, async (req: AuthedRequest, res) => {
     const mod = (modRows as any[])[0];
     if (!mod) return res.status(404).json({ error: "Module not found" });
 
-    // Fetch sessions with completion status for the current user
+    // Practicals list
+    const [practicals] = await pool.query(`
+      SELECT id, lab_number AS labNumber, lab_title AS labTitle,
+             equip_status AS equipStatus, num_sessions AS numSessions, notes, sort_order AS sortOrder
+      FROM module_practicals
+      WHERE module_code = :code
+      ORDER BY sort_order ASC, lab_number ASC
+    `, { code: mod.code });
+
+    // Timetable slots for this module
+    const [schedule] = await pool.query(`
+      SELECT id, session_date AS sessionDate, time_slot AS timeSlot,
+             lab_label AS labLabel, group_code AS groupCode, academic_year AS academicYear
+      FROM timetable_slots
+      WHERE module_code = :code
+      ORDER BY session_date ASC, time_slot ASC, group_code ASC
+    `, { code: mod.code });
+
+    // Lab sessions with completion status
     const userId = req.user!.id;
     const [sessions] = await pool.query(`
       SELECT
@@ -151,11 +178,65 @@ router.get("/modules/:id", requireAuth, async (req: AuthedRequest, res) => {
       ORDER BY ls.scheduled_date ASC, ls.id ASC
     `, { id, userId });
 
-    res.json({ module: mod, sessions });
+    res.json({ module: mod, practicals, schedule, sessions });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// PATCH /academic/modules/:id — admin updates coordinator / num_students
+router.patch("/modules/:id", requireAuth, requirePermission("admin:manage"), async (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  try {
+    const body = z.object({
+      coordinatorName: z.string().max(150).optional(),
+      numStudents:     z.number().int().optional(),
+      name:            z.string().max(120).optional(),
+    }).parse(req.body);
+
+    await pool.query(
+      `UPDATE modules SET
+         coordinator_name = COALESCE(:coordinatorName, coordinator_name),
+         num_students     = COALESCE(:numStudents, num_students),
+         name             = COALESCE(:name, name)
+       WHERE id = :id`,
+      { id, coordinatorName: body.coordinatorName ?? null, numStudents: body.numStudents ?? null, name: body.name ?? null }
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: "Invalid request" }); }
+});
+
+// PUT /academic/modules/:id/practicals — admin replaces practicals list
+router.put("/modules/:id/practicals", requireAuth, requirePermission("admin:manage"), async (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  try {
+    const [modRows] = await pool.query(`SELECT code FROM modules WHERE id = :id`, { id });
+    const mod = (modRows as any[])[0];
+    if (!mod) return res.status(404).json({ error: "Module not found" });
+
+    const { practicals } = z.object({
+      practicals: z.array(z.object({
+        labNumber:   z.string().max(20),
+        labTitle:    z.string().max(255).optional(),
+        equipStatus: z.enum(["Working", "Not Working", "Under Maintenance"]).optional(),
+        numSessions: z.number().int().optional(),
+        notes:       z.string().optional(),
+        sortOrder:   z.number().int().optional(),
+      }))
+    }).parse(req.body);
+
+    // Delete existing and re-insert
+    await pool.query(`DELETE FROM module_practicals WHERE module_code = :code`, { code: mod.code });
+    if (practicals.length > 0) {
+      const rows = practicals.map((p, i) => [mod.code, p.labNumber, p.labTitle ?? null, p.equipStatus ?? 'Working', p.numSessions ?? 0, p.notes ?? null, p.sortOrder ?? i + 1]);
+      await pool.query(
+        `INSERT INTO module_practicals (module_code, lab_number, lab_title, equip_status, num_sessions, notes, sort_order) VALUES ?`,
+        [rows]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: "Invalid request" }); }
 });
 
 // ============================================================

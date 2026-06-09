@@ -6,6 +6,16 @@ import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
 import Link from "next/link";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+type Practical = {
+  id: number; labNumber: string; labTitle: string | null;
+  equipStatus: "Working" | "Not Working" | "Under Maintenance";
+  numSessions: number; notes: string | null; sortOrder: number;
+};
+type ScheduleSlot = {
+  id: number; sessionDate: string; timeSlot: string;
+  labLabel: string; groupCode: string; academicYear: string;
+};
 type Session = {
   id: number; title: string; description: string;
   scheduledDate: string; durationHours: number;
@@ -13,117 +23,427 @@ type Session = {
   attended: boolean; reportSubmitted: boolean;
   completedAt: string | null; documentUrl: string | null;
 };
-type Module = { id: number; code: string; name: string; semesterId: number; semesterName: string };
+type Module = {
+  id: number; code: string; name: string;
+  coordinatorName: string | null; numStudents: number;
+  semesterId: number; semesterName: string; semesterCoordinator: string | null;
+};
 
-function sessionBadge(s: Session) {
-  const isDone = s.attended && s.reportSubmitted;
-  if (isDone) return { label: "Done", color: "#18d18f", bg: "#18d18f15" };
-  if (s.status === "ONGOING") return { label: "Ongoing", color: "#3d83f6", bg: "#3d83f615" };
-  return { label: "Pending", color: "#f3ae2a", bg: "#f3ae2a15" };
-}
-
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmt(d: string | null) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function readStorage(key: string): string | null {
+  try { return localStorage.getItem(key) ?? sessionStorage.getItem(key); } catch { return null; }
+}
+
+const EQUIP_CONFIG = {
+  "Working":             { color: "#18d18f", bg: "#18d18f15", icon: "✅" },
+  "Not Working":         { color: "#ff4d57", bg: "#ff4d5715", icon: "❌" },
+  "Under Maintenance":   { color: "#f3ae2a", bg: "#f3ae2a15", icon: "🔧" },
+};
+
+// ─── Edit Practicals Modal ────────────────────────────────────────────────────
+function EditPracticalsModal({ mod, practicals, token, onClose, onSaved }: {
+  mod: Module; practicals: Practical[]; token: string;
+  onClose: () => void; onSaved: () => void;
+}) {
+  const [rows, setRows] = useState(
+    practicals.map(p => ({ labNumber: p.labNumber, labTitle: p.labTitle ?? "", equipStatus: p.equipStatus, numSessions: p.numSessions, notes: p.notes ?? "" }))
+  );
+  const [coordinatorName, setCoordinatorName] = useState(mod.coordinatorName ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    setSaving(true); setError("");
+    try {
+      // Update coordinator
+      await apiFetch(`/academic/modules/${mod.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coordinatorName }),
+      });
+      // Update practicals
+      await apiFetch(`/academic/modules/${mod.id}/practicals`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          practicals: rows.map((r, i) => ({
+            labNumber: r.labNumber, labTitle: r.labTitle || undefined,
+            equipStatus: r.equipStatus, numSessions: r.numSessions,
+            notes: r.notes || undefined, sortOrder: i + 1,
+          }))
+        }),
+      });
+      onSaved(); onClose();
+    } catch { setError("Failed to save changes"); }
+    finally { setSaving(false); }
+  };
+
+  const updateRow = (i: number, field: string, val: string | number) =>
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+
+  const addRow = () => setRows(prev => [...prev, { labNumber: `Lab ${prev.length + 1}`, labTitle: "", equipStatus: "Working", numSessions: 0, notes: "" }]);
+  const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)" }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "#0d1b2e", border: "1px solid #1a2d4a", borderRadius: 16, width: "min(780px,96vw)", maxHeight: "90vh", overflow: "auto", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid #1a2d4a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 style={{ margin: 0, color: "#e8f0fe", fontSize: "1rem" }}>✏️ Edit Module: {mod.code}</h2>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#4a6580", fontSize: "1.4rem", cursor: "pointer" }}>✕</button>
+        </div>
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Coordinator */}
+          <div>
+            <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>MODULE COORDINATOR</label>
+            <input value={coordinatorName} onChange={e => setCoordinatorName(e.target.value)}
+              placeholder="e.g. Dr. Kaveen Liyanage"
+              style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8, color: "#e8f0fe", padding: "9px 14px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+          </div>
+
+          {/* Practicals table */}
+          <div>
+            <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 10, letterSpacing: 1 }}>LIST OF PRACTICALS</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {rows.map((row, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "90px 1fr 160px 80px auto", gap: 8, alignItems: "center" }}>
+                  <input value={row.labNumber} onChange={e => updateRow(i, "labNumber", e.target.value)}
+                    style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 6, color: "#e8f0fe", padding: "7px 10px", fontSize: "0.82rem" }} />
+                  <input value={row.labTitle} onChange={e => updateRow(i, "labTitle", e.target.value)}
+                    placeholder="Lab title (optional)"
+                    style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 6, color: "#e8f0fe", padding: "7px 10px", fontSize: "0.82rem" }} />
+                  <select value={row.equipStatus} onChange={e => updateRow(i, "equipStatus", e.target.value)}
+                    style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 6, color: "#e8f0fe", padding: "7px 8px", fontSize: "0.8rem" }}>
+                    <option value="Working">✅ Working</option>
+                    <option value="Not Working">❌ Not Working</option>
+                    <option value="Under Maintenance">🔧 Maintenance</option>
+                  </select>
+                  <input type="number" value={row.numSessions} min={0} onChange={e => updateRow(i, "numSessions", Number(e.target.value))}
+                    placeholder="Sessions"
+                    style={{ background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 6, color: "#e8f0fe", padding: "7px 10px", fontSize: "0.82rem", textAlign: "center" }} />
+                  <button onClick={() => removeRow(i)}
+                    style={{ background: "#ff4d5720", border: "1px solid #ff4d5740", borderRadius: 6, color: "#ff4d57", padding: "7px 10px", cursor: "pointer", fontSize: "0.8rem" }}>✕</button>
+                </div>
+              ))}
+            </div>
+            <button onClick={addRow}
+              style={{ marginTop: 10, padding: "8px 18px", background: "transparent", border: "1px dashed #1a2d4a", borderRadius: 8, color: "#7ea5d6", cursor: "pointer", fontSize: "0.82rem" }}>
+              + Add Lab
+            </button>
+          </div>
+
+          {error && <div style={{ color: "#ff4d57", fontSize: "0.85rem", background: "#ff4d5715", padding: "10px 14px", borderRadius: 8 }}>⚠️ {error}</div>}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button onClick={onClose} style={{ padding: "9px 22px", background: "transparent", border: "1px solid #1a2d4a", borderRadius: 8, color: "#7ea5d6", cursor: "pointer" }}>Cancel</button>
+            <button onClick={save} disabled={saving}
+              style={{ padding: "9px 24px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+              {saving ? "Saving…" : "💾 Save Changes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ModulePage() {
   const { moduleId } = useParams<{ moduleId: string }>();
   const [mod, setMod] = useState<Module | null>(null);
+  const [practicals, setPracticals] = useState<Practical[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"pending" | "done">("pending");
+  const [tab, setTab] = useState<"practicals" | "schedule" | "sessions">("practicals");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
+    try {
+      const u = JSON.parse(readStorage("elabs_user") ?? "{}");
+      setIsAdmin(u?.roles?.includes("SYSTEM_ADMIN") ?? false);
+    } catch { /* ignore */ }
+  }, []);
+
+  const load = () => {
+    setLoading(true);
     apiFetch(`/academic/modules/${moduleId}`)
-      .then((r) => r.json())
-      .then((d) => { setMod(d.module); setSessions(d.sessions ?? []); })
+      .then(r => r.json())
+      .then(d => { setMod(d.module); setPracticals(d.practicals ?? []); setSchedule(d.schedule ?? []); setSessions(d.sessions ?? []); })
       .finally(() => setLoading(false));
-  }, [moduleId]);
+  };
 
-  const pending = sessions.filter((s) => !(s.attended && s.reportSubmitted));
-  const done = sessions.filter((s) => s.attended && s.reportSubmitted);
-  const displayed = activeTab === "pending" ? pending : done;
+  useEffect(() => { load(); }, [moduleId]);
 
-  const tab = (id: "pending" | "done", label: string, color: string) => (
-    <button onClick={() => setActiveTab(id)} style={{
-      padding: "8px 22px", borderRadius: 8, fontWeight: 600, fontSize: "0.88rem",
-      cursor: "pointer", border: "none", transition: "all 0.2s",
-      background: activeTab === id ? `${color}20` : "transparent",
-      color: activeTab === id ? color : "#7ea5d6",
-      borderBottom: activeTab === id ? `2px solid ${color}` : "2px solid transparent",
-    }}>{label}</button>
-  );
+  // Group schedule by date
+  const scheduleByDate = schedule.reduce<Record<string, ScheduleSlot[]>>((acc, s) => {
+    const key = s.sessionDate;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(s);
+    return acc;
+  }, {});
+
+  const pending = sessions.filter(s => !(s.attended && s.reportSubmitted));
+  const done = sessions.filter(s => s.attended && s.reportSubmitted);
+
+  const tabStyle = (t: typeof tab, color: string) => ({
+    padding: "9px 22px", borderRadius: 8, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" as const,
+    background: tab === t ? `${color}20` : "transparent",
+    border: `1px solid ${tab === t ? color : "#1a2d4a"}`,
+    color: tab === t ? color : "#7ea5d6", transition: "all 0.2s"
+  });
+
+  if (loading) return <AppShell title="Loading…" subtitle=""><div style={{ padding: 60, textAlign: "center", color: "#7ea5d6" }}>Loading module…</div></AppShell>;
+  if (!mod) return <AppShell title="Not found" subtitle=""><div style={{ padding: 60, textAlign: "center", color: "#ff4d57" }}>Module not found</div></AppShell>;
 
   return (
-    <AppShell title={mod ? `${mod.code}: ${mod.name}` : "Loading…"} subtitle="Lab sessions for this module">
-      {mod && (
-        <div style={{ marginBottom: 20, display: "flex", gap: 8, alignItems: "center", fontSize: "0.85rem", color: "#7ea5d6", flexWrap: "wrap" }}>
-          <Link href="/labs" style={{ color: "#3d83f6", textDecoration: "none" }}>Lab Groups</Link>
-          <span>›</span>
-          <Link href={`/labs/${mod.semesterId}`} style={{ color: "#3d83f6", textDecoration: "none" }}>{mod.semesterName}</Link>
-          <span>›</span>
-          <span style={{ color: "#e8f0fe" }}>{mod.code}</span>
-        </div>
+    <AppShell title={`${mod.code}: ${mod.name}`} subtitle={`${mod.semesterName} · Department of EIE`}>
+      {editOpen && isAdmin && (
+        <EditPracticalsModal mod={mod} practicals={practicals} token={readStorage("elabs_access_token") ?? ""}
+          onClose={() => setEditOpen(false)} onSaved={load} />
       )}
 
-      {!loading && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-          {[
-            { label: "Total Sessions", val: sessions.length, color: "#7ea5d6" },
-            { label: "Pending", val: pending.length, color: "#f3ae2a" },
-            { label: "Completed", val: done.length, color: "#18d18f" },
-          ].map((s) => (
-            <div key={s.label} style={{ flex: 1, background: "#0d1b2e", border: `1px solid ${s.color}25`, borderRadius: 10, padding: "14px 18px" }}>
-              <div style={{ color: "#7ea5d6", fontSize: "0.78rem", marginBottom: 4 }}>{s.label}</div>
-              <div style={{ color: s.color, fontWeight: 700, fontSize: "1.6rem" }}>{s.val}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid #1a2d4a" }}>
-        {tab("pending", `◷ Pending (${pending.length})`, "#f3ae2a")}
-        {tab("done", `✓ Done (${done.length})`, "#18d18f")}
+      {/* Breadcrumb */}
+      <div style={{ marginBottom: 20, display: "flex", gap: 8, alignItems: "center", fontSize: "0.85rem", color: "#7ea5d6", flexWrap: "wrap" }}>
+        <Link href="/labs" style={{ color: "#3d83f6", textDecoration: "none" }}>Lab Groups</Link>
+        <span>›</span>
+        <Link href={`/labs/${mod.semesterId}`} style={{ color: "#3d83f6", textDecoration: "none" }}>{mod.semesterName}</Link>
+        <span>›</span>
+        <span style={{ color: "#e8f0fe" }}>{mod.code}</span>
       </div>
 
-      {loading ? (
-        <div style={{ padding: 40, textAlign: "center", color: "#7ea5d6" }}>Loading sessions…</div>
-      ) : displayed.length === 0 ? (
-        <div style={{ padding: 48, textAlign: "center", color: "#7ea5d6", background: "#0d1b2e", borderRadius: 12, border: "1px dashed #1a2d4a" }}>
-          {activeTab === "pending" ? "No pending lab sessions 🎉" : "No completed sessions yet"}
+      {/* Module header card */}
+      <div style={{ background: "linear-gradient(135deg,#0d1b2e,#0a1628)", border: "1px solid #1a2d4a", borderRadius: 14, padding: "22px 26px", marginBottom: 22 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: 1, color: "#3d83f6", background: "#3d83f615", padding: "3px 12px", borderRadius: 20 }}>
+                {mod.code}
+              </span>
+              <span style={{ fontSize: "0.72rem", color: "#4a6580", fontWeight: 600 }}>· {mod.semesterName}</span>
+            </div>
+            <h1 style={{ margin: "0 0 12px", color: "#e8f0fe", fontWeight: 700, fontSize: "1.15rem", lineHeight: 1.4 }}>{mod.name}</h1>
+
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+              {mod.coordinatorName && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: "0.8rem" }}>
+                    {mod.coordinatorName.split(" ").pop()?.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.88rem" }}>{mod.coordinatorName}</div>
+                    <div style={{ color: "#4a6580", fontSize: "0.72rem" }}>Module Coordinator</div>
+                  </div>
+                </div>
+              )}
+              {mod.semesterCoordinator && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#1dd5e620", border: "1px solid #1dd5e640", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#1dd5e6", fontSize: "0.8rem" }}>
+                    {mod.semesterCoordinator.split(" ").pop()?.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.88rem" }}>{mod.semesterCoordinator}</div>
+                    <div style={{ color: "#4a6580", fontSize: "0.72rem" }}>Semester Coordinator</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexShrink: 0 }}>
+            {/* Stats */}
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ textAlign: "center", background: "#0a1628", borderRadius: 10, padding: "10px 16px" }}>
+                <div style={{ color: "#3d83f6", fontWeight: 700, fontSize: "1.4rem" }}>{practicals.length}</div>
+                <div style={{ color: "#4a6580", fontSize: "0.68rem", fontWeight: 600 }}>LABS</div>
+              </div>
+              <div style={{ textAlign: "center", background: "#0a1628", borderRadius: 10, padding: "10px 16px" }}>
+                <div style={{ color: "#18d18f", fontWeight: 700, fontSize: "1.4rem" }}>{mod.numStudents}</div>
+                <div style={{ color: "#4a6580", fontSize: "0.68rem", fontWeight: 600 }}>STUDENTS</div>
+              </div>
+              <div style={{ textAlign: "center", background: "#0a1628", borderRadius: 10, padding: "10px 16px" }}>
+                <div style={{ color: "#f3ae2a", fontWeight: 700, fontSize: "1.4rem" }}>{schedule.length}</div>
+                <div style={{ color: "#4a6580", fontSize: "0.68rem", fontWeight: 600 }}>SESSIONS</div>
+              </div>
+            </div>
+            {isAdmin && (
+              <button onClick={() => setEditOpen(true)}
+                style={{ padding: "9px 18px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}>
+                ✏️ Edit
+              </button>
+            )}
+          </div>
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {displayed.map((session, idx) => {
-            const badge = sessionBadge(session);
-            return (
-              <Link key={session.id} href={`/labs/session/${session.id}`} style={{ textDecoration: "none" }}>
-                <article
-                  style={{ background: "#0d1b2e", border: "1px solid #1a2d4a", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "all 0.15s ease" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#2a4a7a"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#1a2d4a"; }}
-                >
-                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${badge.color}20`, border: `1px solid ${badge.color}50`, display: "flex", alignItems: "center", justifyContent: "center", color: badge.color, fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
-                    {idx + 1}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        <button style={tabStyle("practicals", "#3d83f6")} onClick={() => setTab("practicals")}>🧪 List of Practicals</button>
+        <button style={tabStyle("schedule", "#1dd5e6")} onClick={() => setTab("schedule")}>
+          📅 Lab Schedule {schedule.length > 0 && <span style={{ background: "#1dd5e630", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem", marginLeft: 4 }}>{schedule.length}</span>}
+        </button>
+        <button style={tabStyle("sessions", "#18d18f")} onClick={() => setTab("sessions")}>
+          📋 Sessions {sessions.length > 0 && <span style={{ background: "#18d18f30", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem", marginLeft: 4 }}>{sessions.length}</span>}
+        </button>
+      </div>
+
+      {/* ─── PRACTICALS TAB ─── */}
+      {tab === "practicals" && (
+        <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid #1a2d4a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ color: "#e8f0fe", fontWeight: 700, fontSize: "0.9rem" }}>List of Practicals — {mod.code}</span>
+            <span style={{ color: "#4a6580", fontSize: "0.78rem" }}>University of Ruhuna · Faculty of Engineering · EIE Dept.</span>
+          </div>
+          {practicals.length === 0 ? (
+            <div style={{ padding: 48, textAlign: "center", color: "#4a6580" }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>🧪</div>
+              <div>No practicals listed yet{isAdmin && " — click Edit to add"}</div>
+            </div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+              <thead>
+                <tr style={{ background: "#0a1628" }}>
+                  {["Lab", "Lab Title", "Equipment Status", "Sessions", "Notes"].map(h => (
+                    <th key={h} style={{ padding: "11px 18px", color: "#7ea5d6", fontWeight: 700, fontSize: "0.75rem", letterSpacing: 1, textAlign: "left", borderBottom: "1px solid #1a2d4a" }}>{h.toUpperCase()}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {practicals.map((p, i) => {
+                  const cfg = EQUIP_CONFIG[p.equipStatus] ?? EQUIP_CONFIG["Working"];
+                  return (
+                    <tr key={p.id} style={{ borderBottom: "1px solid #0d1b2e", background: i % 2 === 0 ? "transparent" : "#09121f" }}>
+                      <td style={{ padding: "13px 18px", color: "#3d83f6", fontWeight: 700 }}>{p.labNumber}</td>
+                      <td style={{ padding: "13px 18px", color: p.labTitle ? "#e8f0fe" : "#2d4a6a", fontStyle: p.labTitle ? "normal" : "italic" }}>
+                        {p.labTitle ?? "Title not specified"}
+                      </td>
+                      <td style={{ padding: "13px 18px" }}>
+                        <span style={{ background: cfg.bg, color: cfg.color, borderRadius: 20, padding: "3px 12px", fontSize: "0.78rem", fontWeight: 700 }}>
+                          {cfg.icon} {p.equipStatus}
+                        </span>
+                      </td>
+                      <td style={{ padding: "13px 18px", color: p.numSessions > 0 ? "#e8f0fe" : "#4a6580", textAlign: "center", fontWeight: 600 }}>
+                        {p.numSessions > 0 ? p.numSessions : "—"}
+                      </td>
+                      <td style={{ padding: "13px 18px", color: "#4a6580", fontSize: "0.8rem" }}>{p.notes ?? "—"}</td>
+                    </tr>
+                  );
+                })}
+                {/* Total row */}
+                <tr style={{ background: "#0a1628", borderTop: "2px solid #1a2d4a" }}>
+                  <td colSpan={3} style={{ padding: "11px 18px", color: "#7ea5d6", fontWeight: 700, fontSize: "0.8rem" }}>TOTAL</td>
+                  <td style={{ padding: "11px 18px", color: "#3d83f6", fontWeight: 700, textAlign: "center" }}>
+                    {practicals.reduce((s, p) => s + p.numSessions, 0) || "—"}
+                  </td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* ─── SCHEDULE TAB ─── */}
+      {tab === "schedule" && (
+        <div>
+          {schedule.length === 0 ? (
+            <div style={{ padding: 48, textAlign: "center", color: "#4a6580", background: "#0d1b2e", borderRadius: 14, border: "1px dashed #1a2d4a" }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
+              <div>No timetable data for this module yet</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ color: "#4a6580", fontSize: "0.8rem", marginBottom: 4 }}>
+                Academic Year {schedule[0]?.academicYear} · {Object.keys(scheduleByDate).length} session dates · {schedule.length} group-slots
+              </div>
+              {Object.entries(scheduleByDate).map(([date, slots]) => (
+                <div key={date} className="panel" style={{ padding: 0, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 16px", background: "#0a1628", borderBottom: "1px solid #1a2d4a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: "#e8f0fe", fontWeight: 700, fontSize: "0.88rem" }}>📅 {fmtDate(date)}</span>
+                    <span style={{ color: "#4a6580", fontSize: "0.78rem" }}>{slots[0].timeSlot}</span>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-                      <span style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.95rem" }}>{session.title}</span>
-                      <span style={{ fontSize: "0.72rem", fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: badge.bg, color: badge.color, flexShrink: 0 }}>{badge.label}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 16, fontSize: "0.8rem", color: "#7ea5d6", flexWrap: "wrap" }}>
-                      <span>📅 {fmt(session.scheduledDate)}</span>
-                      <span>⏱ {session.durationHours}h</span>
-                      {session.attended && <span style={{ color: "#18d18f" }}>✓ Attended</span>}
-                      {session.reportSubmitted && <span style={{ color: "#18d18f" }}>✓ Report</span>}
-                    </div>
+                  <div style={{ display: "flex", gap: 0, flexWrap: "wrap" }}>
+                    {slots.map(slot => (
+                      <div key={slot.id} style={{ padding: "12px 16px", borderRight: "1px solid #0d1b2e", minWidth: 120, flex: 1 }}>
+                        <div style={{ color: "#3d83f6", fontWeight: 700, fontSize: "0.82rem", marginBottom: 4 }}>{slot.labLabel}</div>
+                        <div style={{ color: "#1dd5e6", fontWeight: 600, fontSize: "0.88rem" }}>{slot.groupCode}</div>
+                        <div style={{ color: "#4a6580", fontSize: "0.72rem", marginTop: 2 }}>Group</div>
+                      </div>
+                    ))}
                   </div>
-                  <span style={{ color: "#7ea5d6", fontSize: "1.2rem" }}>›</span>
-                </article>
-              </Link>
-            );
-          })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── SESSIONS TAB ─── */}
+      {tab === "sessions" && (
+        <div>
+          {sessions.length === 0 ? (
+            <div style={{ padding: 48, textAlign: "center", color: "#4a6580", background: "#0d1b2e", borderRadius: 14, border: "1px dashed #1a2d4a" }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>📋</div>
+              <div>No sessions recorded yet</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+                {[
+                  { label: "Total", val: sessions.length, color: "#7ea5d6" },
+                  { label: "Pending", val: pending.length, color: "#f3ae2a" },
+                  { label: "Completed", val: done.length, color: "#18d18f" },
+                ].map(s => (
+                  <div key={s.label} style={{ flex: 1, minWidth: 100, background: "#0d1b2e", border: `1px solid ${s.color}25`, borderRadius: 10, padding: "14px 18px" }}>
+                    <div style={{ color: "#7ea5d6", fontSize: "0.75rem", marginBottom: 4 }}>{s.label}</div>
+                    <div style={{ color: s.color, fontWeight: 700, fontSize: "1.5rem" }}>{s.val}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {sessions.map((session, idx) => {
+                  const isDone = session.attended && session.reportSubmitted;
+                  const badge = isDone ? { label: "Done", color: "#18d18f", bg: "#18d18f15" }
+                    : session.status === "ONGOING" ? { label: "Ongoing", color: "#3d83f6", bg: "#3d83f615" }
+                    : { label: "Pending", color: "#f3ae2a", bg: "#f3ae2a15" };
+                  return (
+                    <Link key={session.id} href={`/labs/session/${session.id}`} style={{ textDecoration: "none" }}>
+                      <article style={{ background: "#0d1b2e", border: "1px solid #1a2d4a", borderRadius: 12, padding: "15px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", transition: "border-color 0.15s" }}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = "#2a4a7a"}
+                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = "#1a2d4a"}>
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${badge.color}20`, border: `1px solid ${badge.color}50`, display: "flex", alignItems: "center", justifyContent: "center", color: badge.color, fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
+                          {idx + 1}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+                            <span style={{ color: "#e8f0fe", fontWeight: 600 }}>{session.title}</span>
+                            <span style={{ fontSize: "0.7rem", fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: badge.bg, color: badge.color }}>{badge.label}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 14, fontSize: "0.78rem", color: "#7ea5d6", flexWrap: "wrap" }}>
+                            <span>📅 {fmt(session.scheduledDate)}</span>
+                            <span>⏱ {session.durationHours}h</span>
+                            {session.attended && <span style={{ color: "#18d18f" }}>✓ Attended</span>}
+                            {session.reportSubmitted && <span style={{ color: "#18d18f" }}>✓ Report</span>}
+                          </div>
+                        </div>
+                        <span style={{ color: "#7ea5d6", fontSize: "1.2rem" }}>›</span>
+                      </article>
+                    </Link>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
     </AppShell>
