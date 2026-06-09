@@ -127,7 +127,7 @@ router.post("/logout", async (req, res) => {
 router.get("/me", requireAuth, async (req: AuthedRequest, res) => {
   const [rows] = await pool.query(
     `
-    SELECT u.id, u.email, u.full_name,
+    SELECT u.id, u.email, u.full_name, u.must_change_password,
            JSON_ARRAYAGG(r.name) AS roles
     FROM users u
     JOIN user_roles ur ON ur.user_id = u.id
@@ -149,7 +149,6 @@ router.get("/me", requireAuth, async (req: AuthedRequest, res) => {
       const text = raw.trim();
       if (!text) return [];
 
-      // Some DB drivers return JSON text, others may return plain role string.
       if (text.startsWith("[")) {
         try {
           const parsed = JSON.parse(text);
@@ -170,7 +169,29 @@ router.get("/me", requireAuth, async (req: AuthedRequest, res) => {
     email: me.email,
     fullName: me.full_name,
     roles: parseRoles(me.roles),
+    mustChangePassword: Boolean(me.must_change_password),
   });
+});
+
+/** POST /auth/change-password — forced first-login password change */
+router.post("/change-password", requireAuth, async (req: AuthedRequest, res) => {
+  const body = z.object({
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  }).parse(req.body);
+
+  const newHash = await bcrypt.hash(body.newPassword, 10);
+  await pool.query(
+    `UPDATE users SET password_hash = :hash, must_change_password = 0 WHERE id = :uid`,
+    { hash: newHash, uid: req.user!.id }
+  );
+
+  // Also update student_profiles flag if exists
+  await pool.query(
+    `UPDATE student_profiles SET must_change_password = 0 WHERE user_id = :uid`,
+    { uid: req.user!.id }
+  ).catch(() => {});
+
+  return res.json({ ok: true, message: "Password updated successfully" });
 });
 
 export default router;

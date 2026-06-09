@@ -1,121 +1,193 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { notifications } from "@/lib/demoData";
+import { useSocket } from "@/hooks/useSocket";
+
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+
+interface Notification {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+  meta?: any;
+}
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function getToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("elabs_token") ?? sessionStorage.getItem("elabs_token");
+}
+
+const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
+  BORROW_APPROVED:  { icon: "✅", color: "#18d18f", label: "Approved" },
+  BORROW_OVERDUE:   { icon: "⚠️", color: "#f3ae2a", label: "Overdue" },
+  BORROW_RETURNED:  { icon: "📦", color: "#3d83f6", label: "Returned" },
+  LAB_REMINDER:     { icon: "📅", color: "#1dd5e6", label: "Lab Session" },
+  FIRE_ALERT:       { icon: "🔥", color: "#ff4d57", label: "Fire Alert" },
+  BROADCAST:        { icon: "📢", color: "#a78bfa", label: "Announcement" },
+  SYSTEM:           { icon: "⚙️", color: "#7ea5d6", label: "System" },
+};
 
 export default function NotificationsPage() {
-  const [filter, setFilter] = useState("All");
-  const tabs = ["All", "Critical", "Warning", "Success", "Info"];
+  const token = getToken();
+  const { on } = useSocket(token);
 
-  const filtered = filter === "All" ? notifications : notifications.filter((n) => {
-    if (filter === "Critical") return n.type === "danger";
-    if (filter === "Warning") return n.type === "warn";
-    if (filter === "Info") return n.type === "info";
-    return true;
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount,   setUnreadCount]   = useState(0);
+  const [filter,        setFilter]        = useState("All");
+  const [loading,       setLoading]       = useState(true);
+
+  const filters = ["All", "Announcement", "Overdue", "Lab Session", "Fire Alert", "Approved", "Returned"];
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setNotifications(data.notifications ?? []);
+        setUnreadCount(data.unreadCount ?? 0);
+      }
+    } finally { setLoading(false); }
+  }, [token]);
+
+  useEffect(() => { load(); }, []);
+
+  // Real-time push
+  useEffect(() => {
+    const off = on("new_notification", (notif: Notification) => {
+      setNotifications(prev => [notif, ...prev]);
+      setUnreadCount(prev => prev + 1);
+    });
+    return () => { off(); };
+  }, [on]);
+
+  const markRead = async (id: number) => {
+    await fetch(`${API}/notifications/${id}/read`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  };
+
+  const markAllRead = async () => {
+    await fetch(`${API}/notifications/read-all`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    setUnreadCount(0);
+  };
+
+  const filtered = notifications.filter(n => {
+    if (filter === "All") return true;
+    const cfg = TYPE_CONFIG[n.type];
+    return cfg?.label === filter;
   });
 
   return (
-    <AppShell title="Notifications" subtitle="System alerts, approvals, and overdue prompts">
-      {/* Stats Row */}
-      <section className="stats-grid">
-        <article className="stat-card">
-          <div className="stat-icon-circle" style={{ background: "rgba(61,131,246,0.15)" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3d83f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-          </div>
-          <div className="stat-value">12</div>
-          <div className="stat-label">Total</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-icon-circle" style={{ background: "rgba(255,77,87,0.15)" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff4d57" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-          </div>
-          <div className="stat-value" style={{ color: "#ff6d86" }}>3</div>
-          <div className="stat-label">Unread</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-icon-circle" style={{ background: "rgba(243,174,42,0.15)" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f3ae2a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-          </div>
-          <div className="stat-value" style={{ color: "#ffc762" }}>2</div>
-          <div className="stat-label">Critical Alerts</div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-icon-circle" style={{ background: "rgba(243,174,42,0.15)" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f3ae2a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-          </div>
-          <div className="stat-value" style={{ color: "#fbc95f" }}>2</div>
-          <div className="stat-label">Pending Actions</div>
-        </article>
-      </section>
+    <AppShell title="Notifications" subtitle="Real-time alerts, approvals, and announcements">
 
-      {/* Filters */}
-      <section className="panel">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {tabs.map((t) => (
-              <button key={t} className={`tab-btn ${filter === t ? "active" : ""}`} type="button" onClick={() => setFilter(t)}>
-                {t}
+      {/* Stats row */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        {[
+          { label: "Total",        value: notifications.length,  color: "#3d83f6", icon: "🔔" },
+          { label: "Unread",       value: unreadCount,            color: "#ff4d57", icon: "🔴" },
+          { label: "Announcements",value: notifications.filter(n => n.type === "BROADCAST").length, color: "#a78bfa", icon: "📢" },
+          { label: "Overdue",      value: notifications.filter(n => n.type === "BORROW_OVERDUE").length, color: "#f3ae2a", icon: "⚠️" },
+        ].map(s => (
+          <div key={s.label} style={{ background: "#0d1b2e", border: `1px solid ${s.color}30`, borderRadius: 12,
+            padding: "14px 20px", flex: "1", minWidth: 120 }}>
+            <div style={{ fontSize: "1.4rem", marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ color: s.color, fontSize: "1.6rem", fontWeight: 700, fontFamily: "monospace" }}>{s.value}</div>
+            <div style={{ color: "#7ea5d6", fontSize: "0.72rem", fontWeight: 600, letterSpacing: 1 }}>{s.label.toUpperCase()}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters + actions */}
+      <div className="panel" style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {filters.map(f => (
+              <button key={f} onClick={() => setFilter(f)}
+                style={{ padding: "6px 14px", borderRadius: 20, fontWeight: 600, fontSize: "0.78rem", cursor: "pointer", transition: "all 0.2s",
+                  background: filter === f ? "#3d83f630" : "transparent",
+                  border: `1px solid ${filter === f ? "#3d83f6" : "#1a2d4a"}`,
+                  color: filter === f ? "#3d83f6" : "#7ea5d6" }}>
+                {f}
               </button>
             ))}
-            <select className="select" style={{ minWidth: 140 }}>
-              <option>All Categories</option>
-              <option>Inventory</option>
-              <option>Access</option>
-              <option>System</option>
-            </select>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ color: "#6fa0cf", fontSize: "0.9rem" }}>3 unread</span>
-            <button className="ghost-btn" type="button" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1dd5e6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <span style={{ color: "#1dd5e6" }}>Mark All Read</span>
+          {unreadCount > 0 && (
+            <button onClick={markAllRead}
+              style={{ padding: "6px 16px", background: "transparent", border: "1px solid #1dd5e640",
+                borderRadius: 20, color: "#1dd5e6", fontWeight: 600, fontSize: "0.78rem", cursor: "pointer" }}>
+              ✓ Mark All Read
             </button>
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* Notification Cards */}
-        <div className="notice-list">
-          {filtered.map((n, idx) => (
-            <article key={idx} className={`notice-item ${n.type}`}>
+      {/* Notification list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {loading ? (
+          <div className="panel" style={{ textAlign: "center", padding: 40, color: "#4a6580" }}>Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div className="panel" style={{ textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🔕</div>
+            <div style={{ color: "#4a6580" }}>No notifications in this category</div>
+          </div>
+        ) : filtered.map(notif => {
+          const cfg = TYPE_CONFIG[notif.type] ?? { icon: "📌", color: "#7ea5d6", label: notif.type };
+          return (
+            <div key={notif.id} onClick={() => !notif.isRead && markRead(notif.id)}
+              style={{ background: "#0d1b2e", border: `1px solid ${notif.isRead ? "#1a2d4a" : cfg.color + "40"}`,
+                borderRadius: 12, padding: "16px 20px", cursor: notif.isRead ? "default" : "pointer",
+                transition: "all 0.2s", opacity: notif.isRead ? 0.7 : 1,
+                borderLeft: `4px solid ${notif.isRead ? "#1a2d4a" : cfg.color}` }}>
               <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                <div className="notice-icon-wrap" style={{ background: n.type === "danger" ? "rgba(255,77,87,0.15)" : n.type === "warn" ? "rgba(243,174,42,0.15)" : "rgba(61,131,246,0.15)" }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={n.type === "danger" ? "#ff4d57" : n.type === "warn" ? "#f3ae2a" : "#6fb5ff"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                  </svg>
-                </div>
+                <div style={{ fontSize: "1.4rem", flexShrink: 0 }}>{cfg.icon}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <strong>{n.title}</strong>
-                      {n.unread && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff4d57", display: "inline-block" }}/>}
-                      {n.category && (
-                        <span className="badge info" style={{ fontSize: "0.72rem", padding: "2px 8px" }}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4, verticalAlign: "middle" }}><circle cx="12" cy="12" r="3"/><path d="M12 1v2"/><path d="M12 21v2"/></svg>
-                          {n.category}
-                        </span>
+                      <strong style={{ color: "#e8f0fe", fontSize: "0.9rem" }}>{notif.title}</strong>
+                      {!notif.isRead && (
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color, display: "inline-block", flexShrink: 0 }} />
                       )}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      <span style={{ color: "#5a8abb", fontSize: "0.82rem" }}>{n.time}</span>
-                      <button className="notice-action-btn success" type="button" title="Acknowledge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                      </button>
-                      <button className="notice-action-btn danger" type="button" title="Dismiss">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ background: cfg.color + "20", border: `1px solid ${cfg.color}40`, borderRadius: 20,
+                        color: cfg.color, fontSize: "0.7rem", fontWeight: 700, padding: "2px 10px" }}>
+                        {cfg.label}
+                      </span>
+                      <span style={{ color: "#4a6580", fontSize: "0.75rem" }}>{timeAgo(notif.createdAt)}</span>
                     </div>
                   </div>
-                  <p style={{ margin: 0, color: "#87b1da", lineHeight: 1.5 }}>{n.body}</p>
-                  {n.actionLabel && (
-                    <button className="ghost-btn" style={{ marginTop: 10, color: "#ff6d86", borderColor: "#7a3154" }} type="button">{n.actionLabel}</button>
-                  )}
+                  <p style={{ margin: 0, color: "#87b1da", lineHeight: 1.6, fontSize: "0.88rem" }}>{notif.body}</p>
                 </div>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+            </div>
+          );
+        })}
+      </div>
     </AppShell>
   );
 }

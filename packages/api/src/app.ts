@@ -13,6 +13,9 @@ import adminRoutes from "./modules/admin/admin.routes";
 import academicRoutes from "./modules/academic/academic.routes";
 import submissionsRoutes from "./modules/submissions/submissions.routes";
 import attendanceRoutes from "./modules/attendance/attendance.routes";
+import messagesRoutes from "./modules/messages/messages.routes";
+import notificationsRoutes from "./modules/notifications/notifications.routes";
+import timetableRoutes from "./modules/academic/timetable.routes";
 
 export const app = express();
 
@@ -33,6 +36,9 @@ app.use("/admin", adminRoutes);
 app.use("/academic", academicRoutes);
 app.use("/submissions", submissionsRoutes);
 app.use("/attendance", attendanceRoutes);
+app.use("/messages", messagesRoutes);
+app.use("/notifications", notificationsRoutes);
+app.use("/timetable", timetableRoutes);
 
 // Global Error Handler to prevent crashes
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

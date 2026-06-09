@@ -34,11 +34,15 @@ export default function LoginPage() {
       const data = await res.json();
       setAccessToken(data.accessToken);
 
-      // Fetch and store the user's profile (including roles)
       const meRes = await apiFetch("/auth/me");
       if (meRes.ok) {
         const me = await meRes.json();
         setUser({ id: me.id, email: me.email, fullName: me.fullName, roles: me.roles ?? [] });
+        // First-time login: force password change
+        if (me.mustChangePassword) {
+          router.push("/change-password");
+          return;
+        }
       }
 
       router.push("/dashboard");
