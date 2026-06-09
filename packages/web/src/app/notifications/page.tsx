@@ -74,7 +74,8 @@ export default function NotificationsPage() {
     } finally { setLoading(false); }
   }, [token]);
 
-  useEffect(() => { load(); }, []);
+  // Trigger load when token is available (token is async-loaded from localStorage)
+  useEffect(() => { if (token) load(); }, [token, load]);
 
   // Real-time push
   useEffect(() => {
