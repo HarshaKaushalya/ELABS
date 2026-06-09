@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiFetch, setAccessToken } from "@/lib/api";
+import { setUser } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -32,6 +33,14 @@ export default function LoginPage() {
 
       const data = await res.json();
       setAccessToken(data.accessToken);
+
+      // Fetch and store the user's profile (including roles)
+      const meRes = await apiFetch("/auth/me");
+      if (meRes.ok) {
+        const me = await meRes.json();
+        setUser({ id: me.id, email: me.email, fullName: me.fullName, roles: me.roles ?? [] });
+      }
+
       router.push("/dashboard");
     } catch (err) {
       setLoading(false);

@@ -199,11 +199,25 @@ router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async
 
       const issuedBy = req.user.id;
 
+      // Security: look up the requester's roles
+      const [roleRows] = await conn.query(
+        `SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = :uid`,
+        { uid: issuedBy }
+      );
+      const userRoles = (roleRows as any[]).map((x: any) => x.name);
+      const isStudent = userRoles.includes("STUDENT") && !userRoles.includes("TECHNICIAN") && !userRoles.includes("SYSTEM_ADMIN") && !userRoles.includes("LECTURER");
+
+      // Students can only borrow for themselves
+      if (isStudent) {
+        body.borrowerUserId = issuedBy;
+      }
+
       // MySQL needs 'YYYY-MM-DD HH:MM:SS', not ISO 8601 'YYYY-MM-DDTHH:MM:SS.mmmZ'
       const toMysqlDt = (iso: string | null | undefined): string | null => {
         if (!iso) return null;
         try { return new Date(iso).toISOString().replace("T", " ").substring(0, 19); } catch { return null; }
       };
+
 
       // create transaction
       const [txRes] = await conn.query(

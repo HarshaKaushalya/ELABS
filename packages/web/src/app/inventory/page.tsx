@@ -5,6 +5,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { BarcodeScanner } from "@/components/inventory/BarcodeScanner";
 import { ItemDetailsModal } from "@/components/inventory/ItemDetailsModal";
 import { apiFetch } from "@/lib/api";
+import { getUser } from "@/lib/auth";
+import { useIsStudent } from "@/hooks/useRole";
 import { QrCode } from "lucide-react";
 
 type InventoryItem = {
@@ -394,8 +396,89 @@ function BorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: BorrowSuc
   );
 }
 
+// ── Student Self-Borrow Form ──────────────────────────────────────────────────
+function StudentBorrowForm({ labs, userId, onSuccess }: { labs: Lab[]; userId: number; onSuccess: (r: BorrowSuccess) => void }) {
+  const [labId, setLabId] = useState<number>(labs[0]?.id ?? 0);
+  const [purpose, setPurpose] = useState("");
+  const [availableItems, setAvailableItems] = useState<AvailableItem[]>([]);
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!labId) return;
+    setLoadingItems(true);
+    setSelectedTags(new Set());
+    apiFetch(`/inventory/available-items/${labId}`)
+      .then(r => r.json()).then(d => setAvailableItems(d.items ?? [])).finally(() => setLoadingItems(false));
+  }, [labId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (selectedTags.size === 0) return setError("Select at least one item.");
+    setSubmitting(true);
+    try {
+      const res = await apiFetch("/inventory/borrow", {
+        method: "POST",
+        body: JSON.stringify({ labId, borrowerType: "STUDENT", borrowerUserId: userId, purpose: purpose.trim() || null, dueAt: null, elabsTags: Array.from(selectedTags), conditionOut: "Good" }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setError(data.detail || data.error || "Borrow failed");
+      setSelectedTags(new Set()); setPurpose("");
+      onSuccess(data as BorrowSuccess);
+    } catch { setError("Network error."); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <div style={{ background: "#ff4d5720", border: "1px solid #ff4d5740", borderRadius: 8, padding: "10px 14px", color: "#ff4d57", marginBottom: 16, fontSize: "0.85rem" }}>⚠ {error}</div>}
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: "block", color: "#7ea5d6", fontSize: "0.8rem", marginBottom: 6, fontWeight: 600 }}>LAB</label>
+        <select value={labId} onChange={e => setLabId(Number(e.target.value))} style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8, color: "#e8f0fe", padding: "10px 12px", fontSize: "0.9rem" }}>
+          {labs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: "block", color: "#7ea5d6", fontSize: "0.8rem", marginBottom: 6, fontWeight: 600 }}>PURPOSE (OPTIONAL)</label>
+        <input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="e.g. EE601 Lab 3" style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8, color: "#e8f0fe", padding: "10px 12px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: "block", color: "#7ea5d6", fontSize: "0.8rem", marginBottom: 8, fontWeight: 600 }}>
+          SELECT ITEMS <span style={{ color: "#3d83f6" }}>({availableItems.length} available)</span>
+          {selectedTags.size > 0 && <span style={{ color: "#18d18f", marginLeft: 8 }}>· {selectedTags.size} selected</span>}
+        </label>
+        {loadingItems ? <div style={{ color: "#7ea5d6", padding: 20, textAlign: "center" }}>Loading items…</div> : availableItems.length === 0 ? <div style={{ color: "#7ea5d6", padding: 20, textAlign: "center", background: "#0a1628", borderRadius: 8, border: "1px dashed #1a2d4a" }}>No available items in this lab.</div> : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {availableItems.map(item => {
+              const checked = selectedTags.has(item.elabsTag);
+              return (
+                <div key={item.elabsTag} onClick={() => setSelectedTags(prev => { const n = new Set(prev); checked ? n.delete(item.elabsTag) : n.add(item.elabsTag); return n; })} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: checked ? "#3d83f610" : "#0a1628", border: `1px solid ${checked ? "#3d83f660" : "#1a2d4a"}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s" }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, background: checked ? "#3d83f6" : "transparent", border: `2px solid ${checked ? "#3d83f6" : "#2a4060"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "white", fontSize: "0.75rem", fontWeight: 700 }}>{checked && "✓"}</div>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ color: "#1dd5e6", fontFamily: "monospace", fontWeight: 600, fontSize: "0.85rem" }}>{item.elabsTag}</span>
+                    <span style={{ color: checked ? "#e8f0fe" : "#7ea5d6", marginLeft: 10, fontSize: "0.85rem" }}>{item.name}</span>
+                    <span style={{ color: "#4a6580", marginLeft: 8, fontSize: "0.78rem" }}>{item.model}</span>
+                  </div>
+                  <span style={{ background: "#18d18f15", border: "1px solid #18d18f30", borderRadius: 20, color: "#18d18f", fontSize: "0.72rem", fontWeight: 600, padding: "2px 10px" }}>Available</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <button type="submit" disabled={submitting || selectedTags.size === 0} style={{ width: "100%", padding: "12px 0", background: selectedTags.size === 0 ? "#1a2d4a" : "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 10, color: selectedTags.size === 0 ? "#4a6580" : "#fff", fontWeight: 700, fontSize: "0.95rem", cursor: selectedTags.size === 0 ? "not-allowed" : "pointer" }}>
+        {submitting ? "Processing…" : `Borrow (${selectedTags.size} item${selectedTags.size !== 1 ? "s" : ""})`}
+      </button>
+    </form>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function InventoryPage() {
+  const isStudent = useIsStudent();
+  const [currentUserId, setCurrentUserId] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<"items" | "borrow" | "transactions" | "myborrows">("items");
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [labs, setLabs] = useState<Lab[]>([]);
@@ -412,7 +495,14 @@ export default function InventoryPage() {
   const fetchTransactions = useCallback(() => { apiFetch("/inventory/transactions").then(r => r.json()).then(d => setTransactions(d.transactions ?? [])).catch(() => {}); }, []);
   const fetchMyBorrows   = useCallback(() => { apiFetch("/inventory/my-borrows").then(r => r.json()).then(d => setMyBorrows(d.borrows ?? [])).catch(() => {}); }, []);
 
-  useEffect(() => { fetchItems(); fetchLabs(); fetchTransactions(); fetchMyBorrows(); }, [fetchItems, fetchLabs, fetchTransactions, fetchMyBorrows]);
+  useEffect(() => {
+    fetchItems(); fetchLabs(); fetchMyBorrows();
+    if (!isStudent) fetchTransactions();
+    const user = getUser();
+    if (user) setCurrentUserId(user.id);
+    // Default tab: students start on borrow, staff on items
+    setActiveTab(isStudent ? "borrow" : "items");
+  }, [isStudent, fetchItems, fetchLabs, fetchTransactions, fetchMyBorrows]);
 
   const filteredItems = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -448,12 +538,12 @@ export default function InventoryPage() {
 
   return (
     <AppShell title="Inventory Management" subtitle="Track, borrow, and manage all lab equipment">
-      {borrowSuccess && <BorrowSuccessCard result={borrowSuccess} onDone={() => { setBorrowSuccess(null); setActiveTab("transactions"); }} />}
+      {borrowSuccess && <BorrowSuccessCard result={borrowSuccess} onDone={() => { setBorrowSuccess(null); setActiveTab("myborrows"); }} />}
 
       <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid #1a2d4a" }}>
-        {tabBtn("items", "📦 All Equipment")}
-        {tabBtn("borrow", "⊕ Issue Borrow")}
-        {tabBtn("transactions", `📋 Active Borrows${activeBorrows > 0 ? ` (${activeBorrows})` : ""}`)}
+        {!isStudent && tabBtn("items", "📦 All Equipment")}
+        {tabBtn("borrow", isStudent ? "⊕ Borrow Equipment" : "⊕ Issue Borrow")}
+        {!isStudent && tabBtn("transactions", `📋 Active Borrows${activeBorrows > 0 ? ` (${activeBorrows})` : ""}`)}
         {tabBtn("myborrows", "👤 My Borrows")}
       </div>
 
@@ -503,9 +593,19 @@ export default function InventoryPage() {
       {/* ── BORROW TAB ── */}
       {activeTab === "borrow" && (
         <section className="panel">
-          <h3 style={{ margin: "0 0 6px", color: "#e8f0fe" }}>Issue Equipment Borrow</h3>
-          <p style={{ color: "#7ea5d6", marginBottom: 24, fontSize: "0.85rem" }}>Select a lab to see available equipment. Enter the student index number — it will auto-look up their profile.</p>
-          {labs.length > 0 && <BorrowForm labs={labs} onSuccess={handleBorrowSuccess} />}
+          {isStudent ? (
+            <>
+              <h3 style={{ margin: "0 0 6px", color: "#e8f0fe" }}>Borrow Lab Equipment</h3>
+              <p style={{ color: "#7ea5d6", marginBottom: 24, fontSize: "0.85rem" }}>Select a lab, pick the items you need, and submit your borrow request.</p>
+              {labs.length > 0 && <StudentBorrowForm labs={labs} userId={currentUserId} onSuccess={handleBorrowSuccess} />}
+            </>
+          ) : (
+            <>
+              <h3 style={{ margin: "0 0 6px", color: "#e8f0fe" }}>Issue Equipment Borrow</h3>
+              <p style={{ color: "#7ea5d6", marginBottom: 24, fontSize: "0.85rem" }}>Select a lab to see available equipment. Enter the student index number — it will auto-look up their profile.</p>
+              {labs.length > 0 && <BorrowForm labs={labs} onSuccess={handleBorrowSuccess} />}
+            </>
+          )}
         </section>
       )}
 

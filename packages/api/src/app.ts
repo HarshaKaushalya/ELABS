@@ -33,3 +33,9 @@ app.use("/admin", adminRoutes);
 app.use("/academic", academicRoutes);
 app.use("/submissions", submissionsRoutes);
 app.use("/attendance", attendanceRoutes);
+
+// Global Error Handler to prevent crashes
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(err);
+  res.status(err.status || 500).json({ error: err.message || "Internal Server Error" });
+});

@@ -47,11 +47,17 @@ export default function AiAssistantScreen() {
     setLoading(true);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const res = await fetch(`${AI_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       const data = await res.json();
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -59,7 +65,7 @@ export default function AiAssistantScreen() {
         content: data.answer ?? data.response ?? "I couldn't process that request.",
       };
       setMessages((prev) => [...prev, aiMsg]);
-    } catch {
+    } catch (err) {
       setMessages((prev) => [
         ...prev,
         {

@@ -18,7 +18,7 @@ const sections = [
       { label: "Inventory", href: "/inventory", icon: "inventory" },
       { label: "Laboratories", href: "/labs", icon: "labs" },
       { label: "Attendance & Access", href: "/calendar", icon: "attendance" },
-      { label: "Vision Monitoring", href: "/calendar", icon: "vision" },
+      { label: "Vision Monitoring",   href: "/vision",   icon: "vision" },
     ],
   },
   {

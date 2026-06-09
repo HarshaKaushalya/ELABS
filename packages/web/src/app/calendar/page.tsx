@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { VisionMonitoringPanel } from "@/components/vision/VisionMonitoringPanel";
 
 const hours = ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM", "4PM", "5PM"];
 const entries = [12, 28, 15, 8, 4, 22, 30, 18, 6, 2];
@@ -64,12 +63,6 @@ export default function AttendancePage() {
           </button>
         </div>
       </section>
-
-      {/* Vision Monitoring — powered by YOLOv8 */}
-      <section style={{ marginBottom: 16 }}>
-        <VisionMonitoringPanel />
-      </section>
-
 
       {/* Hourly Entry/Exit Chart */}
       <section className="panel">
