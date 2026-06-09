@@ -75,5 +75,87 @@ router.get("/summary", requireAuth, async (_req, res) => {
   });
 });
 
+
+/** GET /dashboard/overdue — list all overdue borrow transactions with items */
+router.get("/overdue", requireAuth, async (_req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        t.id AS transactionId,
+        t.due_at AS dueAt,
+        t.created_at AS createdAt,
+        t.purpose,
+        t.borrower_type AS borrowerType,
+        t.borrower_group_code AS borrowerGroupCode,
+        u.full_name AS borrowerName,
+        u.email AS borrowerEmail,
+        l.name AS labName,
+        TIMESTAMPDIFF(DAY, t.due_at, NOW()) AS daysOverdue,
+        JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'itemId',    i.id,
+            'elabsTag',  i.elabs_tag,
+            'name',      i.name,
+            'category',  i.category,
+            'model',     i.model
+          )
+        ) AS items
+      FROM borrow_transactions t
+      JOIN labs l ON l.id = t.lab_id
+      LEFT JOIN users u ON u.id = t.borrower_user_id
+      JOIN borrow_transaction_items bti ON bti.transaction_id = t.id
+      JOIN inventory_items i ON i.id = bti.item_id
+      WHERE t.status = 'BORROWED'
+        AND t.due_at IS NOT NULL
+        AND t.due_at < NOW()
+      GROUP BY t.id
+      ORDER BY t.due_at ASC
+      LIMIT 50
+    `);
+    res.json({ overdue: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/** GET /dashboard/my-borrows — current user's active + overdue borrows */
+router.get("/my-borrows", requireAuth, async (req: any, res) => {
+  const userId = req.user.id;
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        t.id AS transactionId,
+        t.due_at AS dueAt,
+        t.created_at AS createdAt,
+        t.status,
+        l.name AS labName,
+        t.purpose,
+        TIMESTAMPDIFF(DAY, t.due_at, NOW()) AS daysOverdue,
+        JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'itemId',   i.id,
+            'elabsTag', i.elabs_tag,
+            'name',     i.name,
+            'category', i.category
+          )
+        ) AS items
+      FROM borrow_transactions t
+      JOIN labs l ON l.id = t.lab_id
+      JOIN borrow_transaction_items bti ON bti.transaction_id = t.id
+      JOIN inventory_items i ON i.id = bti.item_id
+      WHERE t.borrower_user_id = :userId
+        AND t.status = 'BORROWED'
+      GROUP BY t.id
+      ORDER BY t.due_at ASC
+    `, { userId });
+    res.json({ borrows: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
+
 
