@@ -28,7 +28,7 @@ function timeAgo(iso: string) {
 
 function getToken() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("elabs_token") ?? sessionStorage.getItem("elabs_token");
+  return localStorage.getItem("elabs_access_token") ?? sessionStorage.getItem("elabs_access_token");
 }
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
@@ -42,7 +42,14 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
 };
 
 export default function NotificationsPage() {
-  const token = getToken();
+  const [mounted, setMounted] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    setToken(getToken());
+    setMounted(true);
+  }, []);
+
   const { on } = useSocket(token);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -101,6 +108,8 @@ export default function NotificationsPage() {
     const cfg = TYPE_CONFIG[n.type];
     return cfg?.label === filter;
   });
+
+  if (!mounted) return <AppShell title="Notifications" subtitle="Real-time alerts, approvals, and announcements"><div style={{ padding: 40, textAlign: "center", color: "#4a6580" }}>Loading...</div></AppShell>;
 
   return (
     <AppShell title="Notifications" subtitle="Real-time alerts, approvals, and announcements">

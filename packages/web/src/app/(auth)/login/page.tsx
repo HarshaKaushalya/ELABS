@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { apiFetch, setAccessToken } from "@/lib/api";
-import { setUser } from "@/lib/auth";
+import { setUser, setToken } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -33,11 +33,12 @@ export default function LoginPage() {
 
       const data = await res.json();
       setAccessToken(data.accessToken);
+      setToken(data.accessToken);
 
       const meRes = await apiFetch("/auth/me");
       if (meRes.ok) {
         const me = await meRes.json();
-        setUser({ id: me.id, email: me.email, fullName: me.fullName, roles: me.roles ?? [] });
+        setUser({ id: me.id, email: me.email, fullName: me.fullName, roles: me.roles ?? [], mustChangePassword: me.mustChangePassword });
         // First-time login: force password change
         if (me.mustChangePassword) {
           router.push("/change-password");

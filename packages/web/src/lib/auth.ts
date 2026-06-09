@@ -17,7 +17,7 @@ export function clearToken(): void {
   window.localStorage.removeItem(USER_KEY);
 }
 
-export type StoredUser = { id: number; email: string; fullName: string; roles: string[] };
+export type StoredUser = { id: number; email: string; fullName: string; roles: string[], mustChangePassword?: boolean };
 
 export function setUser(user: StoredUser): void {
   if (typeof window === "undefined") return;

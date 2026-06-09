@@ -30,7 +30,7 @@ function timeAgo(iso: string) {
 
 function getToken() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("elabs_token") ?? sessionStorage.getItem("elabs_token");
+  return localStorage.getItem("elabs_access_token") ?? sessionStorage.getItem("elabs_access_token");
 }
 
 function getUser(): { roles?: string[]; fullName?: string } | null {
@@ -42,9 +42,16 @@ function getUser(): { roles?: string[]; fullName?: string } | null {
 }
 
 export default function MessagesPage() {
-  const token = getToken();
-  const user  = getUser();
-  const isAdmin = user?.roles?.includes("SYSTEM_ADMIN") ?? false;
+  const [mounted, setMounted] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setToken(getToken());
+    const u = getUser();
+    setIsAdmin(u?.roles?.includes("SYSTEM_ADMIN") ?? false);
+    setMounted(true);
+  }, []);
 
   const { on } = useSocket(token);
 
@@ -133,6 +140,8 @@ export default function MessagesPage() {
       }
     } finally { setSending(false); }
   };
+
+  if (!mounted) return <AppShell title="Messages" subtitle="Live messaging & announcements — powered by WebSocket"><div style={{ padding: 40, textAlign: "center", color: "#4a6580" }}>Loading...</div></AppShell>;
 
   return (
     <AppShell title="Messages" subtitle="Live messaging & announcements — powered by WebSocket">
