@@ -132,7 +132,6 @@ const styles = StyleSheet.create({
   },
   list: { padding: spacing.md, gap: spacing.sm },
   card: {
-    backgroundColor: "transparent",
     borderWidth: 1,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
