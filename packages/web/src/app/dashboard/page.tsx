@@ -7,9 +7,9 @@ import { Calendar as CalendarIcon, Clock, FileText, ChevronLeft, ChevronRight } 
 
 type TimetableSlot = {
   id: number;
-  sessionDate: string;
-  timeSlot: string;
-  labLabel: string;
+  date: string;
+  time: string;
+  lab: string;
   moduleCode: string;
   moduleName: string;
   status: "UPCOMING" | "COMPLETED" | "CANCELLED";
@@ -53,32 +53,29 @@ export default function DashboardPage() {
     today.setHours(0, 0, 0, 0);
 
     slots.forEach((slot) => {
-      const sessionDate = new Date(slot.sessionDate);
-      if (sessionDate >= today) {
-        // Lab Session Event
-        events.push({
-          id: `lab-${slot.id}`,
-          date: sessionDate,
-          title: `Laboratory Session - ${slot.labLabel}`,
-          subtitle: `${slot.moduleCode} ${slot.moduleName} • ${slot.timeSlot}`,
+      const sessionDate = new Date(slot.date);
+      
+      // Lab Session Event
+      events.push({
+        id: `lab-${slot.id}`,
+        date: sessionDate,
+        title: `Laboratory Session - ${slot.lab}`,
+        subtitle: `${slot.moduleCode} ${slot.moduleName} • ${slot.time}`,
           type: "LAB_SESSION",
           color: "#f3ae2a", // amber
         });
 
-        // Pre-lab Event (2 days before)
-        const preLabDate = new Date(sessionDate);
-        preLabDate.setDate(preLabDate.getDate() - 2);
-        if (preLabDate >= today) {
-          events.push({
-            id: `prelab-${slot.id}`,
-            date: preLabDate,
-            title: `PRE-LAB is due`,
-            subtitle: `Assignment is due • ${slot.moduleCode}`,
-            type: "PRE_LAB",
-            color: "#18d18f", // green
-          });
-        }
-      }
+      // Pre-lab Event (2 days before)
+      const preLabDate = new Date(sessionDate);
+      preLabDate.setDate(preLabDate.getDate() - 2);
+      events.push({
+        id: `prelab-${slot.id}`,
+        date: preLabDate,
+        title: `PRE-LAB is due`,
+        subtitle: `Assignment is due • ${slot.moduleCode}`,
+        type: "PRE_LAB",
+        color: "#18d18f", // green
+      });
     });
 
     // Sort chronologically
@@ -87,9 +84,11 @@ export default function DashboardPage() {
 
   const timelineEvents = generateTimelineEvents();
   const next7DaysEvents = timelineEvents.filter(e => {
-    const diffTime = e.date.getTime() - new Date().getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 7;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diffTime = e.date.getTime() - now.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 7;
   });
 
   // Group timeline by date string
