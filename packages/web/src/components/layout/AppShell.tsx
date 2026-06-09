@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { FloatingAIAssistant } from "./FloatingAIAssistant";
 
 type AppShellProps = {
   title: string;
@@ -27,8 +28,11 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isSidebarCollapsed={isSidebarCollapsed}
         />
-        <main className="content page-stage">{children}</main>
+        <main className="content page-stage">
+          {children}
+        </main>
       </div>
+      <FloatingAIAssistant />
     </div>
   );
 }
