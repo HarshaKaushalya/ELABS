@@ -155,7 +155,8 @@ router.get("/modules/:id", requireAuth, async (req: AuthedRequest, res) => {
     // Timetable slots for this module
     const [schedule] = await pool.query(`
       SELECT id, session_date AS sessionDate, time_slot AS timeSlot,
-             lab_label AS labLabel, group_code AS groupCode, academic_year AS academicYear
+             lab_label AS labLabel, group_code AS groupCode, academic_year AS academicYear,
+             status
       FROM timetable_slots
       WHERE module_code = :code
       ORDER BY session_date ASC, time_slot ASC, group_code ASC
@@ -235,6 +236,24 @@ router.put("/modules/:id/practicals", requireAuth, requirePermission("admin:mana
         [rows]
       );
     }
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: "Invalid request" }); }
+});
+
+// PATCH /academic/timetable/:id/status — admin updates timetable slot status
+router.patch("/timetable/:id/status", requireAuth, requirePermission("admin:manage"), async (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  try {
+    const { status } = z.object({
+      status: z.enum(["UPCOMING", "COMPLETED", "CANCELLED"])
+    }).parse(req.body);
+
+    const [result] = await pool.query(
+      `UPDATE timetable_slots SET status = :status WHERE id = :id`,
+      { id, status }
+    );
+    if ((result as any).affectedRows === 0) return res.status(404).json({ error: "Slot not found" });
+    
     res.json({ ok: true });
   } catch (err) { res.status(400).json({ error: "Invalid request" }); }
 });

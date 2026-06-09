@@ -15,6 +15,7 @@ type Practical = {
 type ScheduleSlot = {
   id: number; sessionDate: string; timeSlot: string;
   labLabel: string; groupCode: string; academicYear: string;
+  status: "UPCOMING" | "COMPLETED" | "CANCELLED";
 };
 type Session = {
   id: number; title: string; description: string;
@@ -184,6 +185,19 @@ export default function ModulePage() {
   };
 
   useEffect(() => { load(); }, [moduleId]);
+
+  const toggleScheduleStatus = async (slotId: number, current: string) => {
+    if (!isAdmin) return;
+    const next = current === "UPCOMING" ? "COMPLETED" : "UPCOMING";
+    try {
+      await apiFetch(`/academic/timetable/${slotId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      setSchedule(prev => prev.map(s => s.id === slotId ? { ...s, status: next as "UPCOMING"|"COMPLETED" } : s));
+    } catch { alert("Failed to update status"); }
+  };
 
   // Group schedule by date
   const scheduleByDate = schedule.reduce<Record<string, ScheduleSlot[]>>((acc, s) => {
@@ -363,8 +377,9 @@ export default function ModulePage() {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ color: "#4a6580", fontSize: "0.8rem", marginBottom: 4 }}>
-                Academic Year {schedule[0]?.academicYear} · {Object.keys(scheduleByDate).length} session dates · {schedule.length} group-slots
+              <div style={{ color: "#4a6580", fontSize: "0.8rem", marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
+                <span>Academic Year {schedule[0]?.academicYear} · {Object.keys(scheduleByDate).length} session dates</span>
+                {isAdmin && <span style={{ color: "#f3ae2a" }}>Click on status to mark as completed</span>}
               </div>
               {Object.entries(scheduleByDate).map(([date, slots]) => (
                 <div key={date} className="panel" style={{ padding: 0, overflow: "hidden" }}>
@@ -374,10 +389,26 @@ export default function ModulePage() {
                   </div>
                   <div style={{ display: "flex", gap: 0, flexWrap: "wrap" }}>
                     {slots.map(slot => (
-                      <div key={slot.id} style={{ padding: "12px 16px", borderRight: "1px solid #0d1b2e", minWidth: 120, flex: 1 }}>
-                        <div style={{ color: "#3d83f6", fontWeight: 700, fontSize: "0.82rem", marginBottom: 4 }}>{slot.labLabel}</div>
-                        <div style={{ color: "#1dd5e6", fontWeight: 600, fontSize: "0.88rem" }}>{slot.groupCode}</div>
-                        <div style={{ color: "#4a6580", fontSize: "0.72rem", marginTop: 2 }}>Group</div>
+                      <div key={slot.id} style={{ padding: "12px 16px", borderRight: "1px solid #0d1b2e", minWidth: 140, flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ color: "#3d83f6", fontWeight: 700, fontSize: "0.82rem" }}>{slot.labLabel}</span>
+                          <button
+                            onClick={() => toggleScheduleStatus(slot.id, slot.status)}
+                            disabled={!isAdmin}
+                            style={{ 
+                              background: slot.status === "COMPLETED" ? "#18d18f20" : "#f3ae2a20", 
+                              color: slot.status === "COMPLETED" ? "#18d18f" : "#f3ae2a", 
+                              border: `1px solid ${slot.status === "COMPLETED" ? "#18d18f40" : "#f3ae2a40"}`, 
+                              borderRadius: 4, padding: "2px 6px", fontSize: "0.65rem", fontWeight: 700, 
+                              cursor: isAdmin ? "pointer" : "default" 
+                            }}>
+                            {slot.status === "COMPLETED" ? "✓ DONE" : "UPCOMING"}
+                          </button>
+                        </div>
+                        <div>
+                          <div style={{ color: "#1dd5e6", fontWeight: 600, fontSize: "0.88rem" }}>{slot.groupCode}</div>
+                          <div style={{ color: "#4a6580", fontSize: "0.72rem", marginTop: 2 }}>Group</div>
+                        </div>
                       </div>
                     ))}
                   </div>
