@@ -24,7 +24,7 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
       `SELECT ts.id, ts.session_date AS date, ts.time_slot AS time,
               ts.module_code AS moduleCode, ts.lab_label AS lab,
               ts.group_code AS groupCode, ts.academic_year AS academicYear,
-              m.name AS moduleName
+              m.name AS moduleName, m.id AS moduleId
        FROM timetable_slots ts
        LEFT JOIN modules m ON m.code = ts.module_code
        WHERE ts.group_code = :group
@@ -38,7 +38,7 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
       `SELECT ts.id, ts.session_date AS date, ts.time_slot AS time,
               ts.module_code AS moduleCode, ts.lab_label AS lab,
               ts.group_code AS groupCode, ts.academic_year AS academicYear,
-              m.name AS moduleName
+              m.name AS moduleName, m.id AS moduleId
        FROM timetable_slots ts
        LEFT JOIN modules m ON m.code = ts.module_code
        ORDER BY ts.session_date, ts.group_code, ts.time_slot`

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
 import { Calendar as CalendarIcon, Clock, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 type TimetableSlot = {
   id: number;
@@ -12,6 +13,7 @@ type TimetableSlot = {
   lab: string;
   moduleCode: string;
   moduleName: string;
+  moduleId: number;
   status: "UPCOMING" | "COMPLETED" | "CANCELLED";
 };
 
@@ -22,6 +24,7 @@ type TimelineEvent = {
   subtitle: string;
   type: "PRE_LAB" | "LAB_SESSION";
   color: string;
+  moduleId: number;
 };
 
 export default function DashboardPage() {
@@ -61,9 +64,10 @@ export default function DashboardPage() {
         date: sessionDate,
         title: `Laboratory Session - ${slot.lab}`,
         subtitle: `${slot.moduleCode} ${slot.moduleName} • ${slot.time}`,
-          type: "LAB_SESSION",
-          color: "#f3ae2a", // amber
-        });
+        type: "LAB_SESSION",
+        color: "#f3ae2a", // amber
+        moduleId: slot.moduleId,
+      });
 
       // Pre-lab Event (2 days before)
       const preLabDate = new Date(sessionDate);
@@ -75,6 +79,7 @@ export default function DashboardPage() {
         subtitle: `Assignment is due • ${slot.moduleCode}`,
         type: "PRE_LAB",
         color: "#18d18f", // green
+        moduleId: slot.moduleId,
       });
     });
 
@@ -180,12 +185,16 @@ export default function DashboardPage() {
                               <div style={{ color: event.color, fontSize: "1rem", fontWeight: 500, marginBottom: 4 }}>{event.title}</div>
                               <div style={{ color: "#7ea5d6", fontSize: "0.85rem" }}>{event.subtitle}</div>
                             </div>
-                            <button style={{ padding: "8px 16px", backgroundColor: "transparent", border: "1px solid #204072", color: "#d9ebff", borderRadius: 6, cursor: "pointer", fontSize: "0.85rem" }}
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#122a54"}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                            >
-                              View details
-                            </button>
+                            {event.moduleId ? (
+                              <Link href={`/labs/module/${event.moduleId}`}>
+                                <button style={{ padding: "8px 16px", backgroundColor: "transparent", border: "1px solid #204072", color: "#d9ebff", borderRadius: 6, cursor: "pointer", fontSize: "0.85rem" }}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#122a54"}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                                >
+                                  View details
+                                </button>
+                              </Link>
+                            ) : null}
                           </div>
                         ))}
                       </div>
@@ -261,16 +270,18 @@ export default function DashboardPage() {
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               {dayEvents.map(evt => (
-                                <div key={evt.id} style={{ 
-                                  fontSize: "0.75rem", 
-                                  color: evt.color, 
-                                  display: "flex", 
-                                  alignItems: "flex-start", 
-                                  gap: 4 
-                                }}>
-                                  <span style={{ color: evt.color, marginTop: 1 }}>○</span>
-                                  <span style={{ lineHeight: 1.3, wordBreak: "break-word" }}>{evt.title}</span>
-                                </div>
+                                <Link key={evt.id} href={evt.moduleId ? `/labs/module/${evt.moduleId}` : "#"} style={{ textDecoration: "none" }}>
+                                  <div style={{ 
+                                    fontSize: "0.75rem", 
+                                    color: evt.color, 
+                                    display: "flex", 
+                                    alignItems: "flex-start", 
+                                    gap: 4 
+                                  }}>
+                                    <span style={{ color: evt.color, marginTop: 1 }}>○</span>
+                                    <span style={{ lineHeight: 1.3, wordBreak: "break-word" }}>{evt.title}</span>
+                                  </div>
+                                </Link>
                               ))}
                             </div>
                           </>
