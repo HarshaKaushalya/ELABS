@@ -8,6 +8,7 @@ class ChatRequest(BaseModel):
     message: str
     context: str | None = None
     document_id: str | None = None
+    user_email: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -18,7 +19,7 @@ class ChatResponse(BaseModel):
 def chat(payload: ChatRequest) -> ChatResponse:
     try:
         from ..core.rag import ask_question
-        answer = ask_question(payload.message)
+        answer = ask_question(payload.message, payload.user_email, payload.document_id)
         return ChatResponse(answer=answer)
     except Exception as e:
         return ChatResponse(

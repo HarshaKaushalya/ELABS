@@ -175,9 +175,9 @@ def _analyze_frame_sync(
         fire_flag, smoke_flag = _ya._hsv_fire_smoke_check(frame)
 
     if fire_flag:
-        alerts.append({"type": "fire",  "detail": "🔥 Fire detected!"})
+        alerts.append({"type": "fire",  "detail": "Fire detected!"})
     if smoke_flag:
-        alerts.append({"type": "smoke", "detail": "🌫️ Smoke detected!"})
+        alerts.append({"type": "smoke", "detail": "Smoke detected!"})
 
     # Encode raw frame as JPEG for frontend to display
     try:

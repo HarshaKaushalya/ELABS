@@ -112,7 +112,7 @@ def _load_models() -> None:
             # This will only succeed if the container has internet access
             from ultralytics.hub import HUBTrainingSession  # noqa: F401
             _fire_model = YOLO("keremberke/yolov8n-fire-detection")
-            logger.info("Loaded keremberke/yolov8n-fire-detection ✓")
+            logger.info("Loaded keremberke/yolov8n-fire-detection successfully")
         except Exception as exc:
             logger.warning(
                 "Could not load dedicated fire model (%s). "
@@ -351,7 +351,7 @@ def analyze_video(video_path: str | Path) -> AnalysisResult:
             timeline.append(TimelineEvent(
                 time_sec=time_sec,
                 event="fire",
-                detail="🔥 Fire detected in frame",
+                detail="Fire detected in frame",
             ))
             if len(frame_previews) < MAX_THUMBNAILS:
                 frame_previews.append(FramePreview(
@@ -367,7 +367,7 @@ def analyze_video(video_path: str | Path) -> AnalysisResult:
             timeline.append(TimelineEvent(
                 time_sec=time_sec,
                 event="smoke",
-                detail="🌫️ Smoke detected in frame",
+                detail="Smoke detected in frame",
             ))
             if len(frame_previews) < MAX_THUMBNAILS:
                 frame_previews.append(FramePreview(

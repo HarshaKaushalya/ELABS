@@ -39,11 +39,18 @@ def search_chunks(query: str, doc_id: str = None) -> list[str]:
             chunks.extend(doc.get("chunks", []))
 
     # Simple keyword matching
-    query_words = query.lower().split()
+    query_words = [w for w in query.lower().split() if len(w) > 3] # Ignore stop words like "the", "a", "it"
+    if not query_words:
+        query_words = query.lower().split()
+
     for chunk in chunks:
         chunk_lower = chunk.lower()
         if any(word in chunk_lower for word in query_words):
             results.append(chunk)
+
+    # If no keywords matched, but they asked about a specific document, return the first few chunks as context anyway
+    if not results and doc_id and chunks:
+        results = chunks[:3]
 
     return results[:3]  # Return top 3 results
 
