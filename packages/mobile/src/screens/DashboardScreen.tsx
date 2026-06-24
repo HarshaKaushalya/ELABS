@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/routes";
 import { loadUser, clearAccessToken, User } from "../lib/auth";
@@ -16,19 +17,19 @@ import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "Dashboard">;
 
 const quickActions = [
-  { label: "Scan Entry", icon: "📷", screen: "ScanEntry" as const, gradient: ["#18d18f", "#1dd5e6"] as [string, string] },
-  { label: "Scan Exit", icon: "🚪", screen: "ScanExit" as const, gradient: ["#3d83f6", "#6366f1"] as [string, string] },
-  { label: "Borrow", icon: "📦", screen: "ScanBorrow" as const, gradient: ["#f59e0b", "#ef4444"] as [string, string] },
-  { label: "Return", icon: "↩️", screen: "ScanReturn" as const, gradient: ["#8b5cf6", "#ec4899"] as [string, string] },
+  { label: "Scan Entry", icon: "camera-outline" as const, screen: "ScanEntry" as const, gradient: ["#18d18f", "#1dd5e6"] as [string, string] },
+  { label: "Scan Exit", icon: "exit-outline" as const, screen: "ScanExit" as const, gradient: ["#3d83f6", "#6366f1"] as [string, string] },
+  { label: "Borrow", icon: "cube-outline" as const, screen: "ScanBorrow" as const, gradient: ["#f59e0b", "#ef4444"] as [string, string] },
+  { label: "Return", icon: "arrow-undo-outline" as const, screen: "ScanReturn" as const, gradient: ["#8b5cf6", "#ec4899"] as [string, string] },
 ];
 
 const menuItems = [
-  { label: "Inventory", icon: "📋", screen: "Inventory" as const },
-  { label: "My Labs", icon: "🔬", screen: "MyLabs" as const },
-  { label: "AI Assistant", icon: "🤖", screen: "AiAssistant" as const },
-  { label: "Messages", icon: "💬", screen: "Messages" as const },
-  { label: "Notifications", icon: "🔔", screen: "Notifications" as const },
-  { label: "Settings", icon: "⚙️", screen: "Settings" as const },
+  { label: "Inventory", icon: "clipboard-outline" as const, screen: "Inventory" as const },
+  { label: "My Labs", icon: "flask-outline" as const, screen: "MyLabs" as const },
+  { label: "AI Assistant", icon: "chatbubble-ellipses-outline" as const, screen: "AiAssistant" as const },
+  { label: "Messages", icon: "chatbubbles-outline" as const, screen: "Messages" as const },
+  { label: "Notifications", icon: "notifications-outline" as const, screen: "Notifications" as const },
+  { label: "Settings", icon: "settings-outline" as const, screen: "Settings" as const },
 ];
 
 export default function DashboardScreen({ navigation }: Props) {
@@ -67,7 +68,7 @@ export default function DashboardScreen({ navigation }: Props) {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>{greeting} 👋</Text>
+            <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.role}>{role}</Text>
           </View>
           <Pressable onPress={handleLogout} style={styles.logoutBtn}>
@@ -95,7 +96,7 @@ export default function DashboardScreen({ navigation }: Props) {
                 colors={action.gradient}
                 style={styles.quickGradient}
               >
-                <Text style={styles.quickIcon}>{action.icon}</Text>
+                <Ionicons name={action.icon} size={24} color={colors.white} />
               </LinearGradient>
               <Text style={styles.quickLabel}>{action.label}</Text>
             </Pressable>
@@ -111,9 +112,9 @@ export default function DashboardScreen({ navigation }: Props) {
               onPress={() => navigation.navigate(item.screen)}
               style={styles.menuItem}
             >
-              <Text style={styles.menuIcon}>{item.icon}</Text>
+              <Ionicons name={item.icon} size={20} color={colors.primary} style={{ marginRight: spacing.md }} />
               <Text style={styles.menuLabel}>{item.label}</Text>
-              <Text style={styles.menuArrow}>›</Text>
+              <Ionicons name="chevron-forward-outline" size={18} color={colors.textMuted} />
             </Pressable>
           ))}
         </View>

@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/routes";
 import { apiFetch } from "../lib/api";
 import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type Module = {
   id: number;
@@ -71,7 +72,7 @@ export default function LabGroupScreen({ navigation, route }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📚</Text>
+            <Ionicons name="book-outline" size={48} color={colors.textMuted} style={{ marginBottom: spacing.md }} />
             <Text style={styles.emptyText}>No modules found</Text>
           </View>
         }
@@ -120,12 +121,12 @@ export default function LabGroupScreen({ navigation, route }: Props) {
 
               {/* Stats row */}
               <View style={styles.statsRow}>
-                <Text style={[styles.stat, { color: colors.success }]}>✓ {done} done</Text>
-                <Text style={[styles.stat, { color: colors.warning }]}>◷ {pending} upcoming</Text>
+                <Text style={[styles.stat, { color: colors.success }]}>{done} done</Text>
+                <Text style={[styles.stat, { color: colors.warning }]}>{pending} upcoming</Text>
                 <Text style={[styles.stat, { color: colors.textSecondary }]}>{total} total</Text>
               </View>
 
-              <Text style={[styles.arrow, { color }]}>›</Text>
+              <Ionicons name="chevron-forward" size={18} color={color} style={styles.arrow} />
             </Pressable>
           );
         }}

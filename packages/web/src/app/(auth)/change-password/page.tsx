@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { KeyRound, CheckCircle2 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -64,16 +65,18 @@ export default function ChangePasswordPage() {
       fontFamily: "'Inter','Segoe UI',sans-serif",
     }}>
       <div style={{
-        background: "#0d1b2e", border: "1px solid #1a2d4a", borderRadius: 20,
+        background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 20,
         padding: "40px 48px", width: "100%", maxWidth: 420,
         boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
       }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>🔐</div>
-          <h1 style={{ color: "#e8f0fe", margin: "0 0 8px", fontSize: "1.4rem", fontWeight: 700 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: "#3d83f6" }}>
+            <KeyRound size={48} />
+          </div>
+          <h1 style={{ color: "var(--text-main)", margin: "0 0 8px", fontSize: "1.4rem", fontWeight: 700 }}>
             Set Your Password
           </h1>
-          <p style={{ color: "#7ea5d6", margin: 0, fontSize: "0.88rem", lineHeight: 1.5 }}>
+          <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.88rem", lineHeight: 1.5 }}>
             Welcome to ELABS! You're logging in for the first time.<br />
             Please set a secure password to continue.
           </p>
@@ -81,14 +84,16 @@ export default function ChangePasswordPage() {
 
         {done ? (
           <div style={{ textAlign: "center", color: "#18d18f", padding: "20px 0" }}>
-            <div style={{ fontSize: 36 }}>✅</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: "#18d18f" }}>
+              <CheckCircle2 size={36} />
+            </div>
             <div style={{ fontWeight: 700, marginTop: 8 }}>Password updated!</div>
-            <div style={{ color: "#7ea5d6", fontSize: "0.85rem", marginTop: 4 }}>Redirecting to dashboard…</div>
+            <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 4 }}>Redirecting to dashboard…</div>
           </div>
         ) : (
           <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
-              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
+              <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
                 NEW PASSWORD
               </label>
               <input
@@ -99,14 +104,14 @@ export default function ChangePasswordPage() {
                 required
                 style={{
                   width: "100%", boxSizing: "border-box",
-                  background: "#0a1628", border: "1px solid #1a2d4a",
-                  borderRadius: 10, color: "#e8f0fe", padding: "12px 16px", fontSize: "0.95rem",
+                  background: "var(--bg-app)", border: "1px solid var(--border-color)",
+                  borderRadius: 10, color: "var(--text-main)", padding: "12px 16px", fontSize: "0.95rem",
                 }}
               />
             </div>
 
             <div>
-              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
+              <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
                 CONFIRM PASSWORD
               </label>
               <input
@@ -117,8 +122,8 @@ export default function ChangePasswordPage() {
                 required
                 style={{
                   width: "100%", boxSizing: "border-box",
-                  background: "#0a1628", border: `1px solid ${confirmPw && confirmPw !== newPw ? "#ff4d57" : "#1a2d4a"}`,
-                  borderRadius: 10, color: "#e8f0fe", padding: "12px 16px", fontSize: "0.95rem",
+                  background: "var(--bg-app)", border: `1px solid ${confirmPw && confirmPw !== newPw ? "#ff4d57" : "var(--border-color)"}`,
+                  borderRadius: 10, color: "var(--text-main)", padding: "12px 16px", fontSize: "0.95rem",
                 }}
               />
               {confirmPw && confirmPw !== newPw && (

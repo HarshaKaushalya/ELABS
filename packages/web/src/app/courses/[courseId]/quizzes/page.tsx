@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { QuizBuilder } from "@/components/courses/QuizBuilder";
 

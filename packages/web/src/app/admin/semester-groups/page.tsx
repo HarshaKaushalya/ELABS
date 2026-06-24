@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
+import { FolderTree, BookOpen, FlaskConical, CheckCircle2, XCircle } from "lucide-react";
 
 
 type Semester = { id: number; name: string; level: number; moduleCount: number };
@@ -10,33 +11,35 @@ type Module = { id: number; code: string; name: string };
 
 // ── Reusable form field styles ────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
-  background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 8,
-  padding: "9px 13px", color: "#e8f0fe", width: "100%", fontSize: "0.88rem",
+  background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8,
+  padding: "9px 13px", color: "var(--text-main)", width: "100%", fontSize: "0.88rem",
 };
 const labelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 5 };
-const labelText: React.CSSProperties = { color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 600, letterSpacing: 0.3 };
+const labelText: React.CSSProperties = { color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600, letterSpacing: 0.3 };
 
 function SuccessBanner({ msg }: { msg: string }) {
   return (
-    <div style={{ background: "#18d18f15", border: "1px solid #18d18f40", borderRadius: 8, padding: "10px 14px", color: "#18d18f", marginBottom: 16, fontSize: "0.88rem" }}>
-      ✓ {msg}
+    <div style={{ background: "#18d18f15", border: "1px solid #18d18f40", borderRadius: 8, padding: "10px 14px", color: "#18d18f", marginBottom: 16, fontSize: "0.88rem", display: "flex", alignItems: "center", gap: 8 }}>
+      <CheckCircle2 size={16} />
+      <span>{msg}</span>
     </div>
   );
 }
 function ErrorBanner({ msg }: { msg: string }) {
   return (
-    <div style={{ background: "#ff4d5715", border: "1px solid #ff4d5740", borderRadius: 8, padding: "10px 14px", color: "#ff4d57", marginBottom: 16, fontSize: "0.88rem" }}>
-      ✕ {msg}
+    <div style={{ background: "#ff4d5715", border: "1px solid #ff4d5740", borderRadius: 8, padding: "10px 14px", color: "#ff4d57", marginBottom: 16, fontSize: "0.88rem", display: "flex", alignItems: "center", gap: 8 }}>
+      <XCircle size={16} />
+      <span>{msg}</span>
     </div>
   );
 }
 
 // ── Section card ──────────────────────────────────────────────────────────────
-function Card({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function Card({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#0d1b2e", border: "1px solid #1a2d4a", borderRadius: 16, padding: 24 }}>
-      <h3 style={{ margin: "0 0 20px", color: "#e8f0fe", fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: "1.2rem" }}>{icon}</span> {title}
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 16, padding: 24 }}>
+      <h3 style={{ margin: "0 0 20px", color: "var(--text-main)", fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ display: "flex", alignItems: "center", color: "#3d83f6" }}>{icon}</span> {title}
       </h3>
       {children}
     </div>
@@ -149,7 +152,7 @@ export default function AdminLabsPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
         {/* ── Create Semester Group ─────────────────────────────────────── */}
-        <Card title="Create Semester Group" icon="🗂">
+        <Card title="Create Semester Group" icon={<FolderTree size={20} />}>
           <form onSubmit={handleCreateSemester} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={labelStyle}>
               <span style={labelText}>Group Name</span>
@@ -171,15 +174,15 @@ export default function AdminLabsPage() {
 
           {/* Existing groups list */}
           <div style={{ marginTop: 20 }}>
-            <div style={{ color: "#7ea5d6", fontSize: "0.78rem", marginBottom: 10, fontWeight: 600 }}>EXISTING GROUPS</div>
+            <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", marginBottom: 10, fontWeight: 600 }}>EXISTING GROUPS</div>
             <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
               {semesters.map((s) => (
                 <div key={s.id} style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
-                  background: "#0a1628", borderRadius: 8, padding: "7px 12px",
+                  background: "var(--bg-app)", borderRadius: 8, padding: "7px 12px",
                 }}>
-                  <span style={{ color: "#e8f0fe", fontSize: "0.88rem" }}>{s.name}</span>
-                  <span style={{ color: "#7ea5d6", fontSize: "0.78rem" }}>{s.moduleCount} modules</span>
+                  <span style={{ color: "var(--text-main)", fontSize: "0.88rem" }}>{s.name}</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>{s.moduleCount} modules</span>
                 </div>
               ))}
             </div>
@@ -187,7 +190,7 @@ export default function AdminLabsPage() {
         </Card>
 
         {/* ── Add Module to Semester ────────────────────────────────────── */}
-        <Card title="Add Module to Semester" icon="📚">
+        <Card title="Add Module to Semester" icon={<BookOpen size={20} />}>
           <form onSubmit={handleCreateModule} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={labelStyle}>
               <span style={labelText}>Semester Group</span>
@@ -207,7 +210,7 @@ export default function AdminLabsPage() {
             </label>
             <button type="submit" disabled={loading} style={{
               background: "linear-gradient(135deg, #1dd5e6, #18d18f)", border: "none", borderRadius: 10,
-              color: "#0a1628", fontWeight: 700, padding: "10px 20px", cursor: "pointer", fontSize: "0.9rem",
+              color: "var(--bg-app)", fontWeight: 700, padding: "10px 20px", cursor: "pointer", fontSize: "0.9rem",
             }}>
               {loading ? "Adding…" : "+ Add Module"}
             </button>
@@ -215,7 +218,7 @@ export default function AdminLabsPage() {
 
           {/* Browse modules */}
           <div style={{ marginTop: 20 }}>
-            <div style={{ color: "#7ea5d6", fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>BROWSE MODULES</div>
+            <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>BROWSE MODULES</div>
             <select style={{ ...selectStyle, marginBottom: 10 }}
               value={selectedSemForModules}
               onChange={(e) => setSelectedSemForModules(Number(e.target.value))}>
@@ -224,9 +227,9 @@ export default function AdminLabsPage() {
             </select>
             <div style={{ maxHeight: 160, overflowY: "auto", display: "flex", flexDirection: "column", gap: 5 }}>
               {modules.map((m) => (
-                <div key={m.id} style={{ background: "#0a1628", borderRadius: 8, padding: "7px 12px", display: "flex", gap: 10 }}>
+                <div key={m.id} style={{ background: "var(--bg-app)", borderRadius: 8, padding: "7px 12px", display: "flex", gap: 10 }}>
                   <span style={{ color: "#1dd5e6", fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 600 }}>{m.code}</span>
-                  <span style={{ color: "#e8f0fe", fontSize: "0.85rem" }}>{m.name}</span>
+                  <span style={{ color: "var(--text-main)", fontSize: "0.85rem" }}>{m.name}</span>
                 </div>
               ))}
             </div>
@@ -235,7 +238,7 @@ export default function AdminLabsPage() {
 
         {/* ── Create Lab Session (full width) ──────────────────────────── */}
         <div style={{ gridColumn: "1 / -1" }}>
-          <Card title="Add Lab Session to Module" icon="🔬">
+          <Card title="Add Lab Session to Module" icon={<FlaskConical size={20} />}>
             <form onSubmit={handleCreateSession}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 14 }}>
                 <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>

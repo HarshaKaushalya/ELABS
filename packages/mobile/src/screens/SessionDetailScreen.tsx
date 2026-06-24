@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/routes";
 import { apiFetch } from "../lib/api";
 import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type Session = {
   id: number; title: string; description: string;
@@ -65,7 +66,7 @@ export default function SessionDetailScreen({ navigation, route }: Props) {
       {/* Status pill */}
       <View style={[styles.statusPill, { backgroundColor: `${statusColor}15`, borderColor: `${statusColor}40` }]}>
         <Text style={[styles.statusText, { color: statusColor }]}>
-          {isDone ? "✓ Completed" : "◷ Pending"}
+          {isDone ? "Completed" : "Pending"}
         </Text>
       </View>
 
@@ -108,9 +109,9 @@ export default function SessionDetailScreen({ navigation, route }: Props) {
               backgroundColor: item.done ? `${colors.success}20` : colors.bgCardLight,
               borderColor: item.done ? colors.success : colors.border,
             }]}>
-              <Text style={{ color: colors.success, fontSize: 11, fontWeight: "700" }}>
-                {item.done ? "✓" : ""}
-              </Text>
+              {item.done && (
+                <Ionicons name="checkmark" size={11} color={colors.success} />
+              )}
             </View>
             <Text style={[styles.checkLabel, { color: item.done ? colors.success : colors.textSecondary }]}>
               {item.label}
@@ -122,13 +123,15 @@ export default function SessionDetailScreen({ navigation, route }: Props) {
         )}
       </View>
 
-      {/* Document */}
       {session.documentUrl && (
         <Pressable
           style={styles.docBtn}
           onPress={() => session.documentUrl && Linking.openURL(session.documentUrl)}
         >
-          <Text style={styles.docBtnText}>📄 Open Lab Document →</Text>
+          <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+            <Ionicons name="document-text-outline" size={16} color={colors.accent} />
+            <Text style={styles.docBtnText}>Open Lab Document</Text>
+          </View>
         </Pressable>
       )}
 
@@ -143,7 +146,10 @@ export default function SessionDetailScreen({ navigation, route }: Props) {
           semesterName: session.semesterName,
         })}
       >
-        <Text style={styles.backBtnText}>← Back to Module</Text>
+        <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+          <Ionicons name="arrow-back" size={16} color={colors.textSecondary} />
+          <Text style={styles.backBtnText}>Back to Module</Text>
+        </View>
       </Pressable>
     </ScrollView>
   );

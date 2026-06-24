@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useSocket } from "@/hooks/useSocket";
+import { Mail, Globe, Users, User, AlertTriangle, Clock, Send, Inbox, Check, MailOpen, CornerUpLeft, MessageSquare, X } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -123,36 +124,47 @@ function ComposeModal({
       backdropFilter: "blur(4px)", animation: "fadeIn 0.15s ease"
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: "#0d1b2e", border: "1px solid #1a2d4a", borderRadius: 16,
+        background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 16,
         width: "min(640px, 95vw)", maxHeight: "90vh", overflow: "auto",
         boxShadow: "0 24px 80px rgba(0,0,0,0.6)"
       }}>
         {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a2d4a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h2 style={{ margin: 0, color: "#e8f0fe", fontSize: "1.05rem", fontWeight: 700 }}>✉️ New Message</h2>
-            <p style={{ margin: "4px 0 0", color: "#4a6580", fontSize: "0.8rem" }}>
+            <h2 style={{ margin: 0, color: "var(--text-main)", fontSize: "1.05rem", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              <Mail size={18} />
+              <span>New Message</span>
+            </h2>
+            <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: "0.8rem" }}>
               {isAdmin ? "Broadcast to everyone or send a direct message" : "Send a message to admin, staff, or a student"}
             </p>
           </div>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#4a6580", fontSize: "1.4rem", cursor: "pointer", lineHeight: 1 }}>✕</button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <X size={20} />
+          </button>
         </div>
 
         <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Audience — admin only shows ALL/GROUP */}
           {isAdmin && (
             <div>
-              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>AUDIENCE</label>
+              <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>AUDIENCE</label>
               <div style={{ display: "flex", gap: 8 }}>
                 {(["ALL", "GROUP", "USER"] as const).map(t => (
                   <button key={t} onClick={() => setTargetType(t)}
                     style={{
                       flex: 1, padding: "9px 8px", borderRadius: 10, fontWeight: 600, fontSize: "0.8rem", cursor: "pointer", transition: "all 0.2s",
                       background: targetType === t ? "linear-gradient(135deg,#3d83f630,#1dd5e630)" : "transparent",
-                      border: `1px solid ${targetType === t ? "#3d83f6" : "#1a2d4a"}`,
-                      color: targetType === t ? "#e8f0fe" : "#4a6580"
+                      border: `1px solid ${targetType === t ? "#3d83f6" : "var(--border-color)"}`,
+                      color: targetType === t ? "var(--text-main)" : "var(--text-muted)"
                     }}>
-                    {t === "ALL" ? "🌐 All Students" : t === "GROUP" ? "👥 Group" : "👤 Direct"}
+                    {t === "ALL" ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Globe size={14} /> All Students</span>
+                    ) : t === "GROUP" ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Users size={14} /> Group</span>
+                    ) : (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><User size={14} /> Direct</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -162,9 +174,9 @@ function ComposeModal({
           {/* Group picker */}
           {targetType === "GROUP" && isAdmin && (
             <div>
-              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>LAB GROUP</label>
+              <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>LAB GROUP</label>
               <select value={targetGroup} onChange={e => setTargetGroup(e.target.value)}
-                style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.9rem" }}>
+                style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, color: "var(--text-main)", padding: "10px 14px", fontSize: "0.9rem" }}>
                 <option value="">— Select group —</option>
                 {groups.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
@@ -174,44 +186,46 @@ function ComposeModal({
           {/* Recipient picker — direct message */}
           {targetType === "USER" && (
             <div>
-              <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>TO</label>
+              <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>TO</label>
               {selectedContact ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#3d83f615", border: "1px solid #3d83f640", borderRadius: 10, padding: "10px 14px" }}>
                   <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: "0.85rem", flexShrink: 0 }}>
                     {selectedContact.fullName.charAt(0)}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.9rem" }}>{selectedContact.fullName}</div>
-                    <div style={{ color: "#4a6580", fontSize: "0.75rem" }}>{selectedContact.email}</div>
+                    <div style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "0.9rem" }}>{selectedContact.fullName}</div>
+                    <div style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{selectedContact.email}</div>
                   </div>
                   <span style={{ background: ROLE_BADGE[selectedContact.role]?.bg, color: ROLE_BADGE[selectedContact.role]?.color, borderRadius: 20, padding: "2px 10px", fontSize: "0.7rem", fontWeight: 700 }}>
                     {ROLE_BADGE[selectedContact.role]?.label ?? selectedContact.role}
                   </span>
                   <button onClick={() => { setTargetUser(""); setContactSearch(""); }}
-                    style={{ background: "transparent", border: "none", color: "#4a6580", cursor: "pointer", fontSize: "1.1rem" }}>✕</button>
+                    style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <X size={14} />
+                  </button>
                 </div>
               ) : (
                 <>
                   <input value={contactSearch} onChange={e => setContactSearch(e.target.value)}
                     placeholder="Search by name, email, or reg number…"
-                    style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+                    style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, color: "var(--text-main)", padding: "10px 14px", fontSize: "0.9rem", boxSizing: "border-box" }} />
                   {contactSearch && (
-                    <div style={{ marginTop: 6, background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, maxHeight: 220, overflowY: "auto" }}>
+                    <div style={{ marginTop: 6, background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, maxHeight: 220, overflowY: "auto" }}>
                       {filteredContacts.length === 0 ? (
-                        <div style={{ padding: "14px 16px", color: "#4a6580", fontSize: "0.85rem", textAlign: "center" }}>No contacts found</div>
+                        <div style={{ padding: "14px 16px", color: "var(--text-muted)", fontSize: "0.85rem", textAlign: "center" }}>No contacts found</div>
                       ) : filteredContacts.slice(0, 20).map(c => {
-                        const rb = ROLE_BADGE[c.role] ?? { label: c.role, color: "#7ea5d6", bg: "#7ea5d620" };
+                        const rb = ROLE_BADGE[c.role] ?? { label: c.role, color: "var(--text-muted)", bg: "var(--text-muted)20" };
                         return (
                           <div key={c.id} onClick={() => { setTargetUser(c.id); setContactSearch(""); }}
-                            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #0d1b2e", transition: "background 0.15s" }}
+                            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid var(--bg-card)", transition: "background 0.15s" }}
                             onMouseEnter={e => (e.currentTarget.style.background = "#3d83f610")}
                             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                             <div style={{ width: 32, height: 32, borderRadius: "50%", background: rb.bg, border: `1px solid ${rb.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: rb.color, fontSize: "0.82rem", flexShrink: 0 }}>
                               {c.fullName.charAt(0)}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.fullName}</div>
-                              <div style={{ color: "#4a6580", fontSize: "0.72rem" }}>{c.regNumber ?? c.email}</div>
+                              <div style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.fullName}</div>
+                              <div style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>{c.regNumber ?? c.email}</div>
                             </div>
                             <span style={{ background: rb.bg, color: rb.color, borderRadius: 20, padding: "2px 8px", fontSize: "0.68rem", fontWeight: 700, flexShrink: 0 }}>{rb.label}</span>
                           </div>
@@ -226,32 +240,39 @@ function ComposeModal({
 
           {/* Subject */}
           <div>
-            <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>SUBJECT</label>
+            <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>SUBJECT</label>
             <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Enter subject…"
-              style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.9rem", boxSizing: "border-box" }} />
+              style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, color: "var(--text-main)", padding: "10px 14px", fontSize: "0.9rem", boxSizing: "border-box" }} />
           </div>
 
           {/* Body */}
           <div>
-            <label style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>MESSAGE</label>
+            <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 8, letterSpacing: 1 }}>MESSAGE</label>
             <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Type your message…" rows={5}
-              style={{ width: "100%", background: "#0a1628", border: "1px solid #1a2d4a", borderRadius: 10, color: "#e8f0fe", padding: "10px 14px", fontSize: "0.88rem", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }} />
+              style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, color: "var(--text-main)", padding: "10px 14px", fontSize: "0.88rem", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.6 }} />
           </div>
 
           {/* Error */}
           {error && (
-            <div style={{ background: "#ff4d5720", border: "1px solid #ff4d5740", borderRadius: 8, padding: "10px 14px", color: "#ff4d57", fontSize: "0.85rem" }}>⚠️ {error}</div>
+            <div style={{ background: "#ff4d5720", border: "1px solid #ff4d5740", borderRadius: 8, padding: "10px 14px", color: "#ff4d57", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertTriangle size={14} />
+              <span>{error}</span>
+            </div>
           )}
 
           {/* Actions */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
             <button onClick={onClose}
-              style={{ padding: "10px 24px", background: "transparent", border: "1px solid #1a2d4a", borderRadius: 10, color: "#7ea5d6", fontWeight: 600, cursor: "pointer", fontSize: "0.88rem" }}>
+              style={{ padding: "10px 24px", background: "transparent", border: "1px solid var(--border-color)", borderRadius: 10, color: "var(--text-muted)", fontWeight: 600, cursor: "pointer", fontSize: "0.88rem" }}>
               Cancel
             </button>
             <button onClick={send} disabled={sending}
               style={{ padding: "10px 28px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: "0.88rem", cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.7 : 1, display: "flex", alignItems: "center", gap: 8 }}>
-              {sending ? "⏳ Sending…" : "📤 Send Message"}
+              {sending ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Clock size={14} className="animate-pulse" /> Sending…</span>
+              ) : (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Send size={14} /> Send Message</span>
+              )}
             </button>
           </div>
         </div>
@@ -354,7 +375,7 @@ export default function MessagesPage() {
     const off = on("new_message", (msg: Message) => {
       setInbox(prev => [msg, ...prev]);
       setUnread(prev => prev + 1);
-      showToast(`📨 New message: ${msg.subject}`, true);
+      showToast(`New message: ${msg.subject}`, true);
     });
     return () => { off(); };
   }, [on]);
@@ -376,7 +397,7 @@ export default function MessagesPage() {
   };
 
   const handleSent = () => {
-    showToast("✅ Message sent successfully!", true);
+    showToast("Message sent successfully!", true);
     if (token) { loadSent(token); loadInbox(token); }
   };
 
@@ -385,7 +406,7 @@ export default function MessagesPage() {
 
   if (!mounted) return (
     <AppShell title="Messages" subtitle="Live messaging & announcements">
-      <div style={{ padding: 60, textAlign: "center", color: "#4a6580" }}>Loading…</div>
+      <div style={{ padding: 60, textAlign: "center", color: "var(--text-muted)" }}>Loading…</div>
     </AppShell>
   );
 
@@ -397,7 +418,7 @@ export default function MessagesPage() {
         <div style={{
           position: "fixed", top: 24, right: 24, zIndex: 9999,
           padding: "14px 22px", borderRadius: 12, fontWeight: 700, fontSize: "0.9rem",
-          background: toast.ok ? "#0d1b2e" : "#1a0a0d",
+          background: toast.ok ? "var(--bg-card)" : "#1a0a0d",
           border: `1px solid ${toast.ok ? "#18d18f60" : "#ff4d5760"}`,
           color: toast.ok ? "#18d18f" : "#ff4d57",
           boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
@@ -405,7 +426,9 @@ export default function MessagesPage() {
           animation: "slideIn 0.25s ease"
         }}>
           {toast.msg}
-          <button onClick={() => setToast(null)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.6, fontSize: "1rem", marginLeft: 4 }}>✕</button>
+          <button onClick={() => setToast(null)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.6, display: "flex", alignItems: "center", justifyContent: "center", marginLeft: 4 }}>
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -431,13 +454,16 @@ export default function MessagesPage() {
               style={{
                 padding: "9px 22px", borderRadius: 10, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s",
                 background: tab === t ? "#3d83f6" : "transparent",
-                border: `1px solid ${tab === t ? "#3d83f6" : "#1a2d4a"}`,
-                color: tab === t ? "#fff" : "#7ea5d6",
+                border: `1px solid ${tab === t ? "#3d83f6" : "var(--border-color)"}`,
+                color: tab === t ? "#fff" : "var(--text-muted)",
                 display: "flex", alignItems: "center", gap: 6
               }}>
-              {t === "inbox" ? "📥 Inbox" : "📤 Sent"}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {t === "inbox" ? <Inbox size={14} /> : <Send size={14} />}
+                <span>{t === "inbox" ? "Inbox" : "Sent"}</span>
+              </span>
               {t === "inbox" && unread > 0 && (
-                <span style={{ background: "#1dd5e6", color: "#0a1628", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem", fontWeight: 800 }}>{unread}</span>
+                <span style={{ background: "#1dd5e6", color: "var(--bg-app)", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem", fontWeight: 800 }}>{unread}</span>
               )}
             </button>
           ))}
@@ -447,13 +473,15 @@ export default function MessagesPage() {
         <div style={{ display: "flex", gap: 8 }}>
           {tab === "inbox" && unread > 0 && (
             <button onClick={markAllRead}
-              style={{ padding: "9px 18px", background: "transparent", border: "1px solid #1a2d4a", borderRadius: 10, color: "#7ea5d6", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>
-              ✓ Mark All Read
+              style={{ padding: "9px 18px", background: "transparent", border: "1px solid var(--border-color)", borderRadius: 10, color: "var(--text-muted)", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <Check size={14} />
+              <span>Mark All Read</span>
             </button>
           )}
           <button onClick={() => setComposeOpen(true)}
             style={{ padding: "9px 22px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            ✉️ New Message
+            <Mail size={14} />
+            <span>New Message</span>
           </button>
         </div>
       </div>
@@ -463,17 +491,19 @@ export default function MessagesPage() {
 
         {/* Left: Message List */}
         <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "13px 16px", borderBottom: "1px solid #1a2d4a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ color: "#7ea5d6", fontSize: "0.78rem", fontWeight: 700, letterSpacing: 1 }}>
-              {tab === "inbox" ? `📥 INBOX (${inbox.length})` : `📤 SENT (${sent.length})`}
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 700, letterSpacing: 1 }}>
+              {tab === "inbox" ? `INBOX (${inbox.length})` : `SENT (${sent.length})`}
             </span>
-            {isLoading && <span style={{ color: "#4a6580", fontSize: "0.72rem" }}>Loading…</span>}
+            {isLoading && <span style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>Loading…</span>}
           </div>
 
           <div style={{ maxHeight: 580, overflowY: "auto" }}>
             {!isLoading && displayList.length === 0 ? (
-              <div style={{ padding: "48px 24px", textAlign: "center", color: "#4a6580" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>{tab === "inbox" ? "📭" : "📤"}</div>
+              <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--text-muted)" }}>
+                <div style={{ marginBottom: 12, color: "var(--text-muted)", display: "flex", justifyContent: "center" }}>
+                  {tab === "inbox" ? <MailOpen size={40} /> : <Send size={40} />}
+                </div>
                 <div style={{ fontSize: "0.88rem", fontWeight: 600, marginBottom: 4 }}>{tab === "inbox" ? "Your inbox is empty" : "No sent messages"}</div>
                 <div style={{ fontSize: "0.78rem" }}>Click <strong style={{ color: "#3d83f6" }}>New Message</strong> to get started</div>
               </div>
@@ -484,20 +514,20 @@ export default function MessagesPage() {
                 <div key={msg.id} onClick={() => tab === "inbox" ? markRead(msg) : setActiveMsg(msg)}
                   style={{
                     padding: "13px 16px", cursor: "pointer", transition: "all 0.15s",
-                    borderBottom: "1px solid #0d1b2e",
+                    borderBottom: "1px solid var(--bg-card)",
                     background: isActive ? "#3d83f615" : unreadMsg ? "#1dd5e605" : "transparent",
                     borderLeft: `3px solid ${isActive ? "#3d83f6" : unreadMsg ? "#1dd5e6" : "transparent"}`
                   }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, gap: 6 }}>
-                    <span style={{ color: unreadMsg ? "#e8f0fe" : "#7ea5d6", fontWeight: unreadMsg ? 700 : 500, fontSize: "0.86rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                    <span style={{ color: unreadMsg ? "var(--text-main)" : "var(--text-muted)", fontWeight: unreadMsg ? 700 : 500, fontSize: "0.86rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                       {msg.subject}
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
                       {unreadMsg && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1dd5e6", display: "inline-block" }} />}
-                      <span style={{ color: "#4a6580", fontSize: "0.7rem", whiteSpace: "nowrap" }}>{timeAgo(msg.createdAt)}</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: "0.7rem", whiteSpace: "nowrap" }}>{timeAgo(msg.createdAt)}</span>
                     </div>
                   </div>
-                  <div style={{ color: "#4a6580", fontSize: "0.73rem", marginBottom: 4 }}>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.73rem", marginBottom: 4 }}>
                     {tab === "inbox"
                       ? `From ${msg.senderName}`
                       : `To: ${msg.targetType === "ALL" ? "All Students" : msg.targetType === "GROUP" ? msg.targetGroup : "Individual"}`
@@ -524,22 +554,23 @@ export default function MessagesPage() {
           {activeMsg ? (
             <>
               {/* Detail Header */}
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a2d4a", background: "linear-gradient(135deg,#0f1e35,#0d1b2e)" }}>
-                <h2 style={{ margin: "0 0 10px", color: "#e8f0fe", fontSize: "1.1rem", lineHeight: 1.4 }}>{activeMsg.subject}</h2>
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border-color)", background: "linear-gradient(135deg,var(--bg-card),var(--bg-card))" }}>
+                <h2 style={{ margin: "0 0 10px", color: "var(--text-main)", fontSize: "1.1rem", lineHeight: 1.4 }}>{activeMsg.subject}</h2>
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: "0.8rem", flexShrink: 0 }}>
                       {tab === "sent" ? "Y" : activeMsg.senderName?.charAt(0) ?? "?"}
                     </div>
                     <div>
-                      <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "0.85rem" }}>
+                      <div style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "0.85rem" }}>
                         {tab === "sent" ? "You" : activeMsg.senderName}
                       </div>
-                      <div style={{ color: "#4a6580", fontSize: "0.72rem" }}>{formatDate(activeMsg.createdAt)}</div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.72rem" }}>{formatDate(activeMsg.createdAt)}</div>
                     </div>
                   </div>
-                  <span style={{ background: "#3d83f620", border: "1px solid #3d83f640", borderRadius: 20, color: "#3d83f6", fontSize: "0.7rem", fontWeight: 700, padding: "3px 12px" }}>
-                    {activeMsg.targetType === "ALL" ? "🌐 All Students" : activeMsg.targetType === "GROUP" ? `👥 ${activeMsg.targetGroup}` : "👤 Direct"}
+                  <span style={{ background: "#3d83f620", border: "1px solid #3d83f640", borderRadius: 20, color: "#3d83f6", fontSize: "0.7rem", fontWeight: 700, padding: "3px 12px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    {activeMsg.targetType === "ALL" ? <Globe size={12} /> : activeMsg.targetType === "GROUP" ? <Users size={12} /> : <User size={12} />}
+                    <span>{activeMsg.targetType === "ALL" ? "All Students" : activeMsg.targetType === "GROUP" ? activeMsg.targetGroup : "Direct"}</span>
                   </span>
                   {tab === "sent" && activeMsg.recipientCount !== undefined && (
                     <span style={{ background: "#18d18f20", border: "1px solid #18d18f40", borderRadius: 20, color: "#18d18f", fontSize: "0.7rem", fontWeight: 700, padding: "3px 12px" }}>
@@ -556,19 +587,22 @@ export default function MessagesPage() {
 
               {/* Footer actions */}
               {tab === "inbox" && (
-                <div style={{ padding: "14px 24px", borderTop: "1px solid #1a2d4a", display: "flex", gap: 10 }}>
+                <div style={{ padding: "14px 24px", borderTop: "1px solid var(--border-color)", display: "flex", gap: 10 }}>
                   <button onClick={() => {
                     setComposeOpen(true);
                   }}
-                    style={{ padding: "8px 18px", background: "transparent", border: "1px solid #3d83f640", borderRadius: 8, color: "#3d83f6", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>
-                    ↩ Reply
+                    style={{ padding: "8px 18px", background: "transparent", border: "1px solid #3d83f640", borderRadius: 8, color: "#3d83f6", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                    <CornerUpLeft size={14} />
+                    <span>Reply</span>
                   </button>
                 </div>
               )}
             </>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 500, color: "#2d4a6a", gap: 14 }}>
-              <div style={{ fontSize: 60, opacity: 0.4 }}>💬</div>
+              <div style={{ color: "var(--text-muted)", opacity: 0.25, display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                <MessageSquare size={60} />
+              </div>
               <div style={{ fontWeight: 700, fontSize: "1rem", color: "#3d5a80" }}>Select a message</div>
               <div style={{ fontSize: "0.82rem", color: "#2d4a6a" }}>or click <strong style={{ color: "#3d83f6", cursor: "pointer" }} onClick={() => setComposeOpen(true)}>New Message</strong> to compose</div>
             </div>

@@ -1,5 +1,8 @@
 "use client";
 
+import { ArrowRight, ArrowLeft, Flame, CloudFog, TrendingUp } from "lucide-react";
+import React from "react";
+
 interface TimelineEvent {
   time_sec: number;
   event: string;
@@ -16,29 +19,29 @@ function fmtTs(sec: number) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-const EVENT_META: Record<string, { icon: string; color: string; bg: string }> = {
+const EVENT_META: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
   entry: {
-    icon: "→",
+    icon: <ArrowRight size={14} />,
     color: "#18d18f",
     bg: "rgba(24,209,143,0.12)",
   },
   exit: {
-    icon: "←",
+    icon: <ArrowLeft size={14} />,
     color: "#4a7fb5",
     bg: "rgba(74,127,181,0.12)",
   },
   fire: {
-    icon: "🔥",
+    icon: <Flame size={14} />,
     color: "#ff4d57",
     bg: "rgba(255,77,87,0.15)",
   },
   smoke: {
-    icon: "🌫️",
+    icon: <CloudFog size={14} />,
     color: "#f59e0b",
     bg: "rgba(245,158,11,0.15)",
   },
   peak_occupancy: {
-    icon: "▲",
+    icon: <TrendingUp size={14} />,
     color: "#7d5cff",
     bg: "rgba(125,92,255,0.12)",
   },
@@ -65,7 +68,7 @@ export function EventTimeline({ events }: Props) {
       <div className="vision-timeline">
         {events.map((ev, i) => {
           const meta = EVENT_META[ev.event] ?? {
-            icon: "•",
+            icon: <span>•</span>,
             color: "#6e9ecc",
             bg: "rgba(110,158,204,0.1)",
           };
@@ -75,7 +78,7 @@ export function EventTimeline({ events }: Props) {
               className="vision-timeline-event"
               style={{ borderLeft: `3px solid ${meta.color}`, background: meta.bg }}
             >
-              <span className="vision-timeline-icon">{meta.icon}</span>
+              <span className="vision-timeline-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{meta.icon}</span>
               <div className="vision-timeline-body">
                 <span className="vision-timeline-detail">{ev.detail}</span>
                 <span className="vision-timeline-ts" style={{ color: meta.color }}>

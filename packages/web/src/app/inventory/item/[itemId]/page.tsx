@@ -1,4 +1,4 @@
-﻿import { AppShell } from "@/components/layout/AppShell";
+import { AppShell } from "@/components/layout/AppShell";
 
 type PageProps = { params: Promise<{ itemId: string }> };
 

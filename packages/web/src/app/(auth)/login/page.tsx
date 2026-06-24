@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { apiFetch, setAccessToken } from "@/lib/api";
 import { setUser, setToken } from "@/lib/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { School } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refreshMe } = useAuth();
   const [email, setEmail] = useState("admin@elabs.local");
   const [password, setPassword] = useState("Admin123!");
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +44,13 @@ export default function LoginPage() {
         setUser({ id: me.id, email: me.email, fullName: me.fullName, roles: me.roles ?? [], mustChangePassword: me.mustChangePassword });
         // First-time login: force password change
         if (me.mustChangePassword) {
+          await refreshMe();
           router.push("/change-password");
           return;
         }
       }
 
+      await refreshMe();
       router.push("/dashboard");
     } catch (err) {
       setLoading(false);
@@ -66,7 +71,10 @@ export default function LoginPage() {
         {/* Left: Info panel */}
         <div className="login-hero">
           <div className="login-hero-inner">
-            <div className="login-hero-badge">🏛️ University of Ruhuna</div>
+            <div className="login-hero-badge" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <School size={14} />
+              <span>University of Ruhuna</span>
+            </div>
             <h1 className="login-hero-title">
               ELABS
               <span>Smart Laboratory Management</span>

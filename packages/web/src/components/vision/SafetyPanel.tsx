@@ -1,5 +1,7 @@
 "use client";
 
+import { Flame, CloudFog } from "lucide-react";
+
 interface Props {
   fireDetected: boolean;
   smokeDetected: boolean;
@@ -44,7 +46,7 @@ export function SafetyPanel({
           {/* Fire */}
           <div className={`vision-safety-card ${fireDetected ? "fire" : "clear"}`}>
             <div className="vision-safety-card-header">
-              <span className="vision-safety-card-icon">🔥</span>
+              <span className="vision-safety-card-icon" style={{ display: "flex", alignItems: "center" }}><Flame size={16} /></span>
               <span className="vision-safety-card-title">Fire</span>
               <span className={`vision-safety-badge ${fireDetected ? "detected" : "clear"}`}>
                 {fireDetected ? "DETECTED" : "CLEAR"}
@@ -64,7 +66,7 @@ export function SafetyPanel({
           {/* Smoke */}
           <div className={`vision-safety-card ${smokeDetected ? "smoke" : "clear"}`}>
             <div className="vision-safety-card-header">
-              <span className="vision-safety-card-icon">🌫️</span>
+              <span className="vision-safety-card-icon" style={{ display: "flex", alignItems: "center" }}><CloudFog size={16} /></span>
               <span className="vision-safety-card-title">Smoke</span>
               <span className={`vision-safety-badge ${smokeDetected ? "detected smoke" : "clear"}`}>
                 {smokeDetected ? "DETECTED" : "CLEAR"}

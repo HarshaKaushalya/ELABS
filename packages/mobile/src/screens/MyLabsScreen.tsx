@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/routes";
 import { apiFetch } from "../lib/api";
 import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type Semester = {
   id: number;
@@ -27,8 +28,8 @@ const groupColors: Record<number, string> = {
   5: "#ff7043", 6: "#18d18f", 7: "#e040fb", 8: "#ff4d57", 9: "#a798ff",
 };
 const groupIcons: Record<number, string> = {
-  1: "🔬", 2: "⚡", 3: "📡", 4: "🔌",
-  5: "📊", 6: "☀️", 7: "📶", 8: "🚀", 9: "🧪",
+  1: "flask-outline", 2: "flash-outline", 3: "radio-outline", 4: "power-outline",
+  5: "analytics-outline", 6: "sunny-outline", 7: "wifi-outline", 8: "rocket-outline", 9: "beaker-outline",
 };
 
 export default function MyLabsScreen({ navigation }: Props) {
@@ -75,13 +76,13 @@ export default function MyLabsScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🔬</Text>
+            <Ionicons name="flask-outline" size={48} color={colors.textMuted} style={{ marginBottom: spacing.md }} />
             <Text style={styles.emptyText}>No semester groups found</Text>
           </View>
         }
         renderItem={({ item }) => {
           const color = groupColors[item.level] ?? "#7ea5d6";
-          const icon = groupIcons[item.level] ?? "🔭";
+          const icon = groupIcons[item.level] ?? "compass-outline";
           const isRnD = item.level === 9;
           return (
             <Pressable
@@ -94,7 +95,7 @@ export default function MyLabsScreen({ navigation }: Props) {
               <View style={styles.cardRow}>
                 {/* Icon */}
                 <View style={[styles.iconBox, { backgroundColor: `${color}18`, borderColor: `${color}40` }]}>
-                  <Text style={styles.icon}>{icon}</Text>
+                  <Ionicons name={icon as any} size={24} color={color} />
                 </View>
 
                 {/* Info */}
@@ -113,7 +114,7 @@ export default function MyLabsScreen({ navigation }: Props) {
                   <Text style={styles.countLabel}>Modules</Text>
                 </View>
 
-                <Text style={[styles.arrow, { color }]}>›</Text>
+                <Ionicons name="chevron-forward" size={18} color={color} />
               </View>
             </Pressable>
           );

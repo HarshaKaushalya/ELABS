@@ -16,6 +16,7 @@ import {
 import { apiFetch } from "../lib/api";
 import { loadUser, User } from "../lib/auth";
 import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type InventoryItem = {
@@ -57,9 +58,9 @@ function isOverdue(dueAt: string | null, status: string) {
 function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLORS[status] ?? colors.textMuted;
   const labels: Record<string, string> = {
-    AVAILABLE: "✓ Available", BORROWED: "◉ Borrowed",
-    MAINTENANCE: "⚙ Maintenance", OUT_OF_SERVICE: "✕ Out of Service",
-    RETURNED: "✓ Returned", OVERDUE: "⚠ Overdue",
+    AVAILABLE: "Available", BORROWED: "Borrowed",
+    MAINTENANCE: "Maintenance", OUT_OF_SERVICE: "Out of Service",
+    RETURNED: "Returned", OVERDUE: "Overdue",
   };
   return (
     <View style={[styles.badge, { backgroundColor: `${color}20` }]}>
@@ -75,7 +76,7 @@ function SuccessOverlay({ result, onDone }: { result: BorrowSuccess; onDone: () 
       <View style={styles.overlayBg}>
         <View style={styles.overlayCard}>
           <View style={styles.successIcon}>
-            <Text style={{ fontSize: 32, color: colors.success }}>✓</Text>
+            <Ionicons name="checkmark-circle-outline" size={36} color={colors.success} />
           </View>
           <Text style={styles.successTitle}>Borrow Issued!</Text>
           <Text style={styles.successSub}>
@@ -86,7 +87,7 @@ function SuccessOverlay({ result, onDone }: { result: BorrowSuccess; onDone: () 
           {result.borrowedItems.map((item) => (
             <View key={item.elabsTag} style={styles.borrowedItem}>
               <View style={styles.itemCheckCircle}>
-                <Text style={{ color: colors.success, fontWeight: "700", fontSize: 12 }}>✓</Text>
+                <Ionicons name="checkmark" size={10} color={colors.success} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemTag}>{item.elabsTag}</Text>
@@ -207,7 +208,7 @@ function StaffBorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: Borr
     <ScrollView showsVerticalScrollIndicator={false}>
       {error ? (
         <View style={styles.errorBox}>
-          <Text style={styles.errorText}>⚠ {error}</Text>
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
 
@@ -230,7 +231,7 @@ function StaffBorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: Borr
                 onPress={() => { setLabId(l.id); setLabPickerOpen(false); }}
               >
                 <Text style={[styles.pickerOptionText, l.id === labId && { color: colors.primary }]}>{l.name}</Text>
-                {l.id === labId && <Text style={{ color: colors.primary }}>✓</Text>}
+                {l.id === labId && <Ionicons name="checkmark" size={16} color={colors.primary} />}
               </Pressable>
             ))}
           </View>
@@ -256,12 +257,12 @@ function StaffBorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: Borr
             </Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.studentName}>✓ {student.fullName}</Text>
+            <Text style={styles.studentName}>{student.fullName}</Text>
             <Text style={styles.studentMeta}>{student.indexNo} · {student.email}</Text>
           </View>
         </View>
       )}
-      {studentError ? <Text style={styles.studentError}>✕ {studentError}</Text> : null}
+      {studentError ? <Text style={styles.studentError}>{studentError}</Text> : null}
 
       {/* Purpose */}
       <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Purpose (optional)</Text>
@@ -330,7 +331,7 @@ function StaffBorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: Borr
                     onPress={() => toggleItem(item.elabsTag)}
                   >
                     <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                      {checked && <Text style={styles.checkmark}>✓</Text>}
+                      {checked && <Ionicons name="checkmark" size={12} color={colors.white} />}
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
@@ -425,7 +426,7 @@ function StudentBorrowForm({ labs, userId, onSuccess }: { labs: Lab[]; userId: n
 
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
-      {error ? <View style={styles.errorBox}><Text style={styles.errorText}>⚠ {error}</Text></View> : null}
+      {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
       <Text style={styles.fieldLabel}>Lab</Text>
       <Pressable style={styles.pickerBtn} onPress={() => setLabPickerOpen(true)}>
@@ -444,7 +445,7 @@ function StudentBorrowForm({ labs, userId, onSuccess }: { labs: Lab[]; userId: n
                 onPress={() => { setLabId(l.id); setLabPickerOpen(false); }}
               >
                 <Text style={[styles.pickerOptionText, l.id === labId && { color: colors.primary }]}>{l.name}</Text>
-                {l.id === labId && <Text style={{ color: colors.primary }}>✓</Text>}
+                {l.id === labId && <Ionicons name="checkmark" size={16} color={colors.primary} />}
               </Pressable>
             ))}
           </View>
@@ -481,7 +482,7 @@ function StudentBorrowForm({ labs, userId, onSuccess }: { labs: Lab[]; userId: n
                 onPress={() => toggleItem(item.elabsTag)}
               >
                 <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                  {checked && <Text style={styles.checkmark}>✓</Text>}
+                  {checked && <Ionicons name="checkmark" size={12} color={colors.white} />}
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
@@ -540,7 +541,7 @@ function MyBorrowsTab() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await fetchBorrows(); setRefreshing(false); }} tintColor={colors.primary} />}
       ListEmptyComponent={
         <View style={{ padding: 60, alignItems: "center" }}>
-          <Text style={{ fontSize: 40, marginBottom: 12 }}>📦</Text>
+          <Ionicons name="cube-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
           <Text style={{ color: colors.textMuted, fontSize: fontSize.md }}>No borrow history yet</Text>
         </View>
       }
@@ -561,18 +562,18 @@ function MyBorrowsTab() {
             <View style={styles.borrowItems}>
               {parsedItems.map((it) => (
                 <View key={it.elabsTag} style={styles.borrowItemChip}>
-                  <Text style={styles.borrowItemTick}>✓</Text>
+                  <Ionicons name="checkmark" size={10} color={colors.success} style={{ marginRight: 4 }} />
                   <Text style={styles.borrowItemTag}>{it.elabsTag}</Text>
                   <Text style={styles.borrowItemName}>{it.name}</Text>
                 </View>
               ))}
             </View>
             <View style={styles.borrowMeta}>
-              <Text style={styles.metaText}>📅 {fmt(item.createdAt)}</Text>
+              <Text style={styles.metaText}>{fmt(item.createdAt)}</Text>
               <Text style={[styles.metaText, { color: overdue ? colors.danger : colors.textSecondary }]}>
-                {overdue ? "⚠ " : ""}Due: {fmt(item.dueAt)}
+                Due: {fmt(item.dueAt)}
               </Text>
-              {item.returnedAt && <Text style={[styles.metaText, { color: colors.success }]}>✓ Returned: {fmt(item.returnedAt)}</Text>}
+              {item.returnedAt && <Text style={[styles.metaText, { color: colors.success }]}>Returned: {fmt(item.returnedAt)}</Text>}
             </View>
           </View>
         );
@@ -623,7 +624,7 @@ function ActiveBorrowsTab() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await fetchTx(); setRefreshing(false); }} tintColor={colors.primary} />}
       ListEmptyComponent={
         <View style={{ padding: 60, alignItems: "center" }}>
-          <Text style={{ fontSize: 40, marginBottom: 12 }}>📋</Text>
+          <Ionicons name="clipboard-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
           <Text style={{ color: colors.textMuted, fontSize: fontSize.md }}>No active borrows</Text>
         </View>
       }
@@ -641,11 +642,11 @@ function ActiveBorrowsTab() {
             {item.purpose ? <Text style={styles.txPurpose}>{item.purpose}</Text> : null}
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
               <Text style={[styles.metaText, { color: overdue ? colors.danger : colors.textSecondary }]}>
-                Due: {fmt(item.dueAt)}{overdue ? " ⚠" : ""}
+                Due: {fmt(item.dueAt)}
               </Text>
               {item.status === "BORROWED" && (
                 <Pressable style={styles.returnBtn} onPress={() => handleReturn(item.id)}>
-                  <Text style={styles.returnBtnText}>↩ Return</Text>
+                  <Text style={styles.returnBtnText}>Return</Text>
                 </Pressable>
               )}
             </View>
@@ -737,15 +738,15 @@ export default function InventoryScreen() {
   }, []);
 
   const staffTabs = [
-    { id: "items" as const, label: "📦 Equipment" },
-    { id: "borrow" as const, label: "⊕ Issue Borrow" },
-    { id: "active" as const, label: "📋 Active" },
-    { id: "myborrows" as const, label: "👤 My Borrows" },
+    { id: "items" as const, label: "Equipment" },
+    { id: "borrow" as const, label: "Issue Borrow" },
+    { id: "active" as const, label: "Active" },
+    { id: "myborrows" as const, label: "My Borrows" },
   ];
 
   const studentTabs = [
-    { id: "borrow" as const, label: "⊕ Borrow" },
-    { id: "myborrows" as const, label: "👤 My Borrows" },
+    { id: "borrow" as const, label: "Borrow" },
+    { id: "myborrows" as const, label: "My Borrows" },
   ];
 
   const tabs = isStaff ? staffTabs : studentTabs;

@@ -55,39 +55,39 @@ export function FloatingAIAssistant() {
       {/* Chat Window */}
       {isOpen && (
         <div style={{
-          width: 340, height: 500, backgroundColor: "#0a1732",
-          border: "1px solid #204072", borderRadius: 16,
+          width: 340, height: 500, backgroundColor: "var(--bg-card)",
+          border: "1px solid var(--border-color)", borderRadius: 16,
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(29, 213, 230, 0.2)",
           marginBottom: 16, display: "flex", flexDirection: "column", overflow: "hidden",
           animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
         }}>
           {/* Header */}
-          <div style={{ padding: "16px", backgroundColor: "#0f2244", borderBottom: "1px solid #204072", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "16px", backgroundColor: "var(--bg-card)", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ background: "linear-gradient(135deg, #1dd5e6 0%, #3d83f6 100%)", borderRadius: "50%", padding: 6, display: "flex" }}>
                 <Bot size={18} color="#fff" />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: "0.95rem", color: "#e8f0fe", fontWeight: 600 }}>ELABS AI</h3>
+                <h3 style={{ margin: 0, fontSize: "0.95rem", color: "var(--text-main)", fontWeight: 600 }}>ELABS AI</h3>
                 <span style={{ fontSize: "0.75rem", color: "#18d18f", display: "flex", alignItems: "center", gap: 4 }}>
                   <span style={{ width: 6, height: 6, backgroundColor: "#18d18f", borderRadius: "50%", display: "inline-block" }}></span> Online
                 </span>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} style={{ background: "transparent", border: "none", color: "#7ea5d6", cursor: "pointer", padding: 4 }}>
+            <button onClick={() => setIsOpen(false)} style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 4 }}>
               <X size={20} />
             </button>
           </div>
 
           {/* Messages Area */}
-          <div style={{ flex: 1, padding: "16px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ flex: 1, padding: "16px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, backgroundColor: "var(--bg-card)" }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                 <div style={{
                   maxWidth: "85%", padding: "10px 14px", borderRadius: 12, fontSize: "0.85rem", lineHeight: 1.5,
-                  backgroundColor: msg.role === "user" ? "#1dd5e615" : "#122a54",
-                  color: msg.role === "user" ? "#1dd5e6" : "#d9ebff",
-                  border: msg.role === "user" ? "1px solid #1dd5e630" : "1px solid #204072",
+                  backgroundColor: msg.role === "user" ? "rgba(29,213,230,0.1)" : "var(--bg-card-hover)",
+                  color: msg.role === "user" ? "var(--cyan)" : "var(--text-main)",
+                  border: msg.role === "user" ? "1px solid rgba(29,213,230,0.3)" : "1px solid var(--border-color)",
                   borderBottomRightRadius: msg.role === "user" ? 2 : 12,
                   borderBottomLeftRadius: msg.role === "ai" ? 2 : 12,
                 }}>
@@ -97,8 +97,8 @@ export function FloatingAIAssistant() {
             ))}
             {isLoading && (
               <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                <div style={{ padding: "10px 14px", borderRadius: 12, backgroundColor: "#122a54", border: "1px solid #204072", borderBottomLeftRadius: 2 }}>
-                  <Sparkles size={16} color="#7ea5d6" className="animate-pulse" />
+                <div style={{ padding: "10px 14px", borderRadius: 12, backgroundColor: "var(--bg-card-hover)", border: "1px solid var(--border-color)", borderBottomLeftRadius: 2 }}>
+                  <Sparkles size={16} color="var(--muted)" className="animate-pulse" />
                 </div>
               </div>
             )}
@@ -106,15 +106,15 @@ export function FloatingAIAssistant() {
           </div>
 
           {/* Input Area */}
-          <form onSubmit={handleSend} style={{ padding: "12px 16px", backgroundColor: "#0f2244", borderTop: "1px solid #204072", display: "flex", gap: 8 }}>
+          <form onSubmit={handleSend} style={{ padding: "12px 16px", backgroundColor: "var(--bg-card)", borderTop: "1px solid var(--border-color)", display: "flex", gap: 8 }}>
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask the AI assistant..."
               style={{
-                flex: 1, backgroundColor: "#0a1732", border: "1px solid #204072", borderRadius: 8, padding: "8px 12px",
-                color: "#e8f0fe", fontSize: "0.85rem", outline: "none"
+                flex: 1, backgroundColor: "var(--bg-card-hover)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "8px 12px",
+                color: "var(--text-main)", fontSize: "0.85rem", outline: "none"
               }}
               disabled={isLoading}
             />

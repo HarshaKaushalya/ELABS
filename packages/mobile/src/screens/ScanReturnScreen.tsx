@@ -10,6 +10,7 @@ import {
 import { BarcodeScannerView } from "../components/BarcodeScanner";
 import { apiFetch } from "../lib/api";
 import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type ScannedItem = {
   elabsTag: string;
@@ -88,7 +89,7 @@ export default function ScanReturnScreen() {
       <View style={styles.container}>
         <View style={styles.successCard}>
           <View style={styles.successIcon}>
-            <Text style={{ fontSize: 36, color: colors.success }}>✓</Text>
+            <Ionicons name="checkmark-circle-outline" size={42} color={colors.success} />
           </View>
           <Text style={styles.successTitle}>Item Returned!</Text>
           <Text style={styles.successTag}>{scanned.elabsTag}</Text>
@@ -106,7 +107,7 @@ export default function ScanReturnScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.confirmCard}>
-          <Text style={styles.confirmTitle}>📦 Item Found</Text>
+          <Text style={styles.confirmTitle}>Item Found</Text>
           <View style={styles.itemInfo}>
             <Text style={styles.itemTag}>{scanned.elabsTag}</Text>
             <Text style={styles.itemName}>{scanned.name}</Text>
@@ -137,7 +138,7 @@ export default function ScanReturnScreen() {
             </View>
           ) : (
             <View style={styles.notBorrowedBox}>
-              <Text style={styles.notBorrowedText}>⚠ This item is not currently borrowed</Text>
+              <Text style={styles.notBorrowedText}>This item is not currently borrowed</Text>
             </View>
           )}
 
@@ -153,7 +154,7 @@ export default function ScanReturnScreen() {
               >
                 {loading
                   ? <ActivityIndicator color={colors.bg} size="small" />
-                  : <Text style={styles.returnBtnText}>↩ Confirm Return</Text>
+                  : <Text style={styles.returnBtnText}>Confirm Return</Text>
                 }
               </Pressable>
             )}

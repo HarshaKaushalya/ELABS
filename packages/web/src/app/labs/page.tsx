@@ -50,7 +50,7 @@ export default function LabsPage() {
   return (
     <AppShell title="Laboratories" subtitle="Department of Electrical and Information Engineering">
       {loading && (
-        <div style={{ padding: 40, textAlign: "center", color: "#7ea5d6" }}>
+        <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
           Loading semester groups…
         </div>
       )}
@@ -66,7 +66,7 @@ export default function LabsPage() {
           padding: "16px 0 32px",
         }}>
           {semesters.map((sem) => {
-            const color = groupColors[sem.level] ?? "#7ea5d6";
+            const color = groupColors[sem.level] ?? "var(--text-muted)";
             const isRnD = sem.level === 9;
             const yearStr = isRnD ? "Research" : `Year ${Math.ceil(sem.level / 2)}`;
             
@@ -74,8 +74,8 @@ export default function LabsPage() {
               <Link key={sem.id} href={`/labs/${sem.id}`} style={{ textDecoration: "none" }}>
                 <article
                   style={{
-                    background: "#0d1b2e",
-                    border: `1px solid #1a2d4a`,
+                    background: "var(--bg-card)",
+                    border: `1px solid var(--border-color)`,
                     borderRadius: 12,
                     padding: "24px",
                     cursor: "pointer",
@@ -89,7 +89,7 @@ export default function LabsPage() {
                   }}
                   onMouseEnter={(e) => {
                     (e.currentTarget as HTMLElement).style.borderColor = `${color}60`;
-                    (e.currentTarget as HTMLElement).style.background = "#0a1628";
+                    (e.currentTarget as HTMLElement).style.background = "var(--bg-app)";
                     (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px ${color}15`;
                     const iconWrap = e.currentTarget.querySelector('.icon-wrapper') as HTMLElement;
                     if (iconWrap) {
@@ -97,8 +97,8 @@ export default function LabsPage() {
                     }
                   }}
                   onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = `#1a2d4a`;
-                    (e.currentTarget as HTMLElement).style.background = "#0d1b2e";
+                    (e.currentTarget as HTMLElement).style.borderColor = `var(--border-color)`;
+                    (e.currentTarget as HTMLElement).style.background = "var(--bg-card)";
                     (e.currentTarget as HTMLElement).style.boxShadow = "none";
                     const iconWrap = e.currentTarget.querySelector('.icon-wrapper') as HTMLElement;
                     if (iconWrap) {
@@ -120,23 +120,23 @@ export default function LabsPage() {
                         {getIcon(sem.level, color)}
                       </div>
                       <div>
-                        <h3 style={{ margin: "0 0 4px", color: "#e8f0fe", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.2px" }}>
+                        <h3 style={{ margin: "0 0 4px", color: "var(--text-main)", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.2px" }}>
                           {sem.name}
                         </h3>
-                        <span style={{ fontSize: "0.8rem", color: "#7ea5d6", fontWeight: 500, letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 500, letterSpacing: "0.5px", textTransform: "uppercase" }}>
                           {yearStr}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderTop: "1px solid #1a2d4a", paddingTop: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderTop: "1px solid var(--border-color)", paddingTop: 16 }}>
                     <div>
-                      <div style={{ color: "#4a6580", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>
                         Assigned Modules
                       </div>
-                      <div style={{ color: "#e8f0fe", fontWeight: 600, fontSize: "1.2rem", display: "flex", alignItems: "baseline", gap: 6 }}>
-                        {sem.moduleCount} <span style={{ fontSize: "0.85rem", color: "#7ea5d6", fontWeight: 400 }}>total</span>
+                      <div style={{ color: "var(--text-main)", fontWeight: 600, fontSize: "1.2rem", display: "flex", alignItems: "baseline", gap: 6 }}>
+                        {sem.moduleCount} <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 400 }}>total</span>
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, color: color, fontSize: "0.85rem", fontWeight: 600 }}>

@@ -32,7 +32,7 @@ export default function CoursesPage() {
                 </div>
               </div>
               <div className="course-card-right">
-                <div style={{ color: "#7ea5d6", fontSize: "0.82rem" }}>Next class</div>
+                <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>Next class</div>
                 <div style={{ fontWeight: 700, color: "#d9ebff" }}>{course.nextClass}</div>
                 <div className="grade-badge" style={{ background: `${course.gradeColor}20`, color: course.gradeColor, borderColor: `${course.gradeColor}40` }}>
                   {course.grade}

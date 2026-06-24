@@ -17,7 +17,199 @@
   --red: #ff4d57;
   --green: #18d18f;
   --violet: #7d5cff;
+
+  /* ── Aliases used by page components ── */
+  --bg-app:        #050c1d;
+  --bg-card:       #0f2244;
+  --bg-card-hover: #122a54;
+  --border-color:  #204072;
+  --text-main:     #d9ebff;
+  --text-muted:    #7ea5d6;
 }
+
+/* ===== LIGHT THEME OVERRIDES ===== */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg:       #f0f4f9;
+  --bg-elev:  #ffffff;
+  --panel:    #ffffff;
+  --panel-2:  #f5f8ff;
+  --line:     #d0d9e8;
+  --text:     #1a2540;
+  --muted:    #5a6a8a;
+  --cyan:     #0899a8;
+  --blue:     #2563eb;
+  --amber:    #b45309;
+  --red:      #dc2626;
+  --green:    #16a34a;
+  --violet:   #6d28d9;
+
+  /* ── Aliases used by page components ── */
+  --bg-app:        #f0f4f9;
+  --bg-card:       #ffffff;
+  --bg-card-hover: #f5f8ff;
+  --border-color:  #d0d9e8;
+  --text-main:     #1a2540;
+  --text-muted:    #5a6a8a;
+}
+
+/* Light theme: body background */
+[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 20% -10%, #d6e4ff 0%, transparent 40%),
+    radial-gradient(circle at 100% 20%, #e0f0ff 0%, transparent 30%),
+    #f0f4f9;
+  animation: none;
+  color: #1a2540;
+}
+
+/* Light theme: topbar */
+[data-theme="light"] .topbar {
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom-color: #d0d9e8;
+  color: #1a2540;
+}
+[data-theme="light"] .topbar h1 { 
+  background: linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+[data-theme="light"] .topbar p  { color: #5a6a8a; }
+
+/* Light theme: dark panel/card backgrounds → white */
+[data-theme="light"] .panel,
+[data-theme="light"] .stat-card,
+[data-theme="light"] .lab-card,
+[data-theme="light"] .borrow-card,
+[data-theme="light"] .calendar-card,
+[data-theme="light"] .topbar-dropdown,
+[data-theme="light"] .ai-context-card,
+[data-theme="light"] .vision-panel-root,
+[data-theme="light"] .vision-stat-card,
+[data-theme="light"] .vision-safety-panel,
+[data-theme="light"] .vision-timeline-wrap,
+[data-theme="light"] .vision-previews-wrap,
+[data-theme="light"] .attendance-toggle-btn {
+  background: #ffffff;
+  border-color: #d0d9e8;
+  color: #1a2540;
+}
+
+/* Light theme: secondary elevated surface (hover-state panels) */
+[data-theme="light"] .vision-panel-header,
+[data-theme="light"] .vision-timeline-header,
+[data-theme="light"] .vision-previews-header,
+[data-theme="light"] .vision-safety-card {
+  background: #f5f8ff;
+  border-color: #d0d9e8;
+}
+
+/* Light theme: icon buttons and hamburger in topbar */
+[data-theme="light"] .topbar-icon-button,
+[data-theme="light"] .hamburger-btn {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: #d0d9e8;
+  color: #1a2540;
+}
+[data-theme="light"] .topbar-icon-button:hover,
+[data-theme="light"] .hamburger-btn:hover {
+  background: rgba(0, 0, 0, 0.10);
+}
+
+/* Light theme: search bar */
+[data-theme="light"] .topbar-search {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: #d0d9e8;
+}
+[data-theme="light"] .topbar-search-input { color: #1a2540; }
+[data-theme="light"] .topbar-search-input::placeholder { color: #5a6a8a; }
+
+/* Light theme: user label / dropdown items */
+[data-theme="light"] .topbar-user-label { color: #1a2540; }
+[data-theme="light"] .topbar-dropdown-item { color: #1a2540; }
+[data-theme="light"] .topbar-dropdown-item:hover { background: rgba(37, 99, 235, 0.08); color: #1a2540; }
+[data-theme="light"] .topbar-dropdown-header span { color: #5a6a8a; }
+[data-theme="light"] .topbar-dropdown-divider { background: #d0d9e8; }
+
+/* Light theme: sidebar-link text (sidebar stays cream, just tweak hover) */
+[data-theme="light"] .sidebar-link { color: #5a4a1e; }
+[data-theme="light"] .sidebar-link:hover { background: rgba(255,255,255,0.6); color: #3d3210; }
+[data-theme="light"] .sidebar-link.active { color: #8a6d00; }
+
+/* Light theme: general text that uses hardcoded dark-theme colours */
+[data-theme="light"] .course-name,
+[data-theme="light"] .vision-panel-title,
+[data-theme="light"] .vision-upload-title,
+[data-theme="light"] .vision-upload-filename,
+[data-theme="light"] .vision-processing-label,
+[data-theme="light"] .vision-error-msg,
+[data-theme="light"] .vision-stat-label,
+[data-theme="light"] .vision-safety-title,
+[data-theme="light"] .vision-safety-card-title,
+[data-theme="light"] .vision-timeline-detail,
+[data-theme="light"] .vision-frame-label,
+[data-theme="light"] .lab-card-stat strong {
+  color: #1a2540;
+}
+
+/* Light theme: borders that were hardcoded dark */
+[data-theme="light"] .vision-placeholder,
+[data-theme="light"] .vision-panel-root,
+[data-theme="light"] .attendance-section {
+  border-color: #d0d9e8;
+}
+
+/* Light theme: progress track */
+[data-theme="light"] .vision-progress-track { background: #d0d9e8; }
+
+/* Light theme: hover backgrounds for cancel/reset buttons */
+[data-theme="light"] .vision-cancel-btn:hover,
+[data-theme="light"] .vision-reset-btn:hover { background: #e8edf5; color: #1a2540; }
+
+/* Light theme: notification badge stays colourful */
+[data-theme="light"] .topbar-badge { background: var(--red); color: #fff; }
+
+/* Light theme: tables */
+[data-theme="light"] .table-wrap { background: #ffffff; border-color: #d0d9e8; }
+[data-theme="light"] th { background: #f5f8ff; color: #5a6a8a; }
+[data-theme="light"] td { border-bottom-color: #d0d9e8; color: #1a2540; }
+[data-theme="light"] tr:hover td { background: rgba(37, 99, 235, 0.04); }
+[data-theme="light"] td, [data-theme="light"] th { border-color: #d0d9e8; }
+
+/* Light theme: AI prompt chips */
+[data-theme="light"] .ai-prompt-chip { background: #f0f4f9; border-color: #c0cfe8; color: #2563eb; }
+[data-theme="light"] .ai-prompt-chip:hover { background: #e0eaff; color: #1d4ed8; }
+
+/* Light theme: tab buttons */
+[data-theme="light"] .tab-btn { background: #ffffff; border-color: #d0d9e8; color: #5a6a8a; }
+[data-theme="light"] .tab-btn:hover { background: #f0f4f9; }
+[data-theme="light"] .tab-btn.active { background: var(--cyan); color: #ffffff; border-color: var(--cyan); }
+
+/* Light theme: inputs and selects */
+[data-theme="light"] .input,
+[data-theme="light"] .select { background: #ffffff; border-color: #d0d9e8; color: #1a2540; }
+[data-theme="light"] .input::placeholder { color: #8a9ab8; }
+
+/* Light theme: info cards */
+[data-theme="light"] .info-card { background: #ffffff; border-color: #d0d9e8; }
+[data-theme="light"] .info-card p { color: #5a6a8a; }
+
+/* Light theme: chat components */
+[data-theme="light"] .chat-thread-list { border-color: #d0d9e8; }
+[data-theme="light"] .chat-thread { border-bottom-color: #d0d9e8; }
+[data-theme="light"] .chat-thread:hover,
+[data-theme="light"] .chat-thread.active { background: #f0f4f9; }
+[data-theme="light"] .chat-window { border-color: #d0d9e8; }
+[data-theme="light"] .message-in { background: #f5f8ff; border-color: #d0d9e8; color: #1a2540; }
+
+/* Light theme: notice items */
+[data-theme="light"] .notice-item { background: #ffffff; border-color: #d0d9e8; }
+
+/* Light theme: kpi cards */
+[data-theme="light"] .kpi-card { background: #ffffff; border-color: #d0d9e8; }
+
+/* ==== END LIGHT THEME ==== */
 
 * {
   box-sizing: border-box;
@@ -217,7 +409,14 @@ a {
 
 .topbar h1 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 2.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0px 4px 20px rgba(79, 172, 254, 0.4);
 }
 
 .topbar p {
@@ -585,9 +784,9 @@ a {
 
 .table-wrap {
   overflow: auto;
-  border: 1px solid #1f4a83;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  background: #0e2142;
+  background: var(--panel);
 }
 
 table {
@@ -598,20 +797,21 @@ table {
 th,
 td {
   padding: 12px 14px;
-  border-bottom: 1px solid #1b3f70;
+  border-bottom: 1px solid var(--line);
   text-align: left;
+  color: var(--text);
 }
 
 th {
-  color: #5f9acf;
+  color: var(--muted);
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  background: #0a1a36;
+  background: var(--bg-elev);
 }
 
 tr:hover td {
-  background: rgba(44, 88, 148, 0.12);
+  background: rgba(61, 131, 246, 0.06);
 }
 
 .badge {
@@ -637,10 +837,10 @@ tr:hover td {
 
 .input,
 .select {
-  border: 1px solid #2a4e84;
-  background: #0d2347;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
   border-radius: 12px;
-  color: #d5ebff;
+  color: var(--text);
   padding: 10px 12px;
 }
 
@@ -651,16 +851,16 @@ tr:hover td {
 }
 
 .info-card {
-  border: 1px solid #1f4a83;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  background: linear-gradient(180deg, #10274d 0%, #0d2144 100%);
+  background: var(--panel);
   padding: 16px;
   transition: transform 180ms ease, border-color 220ms ease;
 }
 
 .info-card:hover {
   transform: translateY(-1px);
-  border-color: #2f64aa;
+  border-color: var(--blue);
 }
 
 .info-card h4 {
@@ -670,7 +870,7 @@ tr:hover td {
 
 .info-card p {
   margin: 6px 0;
-  color: #78a7d2;
+  color: var(--muted);
 }
 
 .chat-layout {
@@ -680,26 +880,26 @@ tr:hover td {
 }
 
 .chat-thread-list {
-  border: 1px solid #1f4a83;
+  border: 1px solid var(--line);
   border-radius: 16px;
   overflow: hidden;
 }
 
 .chat-thread {
   padding: 12px 14px;
-  border-bottom: 1px solid #1c406f;
+  border-bottom: 1px solid var(--line);
   cursor: pointer;
   transition: background-color 180ms ease, transform 150ms ease;
 }
 
 .chat-thread.active,
 .chat-thread:hover {
-  background: #12315f;
+  background: var(--panel-2);
   transform: translateX(2px);
 }
 
 .chat-window {
-  border: 1px solid #1f4a83;
+  border: 1px solid var(--line);
   border-radius: 16px;
   padding: 14px;
   display: flex;
@@ -716,8 +916,8 @@ tr:hover td {
 }
 
 .message-in {
-  background: #173865;
-  border: 1px solid #2a5388;
+  background: var(--panel);
+  border: 1px solid var(--line);
 }
 
 .message-out {
@@ -740,10 +940,10 @@ tr:hover td {
 }
 
 .notice-item {
-  border: 1px solid #2a4b78;
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px;
-  background: #0f2346;
+  background: var(--panel);
   transition: transform 170ms ease, border-color 200ms ease;
 }
 
@@ -770,18 +970,19 @@ tr:hover td {
 }
 
 .tab-btn {
-  border: 1px solid #2b4f84;
-  background: #122a52;
-  color: #98bbe0;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
   border-radius: 12px;
   padding: 8px 12px;
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
 
 .tab-btn.active {
-  background: #1ccfdf;
+  background: var(--cyan);
   color: #041224;
-  border-color: #1ccfdf;
+  border-color: var(--cyan);
   font-weight: 700;
 }
 
@@ -792,9 +993,9 @@ tr:hover td {
 }
 
 .kpi-card {
-  border: 1px solid #1f4a83;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  background: #0f2347;
+  background: var(--panel);
   padding: 14px;
 }
 

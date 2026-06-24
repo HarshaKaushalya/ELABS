@@ -16,6 +16,7 @@ import {
   CheckCircle,
   XCircle,
   FlaskConical,
+  ClipboardList,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -89,8 +90,8 @@ function StatCard({
   return (
     <div
       style={{
-        background: "#fff",
-        border: "1px solid #e8edf5",
+        background: "var(--panel)",
+        border: "1px solid var(--line)",
         borderRadius: 14,
         padding: "20px 24px",
         display: "flex",
@@ -116,14 +117,14 @@ function StatCard({
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: "1.6rem", fontWeight: 700, color: "#1a2540", lineHeight: 1 }}>
+        <div style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
           {value}
         </div>
-        <div style={{ fontSize: "0.82rem", color: "#6b7a9a", marginTop: 4, fontWeight: 500 }}>
+        <div style={{ fontSize: "0.82rem", color: "var(--muted)", marginTop: 4, fontWeight: 500 }}>
           {label}
         </div>
         {sub && (
-          <div style={{ fontSize: "0.75rem", color: "#9aa5c0", marginTop: 2 }}>{sub}</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }}>{sub}</div>
         )}
       </div>
     </div>
@@ -145,23 +146,23 @@ function SectionHeader({
     <div
       style={{
         padding: "16px 24px",
-        borderBottom: "1px solid #f0f4fb",
+        borderBottom: "1px solid var(--line)",
         display: "flex",
         alignItems: "center",
         gap: 12,
-        background: "#fff",
+        background: "var(--panel)",
       }}
     >
       {icon}
-      <h3 style={{ margin: 0, color: "#1a2540", fontSize: "1.05rem", fontWeight: 600 }}>
+      <h3 style={{ margin: 0, color: "var(--text)", fontSize: "1.05rem", fontWeight: 600 }}>
         {title}
       </h3>
       {badge !== undefined && (
         <span
           style={{
             marginLeft: "auto",
-            background: badgeColor ?? "#e8edf5",
-            color: badgeColor ? "#fff" : "#6b7a9a",
+            background: badgeColor ?? "var(--line)",
+            color: badgeColor ? "#fff" : "var(--muted)",
             borderRadius: 20,
             padding: "2px 10px",
             fontSize: "0.78rem",
@@ -308,8 +309,8 @@ export default function DashboardPage() {
 
   /* ── Shared card style */
   const cardStyle: React.CSSProperties = {
-    background: "#fff",
-    border: "1px solid #e8edf5",
+    background: "var(--panel)",
+    border: "1px solid var(--line)",
     borderRadius: 14,
     overflow: "hidden",
     boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
@@ -327,7 +328,7 @@ export default function DashboardPage() {
             alignItems: "center",
             justifyContent: "center",
             height: 300,
-            color: "#6b7a9a",
+            color: "var(--muted)",
             gap: 12,
             fontSize: "1rem",
           }}
@@ -336,7 +337,7 @@ export default function DashboardPage() {
             style={{
               width: 20,
               height: 20,
-              border: "2px solid #e8edf5",
+              border: "2px solid var(--line)",
               borderTopColor: "#4f7ef8",
               borderRadius: "50%",
               animation: "spin 0.8s linear infinite",
@@ -387,10 +388,10 @@ export default function DashboardPage() {
               color="#8b5cf6"
             />
             <StatCard
-              icon={<XCircle size={22} color="#6b7a9a" />}
+              icon={<XCircle size={22} color="var(--muted)" />}
               label="Out of Service"
               value={stats.outOfServiceItems}
-              color="#6b7a9a"
+              color="var(--muted)"
             />
           </div>
         )}
@@ -426,9 +427,9 @@ export default function DashboardPage() {
                         padding: "14px 16px",
                         borderRadius: 10,
                         border: overdue
-                          ? "1px solid #fecaca"
-                          : "1px solid #e8edf5",
-                        background: overdue ? "#fff5f5" : "#f8faff",
+                          ? "1px solid rgba(239,68,68,0.35)"
+                          : "1px solid var(--line)",
+                        background: overdue ? "rgba(220,38,38,0.08)" : "var(--panel-2)",
                       }}
                     >
                       <div
@@ -436,7 +437,7 @@ export default function DashboardPage() {
                           width: 36,
                           height: 36,
                           borderRadius: 8,
-                          background: overdue ? "#fee2e2" : "#eff6ff",
+                          background: overdue ? "rgba(239,68,68,0.15)" : "rgba(79,126,248,0.12)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -446,12 +447,12 @@ export default function DashboardPage() {
                         <Package size={18} color={overdue ? "#ef4444" : "#4f7ef8"} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: "#1a2540", fontSize: "0.9rem" }}>
+                        <div style={{ fontWeight: 600, color: "var(--text)", fontSize: "0.9rem" }}>
                           {(b.items as any[])
                             .map((i: any) => i.name)
                             .join(", ")}
                         </div>
-                        <div style={{ color: "#6b7a9a", fontSize: "0.8rem", marginTop: 3 }}>
+                        <div style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 3 }}>
                           {b.labName}
                           {b.purpose ? ` · ${b.purpose}` : ""}
                         </div>
@@ -461,7 +462,7 @@ export default function DashboardPage() {
                               key={i.elabsTag}
                               style={{
                                 fontSize: "0.72rem",
-                                background: "#e8edf5",
+                                background: "var(--line)",
                                 color: "#4a5568",
                                 borderRadius: 6,
                                 padding: "2px 8px",
@@ -483,7 +484,7 @@ export default function DashboardPage() {
                         >
                           {overdue ? `${b.daysOverdue}d overdue` : `Due ${dueDate}`}
                         </div>
-                        <div style={{ fontSize: "0.75rem", color: "#9aa5c0", marginTop: 2 }}>
+                        <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }}>
                           Tx #{b.transactionId}
                         </div>
                       </div>
@@ -522,8 +523,8 @@ export default function DashboardPage() {
                         gap: 14,
                         padding: "14px 16px",
                         borderRadius: 10,
-                        border: "1px solid #fecaca",
-                        background: "#fff5f5",
+                        border: "1px solid rgba(239,68,68,0.35)",
+                        background: "rgba(220,38,38,0.08)",
                       }}
                     >
                       <div
@@ -531,7 +532,7 @@ export default function DashboardPage() {
                           width: 36,
                           height: 36,
                           borderRadius: 8,
-                          background: "#fee2e2",
+                          background: "rgba(239,68,68,0.15)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -541,10 +542,10 @@ export default function DashboardPage() {
                         <AlertTriangle size={18} color="#ef4444" />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: "#1a2540", fontSize: "0.9rem" }}>
+                        <div style={{ fontWeight: 600, color: "var(--text)", fontSize: "0.9rem" }}>
                           {tx.borrowerName ?? tx.borrowerGroupCode ?? "Unknown"}
                         </div>
-                        <div style={{ color: "#6b7a9a", fontSize: "0.8rem", marginTop: 2 }}>
+                        <div style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 2 }}>
                           {tx.labName}
                           {tx.purpose ? ` · ${tx.purpose}` : ""}
                         </div>
@@ -554,9 +555,9 @@ export default function DashboardPage() {
                               key={i.elabsTag}
                               style={{
                                 fontSize: "0.72rem",
-                                background: "#fef2f2",
-                                color: "#b91c1c",
-                                border: "1px solid #fecaca",
+                                background: "rgba(220,38,38,0.1)",
+                                color: "#ef4444",
+                                border: "1px solid rgba(239,68,68,0.35)",
                                 borderRadius: 6,
                                 padding: "2px 8px",
                                 fontFamily: "monospace",
@@ -577,7 +578,7 @@ export default function DashboardPage() {
                         >
                           {tx.daysOverdue}d overdue
                         </div>
-                        <div style={{ fontSize: "0.75rem", color: "#9aa5c0", marginTop: 2 }}>
+                        <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }}>
                           Due {dueDate}
                         </div>
                         <Link href="/inventory">
@@ -586,7 +587,7 @@ export default function DashboardPage() {
                               marginTop: 8,
                               padding: "4px 12px",
                               background: "transparent",
-                              border: "1px solid #fecaca",
+                              border: "1px solid rgba(239,68,68,0.35)",
                               color: "#ef4444",
                               borderRadius: 6,
                               fontSize: "0.78rem",
@@ -625,9 +626,9 @@ export default function DashboardPage() {
                     padding: "6px 16px",
                     borderRadius: 20,
                     border: "1px solid",
-                    borderColor: timeRange === n ? "#4f7ef8" : "#e8edf5",
-                    background: timeRange === n ? "#4f7ef8" : "#fff",
-                    color: timeRange === n ? "#fff" : "#6b7a9a",
+                    borderColor: timeRange === n ? "#4f7ef8" : "var(--line)",
+                    background: timeRange === n ? "#4f7ef8" : "var(--panel)",
+                    color: timeRange === n ? "#fff" : "var(--muted)",
                     fontWeight: 500,
                     fontSize: "0.82rem",
                     cursor: "pointer",
@@ -643,11 +644,11 @@ export default function DashboardPage() {
                 style={{
                   padding: "40px 0",
                   textAlign: "center",
-                  color: "#9aa5c0",
+                  color: "var(--muted)",
                   fontSize: "0.9rem",
                 }}
               >
-                <CheckCircle size={32} color="#e8edf5" style={{ marginBottom: 8 }} />
+                <CheckCircle size={32} color="var(--muted)" style={{ marginBottom: 8 }} />
                 <div>No upcoming events in the next {timeRange} days.</div>
               </div>
             ) : (
@@ -663,7 +664,7 @@ export default function DashboardPage() {
                         letterSpacing: "0.06em",
                         marginBottom: 12,
                         paddingBottom: 6,
-                        borderBottom: "1px solid #f0f4fb",
+                        borderBottom: "1px solid var(--line)",
                       }}
                     >
                       {dateStr}
@@ -677,13 +678,13 @@ export default function DashboardPage() {
                             alignItems: "center",
                             gap: 14,
                             padding: "14px 16px",
-                            background: "#f8faff",
-                            border: "1px solid #e8edf5",
+                            background: "var(--panel-2)",
+                            border: "1px solid var(--line)",
                             borderLeft: `4px solid ${event.color}`,
                             borderRadius: "0 10px 10px 0",
                           }}
                         >
-                          <div style={{ color: "#9aa5c0", fontSize: "0.85rem", minWidth: 45 }}>
+                          <div style={{ color: "var(--muted)", fontSize: "0.85rem", minWidth: 45 }}>
                             {event.type === "PRE_LAB" ? "23:59" : ""}
                           </div>
                           <div
@@ -711,7 +712,7 @@ export default function DashboardPage() {
                             >
                               {event.title}
                             </div>
-                            <div style={{ color: "#6b7a9a", fontSize: "0.82rem" }}>
+                            <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>
                               {event.subtitle}
                             </div>
                           </div>
@@ -720,9 +721,9 @@ export default function DashboardPage() {
                               <button
                                 style={{
                                   padding: "6px 14px",
-                                  background: "#fff",
-                                  border: "1px solid #e8edf5",
-                                  color: "#4f7ef8",
+                                  background: "var(--panel)",
+                                  border: "1px solid var(--line)",
+                                  color: "var(--blue)",
                                   borderRadius: 8,
                                   fontSize: "0.8rem",
                                   cursor: "pointer",
@@ -763,19 +764,19 @@ export default function DashboardPage() {
               <button
                 onClick={prevMonth}
                 style={{
-                  background: "#f0f4fb",
+                  background: "var(--bg-elev)",
                   border: "none",
                   borderRadius: 8,
                   padding: "6px 12px",
                   cursor: "pointer",
-                  color: "#1a2540",
+                  color: "var(--text)",
                   display: "flex",
                   alignItems: "center",
                 }}
               >
                 <ChevronLeft size={16} />
               </button>
-              <div style={{ fontWeight: 700, color: "#1a2540", fontSize: "1rem" }}>
+              <div style={{ fontWeight: 700, color: "var(--text)", fontSize: "1rem" }}>
                 {currentMonth.toLocaleDateString("en-GB", {
                   month: "long",
                   year: "numeric",
@@ -784,12 +785,12 @@ export default function DashboardPage() {
               <button
                 onClick={nextMonth}
                 style={{
-                  background: "#f0f4fb",
+                  background: "var(--bg-elev)",
                   border: "none",
                   borderRadius: 8,
                   padding: "6px 12px",
                   cursor: "pointer",
-                  color: "#1a2540",
+                  color: "var(--text)",
                   display: "flex",
                   alignItems: "center",
                 }}
@@ -801,7 +802,7 @@ export default function DashboardPage() {
             {/* Calendar grid */}
             <div
               style={{
-                border: "1px solid #e8edf5",
+                border: "1px solid var(--line)",
                 borderRadius: 10,
                 overflow: "hidden",
               }}
@@ -811,8 +812,8 @@ export default function DashboardPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(7, 1fr)",
-                  background: "#f8faff",
-                  borderBottom: "1px solid #e8edf5",
+                  background: "var(--bg-elev)",
+                  borderBottom: "1px solid var(--line)",
                 }}
               >
                 {weekDays.map((d) => (
@@ -823,7 +824,7 @@ export default function DashboardPage() {
                       textAlign: "center",
                       fontSize: "0.78rem",
                       fontWeight: 600,
-                      color: "#6b7a9a",
+                      color: "var(--muted)",
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                     }}
@@ -838,7 +839,7 @@ export default function DashboardPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(7, 1fr)",
-                  background: "#fff",
+                  background: "var(--panel)",
                 }}
               >
                 {calendarDays.map((date, i) => {
@@ -851,9 +852,9 @@ export default function DashboardPage() {
                       style={{
                         minHeight: 100,
                         padding: "8px",
-                        borderRight: "1px solid #f0f4fb",
-                        borderBottom: "1px solid #f0f4fb",
-                        background: isToday ? "#eff6ff" : "transparent",
+                        borderRight: "1px solid var(--line)",
+                        borderBottom: "1px solid var(--line)",
+                        background: isToday ? "rgba(79,126,248,0.12)" : "transparent",
                       }}
                     >
                       {date && (
@@ -867,7 +868,7 @@ export default function DashboardPage() {
                               height: 26,
                               borderRadius: "50%",
                               background: isToday ? "#4f7ef8" : "transparent",
-                              color: isToday ? "#fff" : "#1a2540",
+                              color: isToday ? "#fff" : "var(--text)",
                               fontWeight: isToday ? 700 : 400,
                               fontSize: "0.85rem",
                               marginBottom: 6,
@@ -897,7 +898,10 @@ export default function DashboardPage() {
                                     cursor: "pointer",
                                   }}
                                 >
-                                  {evt.type === "PRE_LAB" ? "📋 Pre-lab" : `🔬 ${evt.title.replace("Laboratory Session — ", "") || "Lab"}`}
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                     {evt.type === "PRE_LAB" ? <ClipboardList size={10} /> : <FlaskConical size={10} />}
+                                     <span>{evt.type === "PRE_LAB" ? "Pre-lab" : evt.title.replace("Laboratory Session — ", "") || "Lab"}</span>
+                                   </span>
                                 </div>
                               </Link>
                             ))}
@@ -935,7 +939,7 @@ export default function DashboardPage() {
                       background: l.color,
                     }}
                   />
-                  <span style={{ fontSize: "0.78rem", color: "#6b7a9a" }}>{l.label}</span>
+                  <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>{l.label}</span>
                 </div>
               ))}
             </div>

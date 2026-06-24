@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/routes";
 import { apiFetch } from "../lib/api";
 import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type Session = {
   id: number;
@@ -101,7 +102,7 @@ export default function ModuleDetailScreen({ navigation, route }: Props) {
           onPress={() => setActiveTab("pending")}
         >
           <Text style={[styles.tabText, { color: activeTab === "pending" ? colors.warning : colors.textMuted }]}>
-            ◷ Pending ({pending.length})
+            Pending ({pending.length})
           </Text>
         </Pressable>
         <Pressable
@@ -109,7 +110,7 @@ export default function ModuleDetailScreen({ navigation, route }: Props) {
           onPress={() => setActiveTab("done")}
         >
           <Text style={[styles.tabText, { color: activeTab === "done" ? colors.success : colors.textMuted }]}>
-            ✓ Done ({done.length})
+            Done ({done.length})
           </Text>
         </Pressable>
       </View>
@@ -122,7 +123,7 @@ export default function ModuleDetailScreen({ navigation, route }: Props) {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>
-              {activeTab === "pending" ? "No pending sessions 🎉" : "No completed sessions yet"}
+              {activeTab === "pending" ? "No pending sessions" : "No completed sessions yet"}
             </Text>
           </View>
         }
@@ -146,13 +147,13 @@ export default function ModuleDetailScreen({ navigation, route }: Props) {
                   </View>
                 </View>
                 <View style={styles.cardMeta}>
-                  <Text style={styles.metaText}>📅 {fmt(item.scheduledDate)}</Text>
-                  <Text style={styles.metaText}>⏱ {item.durationHours}h</Text>
-                  {item.attended && <Text style={[styles.metaText, { color: colors.success }]}>✓ Attended</Text>}
-                  {item.reportSubmitted && <Text style={[styles.metaText, { color: colors.success }]}>✓ Report</Text>}
+                  <Text style={styles.metaText}>{fmt(item.scheduledDate)}</Text>
+                  <Text style={styles.metaText}>{item.durationHours}h</Text>
+                  {item.attended && <Text style={[styles.metaText, { color: colors.success }]}>Attended</Text>}
+                  {item.reportSubmitted && <Text style={[styles.metaText, { color: colors.success }]}>Report</Text>}
                 </View>
               </View>
-              <Text style={styles.arrow}>›</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
           );
         }}

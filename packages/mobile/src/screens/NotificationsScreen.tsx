@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { apiFetch } from "../lib/api";
 import { colors, spacing, borderRadius, fontSize } from "../lib/theme";
+import { Ionicons } from "@expo/vector-icons";
 
 type Notification = {
   id: number;
@@ -69,7 +70,7 @@ export default function NotificationsScreen() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🔔</Text>
+            <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} style={{ marginBottom: spacing.md }} />
             <Text style={styles.emptyText}>No notifications</Text>
           </View>
         }

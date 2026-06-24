@@ -6,6 +6,7 @@ import { AnalysisStats } from "./AnalysisStats";
 import { SafetyPanel } from "./SafetyPanel";
 import { EventTimeline } from "./EventTimeline";
 import { FramePreviews } from "./FramePreviews";
+import { Video } from "lucide-react";
 
 // ── types ──────────────────────────────────────────────────────────────────
 
@@ -280,8 +281,9 @@ export function VisionMonitoringPanel() {
           {videoPath && (
             <div style={{ marginTop: 24, borderRadius: 12, overflow: "hidden", border: "1px solid #334155", backgroundColor: "#0f172a" }}>
               <div style={{ padding: 16, borderBottom: "1px solid #334155" }}>
-                <div style={{ fontSize: "0.95rem", fontWeight: 500, color: "#e2e8f0", marginBottom: 8 }}>
-                  📹 Live YOLO Annotations
+                <div style={{ fontSize: "0.95rem", fontWeight: 500, color: "#e2e8f0", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Video size={16} />
+                  <span>Live YOLO Annotations</span>
                 </div>
                 <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
                   Real-time people detection, activity classification, and fire/smoke detection with bounding boxes
