@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api.routes_analyze_video import router as analyze_router
 from .api.routes_health import router as health_router
 from .api.routes_live import router as live_router
+from .api.routes_snapshots import router as snapshots_router
 from .core.logging import configure_logging
 
 configure_logging()
@@ -25,3 +26,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(analyze_router)
 app.include_router(live_router)
+app.include_router(snapshots_router)

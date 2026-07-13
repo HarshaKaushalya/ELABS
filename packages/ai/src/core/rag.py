@@ -1,191 +1,293 @@
+"""
+rag.py  —  ELABS AI Assistant Core
+────────────────────────────────────────────────────────────────────────────────
+Architecture:
+  1. build_context()  → pulls live DB data (inventory, borrows, schedule, etc.)
+  2. A rich system prompt is constructed with that context
+  3. Ollama llama3.2 generates the answer (streaming or non-streaming)
+  4. Falls back to direct DB query if Ollama is offline
+"""
+
+from __future__ import annotations
+
 import os
 import logging
-import requests
 import re
+from typing import Generator
 
-# Import our database tools
+import requests
+
+from .context_builder import build_context
 from ..tools.inventory_tool import get_item_status, get_borrowed_items
 from ..tools.location_tool import locate_item, locate_lab
 from ..tools.schedule_tool import get_upcoming_labs
 from ..tools.occupancy_tool import get_lab_occupancy
+from ..tools.user_tool import (
+    get_user_profile,
+    get_all_overdue_transactions,
+    search_student,
+    get_attendance_summary,
+)
 
 logger = logging.getLogger(__name__)
 
-# ─── Fallback Direct Database Router (no LLM required) ──────────────────
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL    = os.environ.get("OLLAMA_MODEL", "llama3.2")
 
-def _match_intent_and_query_db(question: str, user_email: str | None) -> str | None:
+
+# ─── System Prompt Builder ────────────────────────────────────────────────────
+
+def _build_system_prompt(db_context: str, is_staff: bool, doc_context: str = "") -> str:
+    role_note = (
+        "You are speaking with a STAFF MEMBER (lecturer, admin, or lab technician). "
+        "You have full access to all data including overdue transactions, all student records, "
+        "and system-wide statistics. Provide detailed administrative insights."
+        if is_staff else
+        "You are speaking with a STUDENT. Only show data relevant to them personally "
+        "(their own borrows, their own schedule, their own notifications). "
+        "Never show other students' personal information."
+    )
+
+    doc_section = f"\n\nUPLOADED DOCUMENT CONTEXT:\n{doc_context}\n" if doc_context else ""
+
+    return f"""You are ELABS AI, the intelligent assistant for the DEIE (Department of Electrical and Information Engineering) Smart Laboratory Management System at the University of Ruhuna.
+
+{role_note}
+
+You have real-time access to the laboratory database. The following data was fetched LIVE from the database just now — use it to answer accurately:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIVE DATABASE CONTEXT (as of this moment):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{db_context}
+{doc_section}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GUIDELINES:
+- Use **bold** for equipment names, lab names, dates, and important values
+- Use bullet lists when listing multiple items
+- Format dates as "Jan 15, 2026"
+- If asked about something not in the context above, say "I don't have that information in my current database snapshot" — never make up data
+- Be concise but complete. If there's nothing (e.g. no borrows), say so clearly
+- For overdue items, always mention the urgency
+- You are friendly, professional, and helpful
+"""
+
+
+# ─── Ollama Health Check ──────────────────────────────────────────────────────
+
+def _ollama_is_up() -> bool:
+    try:
+        r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=(2.0, 5.0))
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+def _model_is_available() -> bool:
+    try:
+        r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=(2.0, 5.0))
+        if r.status_code != 200:
+            return False
+        models = [m.get("name", "") for m in r.json().get("models", [])]
+        return any(OLLAMA_MODEL in m for m in models)
+    except Exception:
+        return False
+
+
+# ─── RAG Vector Store (for uploaded docs) ────────────────────────────────────
+
+def _get_doc_context(document_id: str | None, question: str) -> str:
+    if not document_id:
+        return ""
+    try:
+        from ..rag.retrieval import retrieve
+        chunks = retrieve(question, document_id)
+        return "\n\n".join(chunks) if chunks else ""
+    except Exception as e:
+        logger.warning(f"Doc retrieval failed: {e}")
+        return ""
+
+
+# ─── Non-streaming answer ─────────────────────────────────────────────────────
+
+def ask_question(
+    question: str,
+    user_email: str | None = None,
+    document_id: str | None = None,
+    history: list[dict] | None = None,
+) -> str:
+    """Returns a complete answer string (used by mobile / non-streaming clients)."""
+
+    # 1. Build live DB context
+    db_context, is_staff = build_context(user_email)
+
+    # 2. Get doc context if a document was uploaded
+    doc_context = _get_doc_context(document_id, question)
+
+    # 3. Build system prompt
+    system_prompt = _build_system_prompt(db_context, is_staff, doc_context)
+
+    # 4. Try Ollama
+    if _ollama_is_up() and _model_is_available():
+        try:
+            messages = [{"role": "system", "content": system_prompt}]
+            # Inject conversation history (last 6 turns)
+            for h in (history or [])[-6:]:
+                messages.append(h)
+            messages.append({"role": "user", "content": question})
+
+            resp = requests.post(
+                f"{OLLAMA_BASE_URL}/api/chat",
+                json={
+                    "model": OLLAMA_MODEL, 
+                    "messages": messages, 
+                    "stream": False,
+                    "options": {"num_ctx": 1024}
+                },
+                timeout=(10.0, 300.0),
+            )
+            if resp.status_code == 200:
+                return resp.json()["message"]["content"].strip()
+            logger.warning(f"Ollama returned {resp.status_code}: {resp.text[:200]}")
+        except requests.exceptions.Timeout:
+            return "⏱️ The AI took too long to respond. The database data is available — please try a shorter question."
+        except Exception as e:
+            logger.error(f"Ollama error: {e}")
+
+    # 5. Fallback — direct DB routing
+    return _fallback_db_answer(question, user_email, db_context)
+
+
+# ─── Streaming answer ─────────────────────────────────────────────────────────
+
+def ask_question_stream(
+    question: str,
+    user_email: str | None = None,
+    document_id: str | None = None,
+    history: list[dict] | None = None,
+) -> Generator[str, None, None]:
     """
-    Analyzes the question for keywords/intents and routes directly to database tools.
-    Returns the formatted string response if matched, or None to fall back.
+    Yields token strings one at a time for SSE streaming.
+    Falls back to yielding the full DB answer at once if Ollama is offline.
+    """
+
+    # 1. Build live DB context
+    db_context, is_staff = build_context(user_email)
+    doc_context = _get_doc_context(document_id, question)
+    system_prompt = _build_system_prompt(db_context, is_staff, doc_context)
+
+    # 2. Try streaming from Ollama
+    if _ollama_is_up() and _model_is_available():
+        try:
+            messages = [{"role": "system", "content": system_prompt}]
+            for h in (history or [])[-6:]:
+                messages.append(h)
+            messages.append({"role": "user", "content": question})
+
+            with requests.post(
+                f"{OLLAMA_BASE_URL}/api/chat",
+                json={
+                    "model": OLLAMA_MODEL, 
+                    "messages": messages, 
+                    "stream": True,
+                    "options": {"num_ctx": 1024}
+                },
+                timeout=(10.0, 300.0),
+                stream=True,
+            ) as resp:
+                if resp.status_code == 200:
+                    import json
+                    for line in resp.iter_lines():
+                        if line:
+                            try:
+                                chunk = json.loads(line)
+                                token = chunk.get("message", {}).get("content", "")
+                                if token:
+                                    yield token
+                                if chunk.get("done"):
+                                    return
+                            except Exception:
+                                continue
+                    return
+                logger.warning(f"Ollama stream returned {resp.status_code}")
+        except requests.exceptions.Timeout:
+            yield "⏱️ The AI took too long to respond. Please try again."
+            return
+        except Exception as e:
+            logger.error(f"Ollama stream error: {e}")
+
+    # 3. Fallback — stream the DB answer in one chunk
+    fallback = _fallback_db_answer(question, user_email, db_context)
+    yield fallback
+
+
+# ─── Fallback DB Router ───────────────────────────────────────────────────────
+
+def _fallback_db_answer(question: str, user_email: str | None, db_context: str) -> str:
+    """
+    When Ollama is offline, route the question directly to DB tools
+    and return a formatted answer. Much better than a static error message.
     """
     q = question.lower().strip()
-    email = user_email or "student@elabs.local"  # Default fallback email for testing
+    email = user_email or ""
 
-    def has_word(words):
-        return any(re.search(fr"\b{w}\b", q) for w in words)
+    def has(*words):
+        return any(re.search(rf"\b{w}\b", q) for w in words)
 
-    # 1. Schedule intent
-    if has_word(["schedule", "upcoming", "timetable", "sessions", "my lab", "when is my"]):
-        return get_upcoming_labs(email)
+    # Schedule
+    if has("schedule", "upcoming", "timetable", "session", "when", "my lab"):
+        if email:
+            return get_upcoming_labs(email)
 
-    # 2. Personal borrowed items intent
-    if has_word(["my borrowed", "what did i borrow", "items i borrowed", "my items", "checkouts"]):
-        return get_borrowed_items(email)
+    # Personal borrows
+    if has("borrow", "borrowed", "checkout", "my items", "what did i"):
+        if email:
+            return get_borrowed_items(email)
 
-    # 3. Lab Occupancy intent
-    if has_word(["occupancy", "active students", "how many students", "crowded", "people inside", "number of students"]):
-        # Try to identify which lab is being referred to
-        matched_lab = "Software Laboratory"  # Default
-        for lab in ["software", "electronics", "power", "biomedical", "control", "microprocessor", "telecommunication", "circuit"]:
+    # Occupancy
+    if has("occupancy", "how many", "crowded", "people", "students inside", "headcount"):
+        for lab in ["software", "electronics", "power", "biomedical", "control",
+                    "microprocessor", "telecommunication", "circuit"]:
             if lab in q:
-                matched_lab = lab
-                break
-        return get_lab_occupancy(matched_lab)
+                return get_lab_occupancy(lab)
+        return get_lab_occupancy("Software Laboratory")
 
-    # 4. Item Location intent
-    if has_word(["locate", "where is", "where are", "find location of", "which floor"]):
-        # Extract the tag or equipment name
-        # Look for tag format ELABS-XX-0000
-        tag_match = re.search(r"elabs-[a-z0-9\-]+", q)
-        if tag_match:
-            return locate_item(tag_match.group(0).upper())
-            
-        # Extract name by removing location keywords using word boundaries
-        cleaned = re.sub(r"\b(locate|where|is|are|find|location|of|the|a|an|which|floor)\b", "", q)
-        cleaned = re.sub(r"[?!.,]", "", cleaned)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-        if cleaned:
-            # If lab location requested
-            if "lab" in cleaned or "laboratory" in cleaned:
-                return locate_lab(cleaned)
-            return locate_item(cleaned)
+    # Item lookup
+    if has("locate", "where is", "where are", "find", "status of", "available"):
+        tag = re.search(r"elabs-[a-z0-9\-]+", q)
+        if tag:
+            return get_item_status(tag.group())
+        # Try to extract equipment name
+        for kw in ["oscilloscope", "multimeter", "soldering", "power supply", "arduino",
+                   "raspberry", "breadboard", "function generator", "microscope"]:
+            if kw in q:
+                return get_item_status(kw)
 
-    # 5. Availability / Status intent
-    if has_word(["available", "status of", "is there a", "is it available", "borrow an item", "check out"]):
-        tag_match = re.search(r"elabs-[a-z0-9\-]+", q)
-        if tag_match:
-            return get_item_status(tag_match.group(0).upper())
-            
-        # Clean up question to isolate item name using word boundaries
-        cleaned = re.sub(r"\b(is|there|a|an|available|status|of|the|check|out|it|borrow|item)\b", "", q)
-        cleaned = re.sub(r"[?!.,]", "", cleaned)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-        if cleaned:
-            return get_item_status(cleaned)
+    # Profile
+    if has("my profile", "my account", "who am i", "my details"):
+        if email:
+            return get_user_profile(email)
 
-    # 6. Basic Greetings / Help fallbacks
-    if has_word(["hello", "hi", "hey"]):
-        return (
-            "Hello! I'm ELABS AI, your database-connected laboratory assistant. I can help you with:\n"
-            "- Real-time equipment status and locations\n"
-            "- Live lab occupancy levels (monitored via YOLOv8 CCTV)\n"
-            "- Your upcoming lab session schedule and registered modules\n"
-            "- Borrowed equipment list and due dates\n\n"
-            "What would you like to query today?"
-        )
-    if has_word(["help", "what can you do"]):
-        return (
-            "You can ask me questions like:\n"
-            "- *'Is Development Laptop available?'*\n"
-            "- *'Where is ELABS-SW-0001 located?'*\n"
-            "- *'What are my upcoming lab sessions?'*\n"
-            "- *'What is the current occupancy of the Software Laboratory?'*\n"
-            "- *'What equipment do I currently have checked out?'*"
-        )
+    # Overdue (admin)
+    if has("overdue", "late", "not returned"):
+        return get_all_overdue_transactions()
 
-    return None
+    # Search student (admin)
+    if has("find student", "search student", "look up"):
+        words = q.split()
+        if len(words) > 2:
+            term = " ".join(words[2:])
+            return search_student(term)
 
+    # Attendance
+    if has("attendance", "scanned", "entry", "exit records"):
+        if email:
+            return get_attendance_summary(email)
 
-def ask_question(question: str, user_email: str | None = None, document_id: str | None = None) -> str:
-    """
-    Processes a query.
-    1. Tries to match database intent routing directly first.
-    2. Falls back to Ollama LLM if running.
-    3. Falls back to a default helpful message.
-    """
-    # ─── Step 1: Check Database Intent Match ─────────────────────────────────
-    db_response = _match_intent_and_query_db(question, user_email)
-
-    # ─── Step 2: Try Ollama LLM ──────────────────────────────────────────────
-    ollama_base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    try:
-        health = requests.get(f"{ollama_base_url}/api/tags", timeout=(2.0, 5.0), proxies={"http": None, "https": None})
-        if health.status_code == 200:
-            models = health.json().get("models", [])
-            if models:
-                model_name = models[0]["name"]
-                
-                # Fetch database context to feed into LLM system prompt
-                email = user_email or "student@elabs.local"
-                schedule_context = get_upcoming_labs(email)
-                borrowed_context = get_borrowed_items(email)
-                
-                # Fetch RAG Context if document_id is provided
-                rag_context = ""
-                if document_id:
-                    from ..rag.retrieval import retrieve
-                    chunks = retrieve(question, document_id)
-                    if chunks:
-                        rag_context = "\n".join(chunks)
-                
-                # Build the system prompt
-                system_prompt = (
-                    "You are ELABS AI, an expert, friendly, and highly conversational laboratory assistant for a university "
-                    "Smart Laboratory Management System. You have access to real-time database details.\n\n"
-                    f"Current User Context:\n"
-                    f"- Email: {email}\n"
-                    f"- Upcoming Schedule: {schedule_context}\n"
-                    f"- Checked out items: {borrowed_context}\n\n"
-                )
-                
-                if rag_context:
-                    system_prompt += (
-                        f"The user has uploaded a document ({document_id}) and asked a question. Here is the relevant text from the document:\n"
-                        f"--- UPLOADED DOCUMENT CONTENT ---\n{rag_context}\n---------------------------------\n\n"
-                        "IMPORTANT: Use the uploaded document content above to answer the user's question. Explicitly mention the document name in your response.\n"
-                    )
-                elif db_response:
-                    system_prompt += (
-                        "The system successfully executed a query for the user's question and found the following data:\n"
-                        f"--- DATABASE QUERY RESULTS ---\n{db_response}\n------------------------------\n\n"
-                        "IMPORTANT: Use the data above to answer the user's question. Formulate a highly conversational, friendly, and helpful response. Format it nicely with markdown, using bullet points or bold text to highlight key info (like Status and Location).\n"
-                    )
-                else:
-                    system_prompt += "Respond clearly, concisely, and helpfully using your knowledge and context when answering the student."
-                
-                response = requests.post(
-                    f"{ollama_base_url}/api/generate",
-                    json={
-                        "model": model_name,
-                        "prompt": f"{system_prompt}\n\nStudent question: {question}",
-                        "stream": False,
-                        "options": {"temperature": 0.7, "num_predict": 300},
-                    },
-                    timeout=60.0,
-                    proxies={"http": None, "https": None}
-                )
-                response.raise_for_status()
-                answer = response.json().get("response", "").strip()
-                if answer:
-                    return answer
-            else:
-                logger.warning("Ollama is reachable but has no models loaded.")
-        else:
-            logger.warning(f"Ollama health check failed with status: {health.status_code}")
-    except requests.exceptions.Timeout:
-        logger.error("Ollama connection or generation timed out.")
-        if document_id:
-            return "I am currently experiencing high load or Ollama took too long to respond while reading your document. Please try again in a moment."
-    except Exception as e:
-        logger.error(f"Ollama not available or error occurred: {e}")
-
-    # Fallback if LLM is offline but we have a DB response
-    if db_response:
-        return db_response
-
-    # ─── Step 3: Default generic response ────────────────────────────────────
+    # Generic — return the DB context summary
     return (
-        "I couldn't locate specific database records or details for that query. "
-        "Try asking about equipment availability, lab occupancy, or your upcoming schedule. "
-        "For example: 'Is Development Laptop available?'"
+        "🤖 The AI model is currently offline. Here's what I can tell you from the database:\n\n"
+        + db_context
+        + "\n\n*Start Ollama to get intelligent conversational answers.*"
     )

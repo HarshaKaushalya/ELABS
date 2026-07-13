@@ -23,8 +23,8 @@ async def upload_document(file: UploadFile = File(...)) -> UploadResponse:
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     try:
-        document_id = file.filename.replace(".pdf", "").replace(" ", "_")
-        file_path = UPLOAD_DIR / f"{document_id}.pdf"
+        document_id = file.filename.replace(" ", "_")
+        file_path = UPLOAD_DIR / f"{document_id}"
 
         contents = await file.read()
         with open(file_path, "wb") as f:

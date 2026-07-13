@@ -280,6 +280,21 @@ def analyze_video(video_path: str | Path) -> AnalysisResult:
                 cx = float((box[0] + box[2]) / 2)
                 cy = float((box[1] + box[3]) / 2)
                 curr_centroids[tid] = (cx, cy)
+                
+                # Zone detection
+                # Define zones (in a real app, these would be passed via API)
+                ZONES = {
+                    "Workbench A": np.array([[50, 50], [300, 50], [300, 300], [50, 300]], np.int32),
+                    "Exit Door": np.array([[500, 0], [640, 0], [640, 480], [500, 480]], np.int32)
+                }
+                
+                for zone_name, pts in ZONES.items():
+                    if cv2.pointPolygonTest(pts, (cx, cy), False) >= 0:
+                        # Log zone entry
+                        if tid not in seen_ids:
+                            logger.info(f"Person #{tid} entered {zone_name}")
+                            
+                        # If a person enters a restricted zone (e.g. Exit Door with equipment) we can flag it here.
 
         # People entered (new IDs seen for the first time)
         entered = curr_ids - seen_ids
@@ -359,6 +374,16 @@ def analyze_video(video_path: str | Path) -> AnalysisResult:
                     label="Fire Alert",
                     thumbnail=_encode_frame(frame),
                 ))
+            # Trigger Real-Time Socket.IO Alert via API
+            try:
+                import requests
+                requests.post("http://localhost:4000/notifications/webhook", json={
+                    "type": "FIRE",
+                    "message": "🔥 Critical: Fire detected in the laboratory!",
+                    "metadata": {"time_sec": time_sec}
+                }, timeout=1.0)
+            except Exception as e:
+                logger.error(f"Failed to trigger fire webhook: {e}")
 
         if smoke_flag and (
             not smoke_timestamps or time_sec - smoke_timestamps[-1] > 3.0
@@ -375,6 +400,16 @@ def analyze_video(video_path: str | Path) -> AnalysisResult:
                     label="Smoke Alert",
                     thumbnail=_encode_frame(frame),
                 ))
+            # Trigger Real-Time Socket.IO Alert via API
+            try:
+                import requests
+                requests.post("http://localhost:4000/notifications/webhook", json={
+                    "type": "SMOKE",
+                    "message": "💨 Warning: Smoke detected in the laboratory!",
+                    "metadata": {"time_sec": time_sec}
+                }, timeout=1.0)
+            except Exception as e:
+                logger.error(f"Failed to trigger smoke webhook: {e}")
 
         # ── carry state forward ──────────────────────────────────────────────
         prev_ids       = curr_ids

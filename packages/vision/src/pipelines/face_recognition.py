@@ -1,20 +1,26 @@
 import cv2
 import logging
+import time
+from pathlib import Path
+from deepface import DeepFace
 
 logger = logging.getLogger(__name__)
+
+SNAPSHOTS_DIR = Path(__file__).parent.parent / "storage" / "snapshots"
+SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def recognize_faces(video_path: str) -> list[str]:
     """
     Detect faces in a video and map them to student IDs.
-    Uses OpenCV Haar Cascades for face detection.
+    Upgraded to use DeepFace with MediaPipe backend for high efficiency and accuracy.
+    Saves snapshots of detected faces for later experiments.
     """
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     cap = cv2.VideoCapture(video_path)
     
     detected_students = set()
     frame_count = 0
     
-    # Mock database mapping generic face signatures to student IDs
+    # Mock database mapping for MVP (In production, use DeepFace.find with a ChromaDB of embeddings)
     mock_student_db = ["EG/2022/5401", "EG/2022/5402", "EG/2022/5403"]
     
     while cap.isOpened():
@@ -23,18 +29,45 @@ def recognize_faces(video_path: str) -> list[str]:
             break
             
         frame_count += 1
-        # Process every 30th frame to save CPU
+        # Sample every 30th frame (1 second at 30fps) for efficiency
         if frame_count % 30 != 0:
             continue
             
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-        
-        for i, (x, y, w, h) in enumerate(faces):
-            # In a real scenario, we'd extract embeddings here and match against the DB.
-            # For this MVP, we map the first few detected faces to our mock DB.
-            student_id = mock_student_db[i % len(mock_student_db)]
-            detected_students.add(student_id)
+        try:
+            # extract_faces uses mediapipe for rapid CPU-based face detection
+            faces = DeepFace.extract_faces(
+                img_path=frame, 
+                detector_backend='mediapipe', 
+                enforce_detection=False
+            )
+            
+            for i, face_obj in enumerate(faces):
+                if face_obj['confidence'] < 0.5:
+                    continue
+                    
+                # Extract the facial area
+                facial_area = face_obj['facial_area']
+                x, y, w, h = facial_area['x'], facial_area['y'], facial_area['w'], facial_area['h']
+                
+                # Crop the face for the snapshot
+                face_crop = frame[max(0, y):y+h, max(0, x):x+w]
+                
+                # Mock embedding matching
+                student_id = mock_student_db[i % len(mock_student_db)]
+                detected_students.add(student_id)
+                
+                # Save snapshot for dashboard / later experiments
+                safe_id = student_id.replace("/", "_")
+                timestamp = int(time.time() * 1000)
+                snapshot_filename = f"{safe_id}_{timestamp}.jpg"
+                snapshot_path = SNAPSHOTS_DIR / snapshot_filename
+                
+                if face_crop.size > 0:
+                    cv2.imwrite(str(snapshot_path), face_crop)
+                    logger.info(f"Saved face snapshot: {snapshot_filename}")
+                    
+        except Exception as e:
+            logger.warning(f"DeepFace extraction failed on frame {frame_count}: {e}")
             
     cap.release()
     logger.info(f"Detected {len(detected_students)} students in video.")
