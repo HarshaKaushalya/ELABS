@@ -5,7 +5,21 @@ import { usePathname } from "next/navigation";
 import { UniversityBrand } from "./UniversityBrand";
 import { useAuth } from "@/components/auth/AuthProvider";
 
-const sections = [
+type NavLink = {
+  label: string;
+  href: string;
+  icon: string;
+  badge?: number;
+  hideFor?: string[];
+};
+
+type NavSection = {
+  title: string;
+  hideFor?: string[];
+  links: NavLink[];
+};
+
+const sections: NavSection[] = [
   {
     title: "OVERVIEW",
     links: [
@@ -17,7 +31,7 @@ const sections = [
     links: [
       { label: "Inventory", href: "/inventory", icon: "inventory" },
       { label: "Laboratories", href: "/labs", icon: "labs" },
-      { label: "Attendance & Access", href: "/calendar", icon: "attendance" },
+      { label: "Attendance & Access", href: "/calendar", icon: "attendance", hideFor: ["STUDENT"] },
       { label: "Vision Monitoring",   href: "/vision",   icon: "vision" },
     ],
   },
@@ -44,12 +58,13 @@ const sections = [
   },
   {
     title: "ADMIN",
+    hideFor: ["STUDENT"],
     links: [
       { label: "Lab Management", href: "/admin/semester-groups", icon: "admin" },
       { label: "RBAC & Users", href: "/admin/rbac", icon: "rbac" },
     ],
   },
-] as const;
+];
 
 function NavIcon({ type }: { type: string }) {
   const props = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -112,24 +127,31 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       </div>
 
       <nav>
-        {sections.map((section) => (
-          <div key={section.title} className="sidebar-section">
-            {!isCollapsed && <p className="sidebar-section-title">{section.title}</p>}
-            {section.links.map((link) => {
-              const active = isActive(pathname, link.href);
-              const badge = "badge" in link ? (link as any).badge : undefined;
-              return (
-                <Link key={link.href + link.label} href={link.href} className={`sidebar-link ${active ? "active" : ""}`} title={isCollapsed ? link.label : undefined}>
-                  <span className="sidebar-link-icon" aria-hidden>
-                    <NavIcon type={link.icon} />
-                  </span>
-                  {!isCollapsed && <span>{link.label}</span>}
-                  {!isCollapsed && badge != null && <span className="sidebar-badge">{badge}</span>}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
+        {sections
+          .filter(section => !section.hideFor?.some(role => me?.roles?.includes(role)))
+          .map((section) => {
+            const visibleLinks = section.links.filter(link => !link.hideFor?.some(role => me?.roles?.includes(role)));
+            if (visibleLinks.length === 0) return null;
+
+            return (
+              <div key={section.title} className="sidebar-section">
+                {!isCollapsed && <p className="sidebar-section-title">{section.title}</p>}
+                {visibleLinks.map((link) => {
+                  const active = isActive(pathname, link.href);
+                  const badge = link.badge;
+                  return (
+                    <Link key={link.href + link.label} href={link.href} className={`sidebar-link ${active ? "active" : ""}`} title={isCollapsed ? link.label : undefined}>
+                      <span className="sidebar-link-icon" aria-hidden>
+                        <NavIcon type={link.icon} />
+                      </span>
+                      {!isCollapsed && <span>{link.label}</span>}
+                      {!isCollapsed && badge != null && <span className="sidebar-badge">{badge}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+        })}
       </nav>
 
       <div className="sidebar-footer">

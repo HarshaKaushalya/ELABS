@@ -1,354 +1,522 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { getUser } from "@/lib/auth";
-import clsx from "clsx";
-import { Laptop, Users, Calendar, Package, FileText } from "lucide-react";
+import {
+  Bot, Send, Paperclip, X, Loader2, Sparkles,
+  BarChart2, Package, Calendar, Users, AlertTriangle,
+  ChevronRight, RefreshCw, Database, Cpu,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
-const suggestedPrompts = [
-  { icon: Laptop, text: "Is Development Laptop available?" },
-  { icon: Users, text: "What's the current occupancy of the Software Laboratory?" },
-  { icon: Calendar, text: "What are my upcoming lab sessions this week?" },
-  { icon: Package, text: "What equipment do I currently have checked out?" }
+const AI_BASE = process.env.NEXT_PUBLIC_AI_BASE_URL ?? "http://localhost:8001";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Role = "user" | "assistant";
+interface Message {
+  id: string;
+  role: Role;
+  content: string;
+  attachedDoc?: string;
+  isStreaming?: boolean;
+  timestamp: Date;
+}
+
+// ─── Suggestion Chips ─────────────────────────────────────────────────────────
+
+const STUDENT_SUGGESTIONS = [
+  { icon: Package,       text: "What equipment do I currently have checked out?" },
+  { icon: Calendar,      text: "What are my upcoming lab sessions this week?" },
+  { icon: BarChart2,     text: "What is the current inventory available in the lab?" },
+  { icon: Users,         text: "What's the current occupancy of the Software Lab?" },
 ];
 
-type Message = { role: "user" | "assistant"; content: string; attachedDoc?: string };
+const STAFF_SUGGESTIONS = [
+  { icon: AlertTriangle, text: "Show me all overdue equipment transactions" },
+  { icon: BarChart2,     text: "Give me a full inventory summary by status" },
+  { icon: Users,         text: "How many students are in each lab right now?" },
+  { icon: Package,       text: "Which items are currently under maintenance?" },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function isStaffRole(roles: string[] = []) {
+  return roles.some(r =>
+    ["SYSTEM_ADMIN", "MODULE_COORDINATOR", "LECTURER", "LAB_TECHNICIAN"].includes(r)
+  );
+}
+
+// ─── Message Bubble ───────────────────────────────────────────────────────────
+
+function MessageBubble({ msg }: { msg: Message }) {
+  const isUser = msg.role === "user";
+  return (
+    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"} items-end`}>
+      {/* Avatar */}
+      {!isUser && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-lg">
+          <Bot size={16} className="text-white" />
+        </div>
+      )}
+
+      {/* Bubble */}
+      <div
+        className={`relative max-w-[78%] px-4 py-3 rounded-2xl shadow-md text-sm leading-relaxed ${
+          isUser
+            ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-br-sm"
+            : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-bl-sm"
+        }`}
+      >
+        {/* Attached doc badge */}
+        {msg.attachedDoc && (
+          <div className="flex items-center gap-1.5 mb-2 text-xs opacity-80">
+            <Paperclip size={11} />
+            <span className="truncate max-w-[180px]">{msg.attachedDoc}</span>
+          </div>
+        )}
+
+        {/* Content */}
+        {isUser ? (
+          <p className="whitespace-pre-wrap">{msg.content}</p>
+        ) : (
+          <div className="prose dark:prose-invert prose-sm max-w-none
+            prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5
+            prose-h1:text-cyan-600 dark:prose-h1:text-cyan-300
+            prose-h2:text-cyan-600 dark:prose-h2:text-cyan-300
+            prose-h3:text-cyan-600 dark:prose-h3:text-cyan-300
+            prose-strong:text-cyan-700 dark:prose-strong:text-cyan-300
+            prose-code:text-cyan-700 dark:prose-code:text-cyan-200
+            prose-code:bg-slate-100 dark:prose-code:bg-slate-700
+            prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+            prose-blockquote:border-l-cyan-400
+            prose-table:text-xs
+            prose-th:text-cyan-700 dark:prose-th:text-cyan-300
+            prose-th:bg-slate-100 dark:prose-th:bg-slate-700">
+            <ReactMarkdown>{msg.content + (msg.isStreaming ? "▌" : "")}</ReactMarkdown>
+          </div>
+        )}
+
+        {/* Timestamp */}
+        <p className={`text-[10px] mt-1.5 ${isUser ? "text-blue-200/60" : "text-slate-400 dark:text-slate-500"} text-right`}>
+          {formatTime(msg.timestamp)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Typing Indicator ─────────────────────────────────────────────────────────
+
+function TypingIndicator() {
+  return (
+    <div className="flex gap-3 items-end">
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-lg flex-shrink-0">
+        <Bot size={16} className="text-white" />
+      </div>
+      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-sm px-4 py-3">
+        <div className="flex gap-1 items-center">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+          <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">ELABS AI is thinking...</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Welcome Screen ───────────────────────────────────────────────────────────
+
+function WelcomeScreen({ onSuggestion, suggestions, userName }: {
+  onSuggestion: (t: string) => void;
+  suggestions: typeof STUDENT_SUGGESTIONS;
+  userName: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-8 py-12 px-4">
+      {/* Logo */}
+      <div className="relative">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-2xl shadow-cyan-500/30">
+          <Sparkles size={36} className="text-white" />
+        </div>
+        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-green-400 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+          <div className="w-2 h-2 rounded-full bg-green-600 animate-pulse" />
+        </div>
+      </div>
+
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+          Hello{userName ? `, ${userName.split(" ")[0]}` : ""}! 👋
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs">
+          I'm <span className="text-cyan-500 dark:text-cyan-400 font-semibold">ELABS AI</span>, your intelligent lab assistant.
+          I have live access to the laboratory database.
+        </p>
+      </div>
+
+      {/* Capability pills */}
+      <div className="flex flex-wrap gap-2 justify-center max-w-md">
+        {[
+          { icon: Database, label: "Live DB Access" },
+          { icon: Package,  label: "Inventory Tracking" },
+          { icon: Calendar, label: "Lab Schedules" },
+          { icon: Cpu,      label: "AI-Powered" },
+        ].map(c => (
+          <div key={c.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400">
+            <c.icon size={12} className="text-cyan-500 dark:text-cyan-400" />
+            {c.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Suggestion chips */}
+      <div className="w-full max-w-lg grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {suggestions.map((s) => (
+          <button
+            key={s.text}
+            onClick={() => onSuggestion(s.text)}
+            className="group flex items-center gap-3 p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-cyan-500/60 hover:bg-slate-50 dark:hover:bg-slate-750 transition-all text-left shadow-sm"
+          >
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-cyan-500/20 transition-colors">
+              <s.icon size={15} className="text-cyan-500 dark:text-cyan-400" />
+            </div>
+            <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-100 transition-colors leading-snug">
+              {s.text}
+            </span>
+            <ChevronRight size={14} className="text-slate-300 dark:text-slate-600 group-hover:text-cyan-400 ml-auto flex-shrink-0 transition-colors" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function AIAssistantPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hello! I am ELABS AI, your database-connected laboratory assistant. How can I help you today?" }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [userName, setUserName] = useState("");
+  const [userRoles, setUserRoles] = useState<string[]>([]);
+  const [ollamaOnline, setOllamaOnline] = useState<boolean | null>(null);
 
-  // Load student profile context on mount
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // ── Load user ──
   useEffect(() => {
     const user = getUser();
     if (user) {
       setUserEmail(user.email);
+      setUserName(user.fullName ?? user.email);
+      setUserRoles(user.roles ?? []);
     }
   }, []);
 
-  // Smooth scroll helper
-  const scrollToBottom = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({
-        top: scrollContainerRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-  };
-
+  // ── Check Ollama status ──
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    fetch(`${AI_BASE}/health`)
+      .then(r => r.json())
+      .then(d => setOllamaOnline(d.ollama?.online && d.ollama?.model_loaded))
+      .catch(() => setOllamaOnline(false));
+  }, []);
 
-  const sendMessage = async (e?: React.FormEvent, overrideMsg?: string) => {
-    if (e) e.preventDefault();
-    const userMsg = overrideMsg || input.trim();
-    if (!userMsg || isLoading) return;
+  // ── Auto-scroll ──
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, []);
+
+  useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
+
+  // ── Send message ──
+  const sendMessage = useCallback(async (override?: string) => {
+    const text = (override ?? input).trim();
+    if (!text || isLoading) return;
 
     setInput("");
+    const attachedDoc = uploadedDocs.length > 0 ? uploadedDocs[uploadedDocs.length - 1] : undefined;
+    if (attachedDoc) setUploadedDocs([]);
 
-    // Capture actively attached doc and clear the input area
-    const attachedDoc = uploadedDocs.length > 0 ? uploadedDocs[uploadedDocs.length - 1] : null;
-    if (uploadedDocs.length > 0) {
-      setUploadedDocs([]);
-    }
-
-    setMessages(prev => [...prev, { role: "user", content: userMsg, attachedDoc: attachedDoc || undefined }]);
+    const userMsg: Message = { id: uid(), role: "user", content: text, attachedDoc, timestamp: new Date() };
+    setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
 
+    // Build history for context (last 6 turns)
+    const history = messages.slice(-6).map(m => ({ role: m.role, content: m.content }));
+
+    // Find most recent doc in history
+    let contextDoc = attachedDoc;
+    if (!contextDoc) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].attachedDoc) { contextDoc = messages[i].attachedDoc; break; }
+      }
+    }
+
+    // Add streaming placeholder
+    const assistantId = uid();
+    setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", isStreaming: true, timestamp: new Date() }]);
+
+    // Stream from /chat/stream
     try {
-      // Find the most recent document used in the conversation if one isn't actively attached
-      let contextDoc = attachedDoc;
-      if (!contextDoc) {
-        for (let i = messages.length - 1; i >= 0; i--) {
-          if (messages[i].attachedDoc) {
-            contextDoc = messages[i].attachedDoc;
-            break;
-          }
+      abortRef.current = new AbortController();
+      const res = await fetch(`${AI_BASE}/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          user_email: userEmail,
+          document_id: contextDoc || null,
+          history,
+        }),
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const chunk = JSON.parse(line.slice(6));
+            if (chunk.done) break;
+            if (chunk.token) {
+              setMessages(prev =>
+                prev.map(m => m.id === assistantId
+                  ? { ...m, content: m.content + chunk.token }
+                  : m
+                )
+              );
+            }
+          } catch {}
         }
       }
 
-      const res = await fetch("http://localhost:8001/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          message: userMsg,
-          user_email: userEmail || "student@elabs.local",
-          document_id: contextDoc
-        })
-      });
+      // Mark streaming done
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, isStreaming: false } : m));
 
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + " *(stopped)*", isStreaming: false } : m));
+      } else {
+        // Fallback to non-streaming
+        try {
+          const res = await fetch(`${AI_BASE}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text, user_email: userEmail, document_id: contextDoc || null, history }),
+          });
+          const data = await res.json();
+          setMessages(prev => prev.map(m => m.id === assistantId
+            ? { ...m, content: data.answer ?? "Sorry, I could not process that.", isStreaming: false }
+            : m
+          ));
+        } catch {
+          setMessages(prev => prev.map(m => m.id === assistantId
+            ? { ...m, content: "⚠️ Could not connect to the AI server. Make sure the AI backend is running.", isStreaming: false }
+            : m
+          ));
+        }
       }
-
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.answer || "Sorry, I couldn't process that." }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "Error connecting to AI service. Please ensure the Python AI server is running on port 8001." 
-      }]);
     } finally {
       setIsLoading(false);
+      abortRef.current = null;
     }
-  };
+  }, [input, isLoading, messages, userEmail, uploadedDocs]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.currentTarget.files;
-    if (!files || !files[0]) return;
-
-    const file = files[0];
-    if (!file.name.endsWith(".pdf")) {
-      alert("Please upload a PDF file");
-      return;
-    }
-
+  // ── Upload ──
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     setIsUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
-
-      const res = await fetch("http://localhost:8001/upload", {
-        method: "POST",
-        body: formData
-      });
-
-      if (!res.ok) {
-        throw new Error(`Upload failed with status ${res.status}`);
+      const res = await fetch(`${AI_BASE}/upload`, { method: "POST", body: formData });
+      if (res.ok) {
+        const data = await res.json();
+        setUploadedDocs(prev => [...prev, data.document_id ?? file.name]);
       }
-
-      const data = await res.json();
-      setUploadedDocs(prev => [...prev, data.document_id]);
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: `Error uploading file: ${err instanceof Error ? err.message : "Unknown error"}`
-      }]);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+    } catch {}
+    setIsUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  return (
-    <AppShell title="ELABS AI Assistant" subtitle="Intelligent database query assistant and contextual lab help">
-      {/* Self-contained CSS for typing indicators and transitions */}
-      <style>{`
-        @keyframes bounce-dot {
-          0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
-          40% { transform: scale(1.0); opacity: 1; }
-        }
-        .typing-dot {
-          width: 8px;
-          height: 8px;
-          background-color: var(--muted);
-          border-radius: 50%;
-          display: inline-block;
-          animation: bounce-dot 1.4s infinite ease-in-out both;
-        }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        .ai-prompt-chip {
-          background: var(--panel-2);
-          border: 1px solid var(--line);
-          color: var(--text);
-          border-radius: 20px;
-          padding: 8px 16px;
-          font-size: 0.88rem;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-        .ai-prompt-chip:hover {
-          border-color: var(--cyan);
-          background: rgba(8, 153, 168, 0.08);
-          transform: translateY(-2px);
-        }
-        .avatar-glow {
-          box-shadow: 0 0 12px rgba(29, 213, 230, 0.35);
-        }
-        [data-theme="light"] .avatar-glow {
-          box-shadow: 0 0 12px rgba(8, 153, 168, 0.15);
-        }
-        .chat-container {
-          background: var(--panel);
-          border: 1px solid var(--line);
-          border-radius: 16px;
-          padding: 24px;
-          display: flex;
-          flex-direction: column;
-          height: calc(100vh - 140px);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
-      `}</style>
+  // ── Key handler ──
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
 
-      <section className="chat-container">
-        {/* AI Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--line)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="avatar-glow" style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(29, 213, 230, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--cyan)" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/>
-              </svg>
+  const clearChat = () => { setMessages([]); setUploadedDocs([]); };
+  const stopGeneration = () => { abortRef.current?.abort(); };
+
+  const suggestions = isStaffRole(userRoles) ? STAFF_SUGGESTIONS : STUDENT_SUGGESTIONS;
+  const hasMessages = messages.length > 0;
+
+  return (
+    <AppShell title="AI Assistant">
+      <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-900">
+
+        {/* ── Header ── */}
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <Sparkles size={18} className="text-white" />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600, color: "var(--text)" }}>ELABS Database Agent</h3>
-              <p style={{ margin: 0, color: "var(--green)", fontSize: "0.82rem", fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--green)", display: "inline-block" }}></span>
-                Connected to local MySQL
-              </p>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              className="ghost-btn"
-              type="button"
-              onClick={() => {
-                setMessages([{ role: "assistant", content: "Hello! I am ELABS AI, your database-connected laboratory assistant. How can I help you today?" }]);
-                setUploadedDocs([]);
-              }}
-              style={{ display: "flex", alignItems: "center", gap: 8 }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              New Chat
-            </button>
-          </div>
-        </div>
-
-        {/* Messages List */}
-        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: "auto", paddingRight: 8, marginBottom: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-          {messages.map((msg, i) => (
-            <div key={i} style={{ alignSelf: msg.role === "user" ? "flex-end" : "flex-start", maxWidth: "75%" }}>
-              <div style={{
-                padding: "14px 18px",
-                borderRadius: "14px",
-                backgroundColor: msg.role === "user" ? "var(--blue)" : "var(--panel-2)",
-                color: msg.role === "user" ? "#ffffff" : "var(--text)",
-                border: msg.role === "user" ? "none" : "1px solid var(--line)",
-                borderBottomRightRadius: msg.role === "user" ? 0 : "14px",
-                borderBottomLeftRadius: msg.role === "user" ? "14px" : 0,
-                fontSize: "0.95rem",
-                lineHeight: 1.5,
-                whiteSpace: "pre-line",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8
-              }}>
-                {msg.attachedDoc && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: msg.role === "user" ? "rgba(255,255,255,0.9)" : "var(--cyan)", background: msg.role === "user" ? "rgba(0,0,0,0.15)" : "rgba(29, 213, 230, 0.1)", padding: "4px 10px", borderRadius: "12px", width: "fit-content" }}>
-                    <FileText size={12} />
-                    Attached: {msg.attachedDoc}
-                  </div>
-                )}
-                {msg.role === "assistant" ? (
-                  <ReactMarkdown
-                    components={{
-                      p: ({node, ...props}) => <p style={{margin: "0 0 8px 0", lastChild: {margin: 0}}} {...props} />,
-                      ul: ({node, ...props}) => <ul style={{margin: "4px 0 8px 20px", padding: 0}} {...props} />,
-                      li: ({node, ...props}) => <li style={{marginBottom: 4}} {...props} />,
-                      strong: ({node, ...props}) => <strong style={{fontWeight: 600, color: "var(--cyan)"}} {...props} />
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                ) : (
-                  msg.content
-                )}
+              <h1 className="text-sm font-bold text-slate-800 dark:text-slate-100">ELABS AI Assistant</h1>
+              <div className="flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${ollamaOnline ? "bg-green-400 animate-pulse" : "bg-yellow-400"}`} />
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {ollamaOnline === null ? "Checking..." : ollamaOnline ? "llama3.2 · Live" : "Database-only mode"}
+                </span>
               </div>
             </div>
-          ))}
-          {isLoading && (
-            <div style={{ alignSelf: "flex-start", padding: "14px 18px", borderRadius: "14px", backgroundColor: "var(--panel-2)", border: "1px solid var(--line)", borderBottomLeftRadius: 0, display: "flex", gap: 5, alignItems: "center" }}>
-              <span className="typing-dot"></span>
-              <span className="typing-dot"></span>
-              <span className="typing-dot"></span>
-            </div>
-          )}
-        </div>
-
-        {/* Suggestions */}
-        {messages.length === 1 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
-            {suggestedPrompts.map((p) => {
-              const Icon = p.icon;
-              return (
-                <button key={p.text} className="ai-prompt-chip" type="button" onClick={() => sendMessage(undefined, p.text)}>
-                  <Icon size={14} /> {p.text}
-                </button>
-              );
-            })}
           </div>
-        )}
-
-        {/* Input Form Area */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
-          {uploadedDocs.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--cyan)", background: "rgba(29, 213, 230, 0.1)", padding: "4px 10px", borderRadius: "12px", width: "fit-content", border: "1px solid rgba(29, 213, 230, 0.2)" }}>
-              <FileText size={12} />
-              Attached: {uploadedDocs[uploadedDocs.length - 1]}
-              <button type="button" onClick={() => setUploadedDocs([])} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", marginLeft: 4, padding: 0, display: "flex", alignItems: "center" }} title="Remove document">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <div className="flex items-center gap-2">
+            {hasMessages && (
+              <button
+                onClick={clearChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <RefreshCw size={13} />
+                New Chat
               </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Chat Area ── */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-5 scroll-smooth">
+          {!hasMessages ? (
+            <WelcomeScreen
+              onSuggestion={(t) => sendMessage(t)}
+              suggestions={suggestions}
+              userName={userName}
+            />
+          ) : (
+            <>
+              {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
+              {isLoading && !messages.find(m => m.isStreaming) && <TypingIndicator />}
+            </>
+          )}
+        </div>
+
+        {/* ── Input Area ── */}
+        <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-4 md:px-8 py-4">
+
+          {/* Uploaded doc tags */}
+          {uploadedDocs.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {uploadedDocs.map((doc, i) => (
+                <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-600 dark:text-cyan-300">
+                  <Paperclip size={11} />
+                  <span className="max-w-[160px] truncate">{doc}</span>
+                  <button onClick={() => setUploadedDocs(prev => prev.filter((_, j) => j !== i))} className="hover:text-slate-800 dark:hover:text-white ml-0.5">
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
-          
-          <form onSubmit={sendMessage} style={{ display: "flex", gap: 10 }}>
-            <button
-              className="ghost-btn"
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              style={{ padding: "0 14px", display: "flex", alignItems: "center", justifyContent: "center", color: isUploading ? "var(--muted)" : "var(--text)" }}
-              title="Attach PDF"
-            >
-              {isUploading ? (
-                <div style={{display: "flex", gap: 2}}><span className="typing-dot" style={{width: 4, height: 4}}></span><span className="typing-dot" style={{width: 4, height: 4}}></span><span className="typing-dot" style={{width: 4, height: 4}}></span></div>
-              ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                </svg>
-              )}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              style={{ display: "none" }}
-            />
-            <input
-              className="input"
-              placeholder="Ask about equipment, lab occupancy, your sessions, or borrowed tags..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              style={{ flex: 1, padding: "14px 18px", fontSize: "0.95rem" }}
-              disabled={isLoading || isUploading}
-            />
-            <button className="primary-btn" type="submit" disabled={!input.trim() || isLoading || isUploading} style={{ padding: "0 22px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
-          </form>
+
+          <div className="flex items-end gap-3">
+            {/* Upload button */}
+            <label className="flex-shrink-0 cursor-pointer">
+              <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.txt,.docx" onChange={handleUpload} />
+              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:border-cyan-500/60 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                {isUploading ? <Loader2 size={16} className="text-cyan-500 animate-spin" /> : <Paperclip size={16} className="text-slate-500 dark:text-slate-400" />}
+              </div>
+            </label>
+
+            {/* Text input */}
+            <div className="flex-1 relative">
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Ask about equipment, lab sessions, borrowing status..."
+                disabled={isLoading}
+                className="w-full resize-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-cyan-500/60 rounded-2xl px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-colors max-h-32 overflow-y-auto leading-relaxed disabled:opacity-50 shadow-sm"
+                style={{ minHeight: "44px" }}
+                onInput={e => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+                }}
+              />
+            </div>
+
+            {/* Send / Stop button */}
+            {isLoading ? (
+              <button
+                onClick={stopGeneration}
+                className="flex-shrink-0 w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center hover:bg-red-500/30 transition-colors"
+              >
+                <X size={16} className="text-red-400" />
+              </button>
+            ) : (
+              <button
+                onClick={() => sendMessage()}
+                disabled={!input.trim()}
+                className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg hover:shadow-cyan-500/30 hover:scale-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100"
+              >
+                <Send size={16} className="text-white" />
+              </button>
+            )}
+          </div>
+
+          {/* Suggestion chips when chat is active */}
+          {hasMessages && !isLoading && (
+            <div className="flex gap-2 mt-3 overflow-x-auto pb-0.5 scrollbar-none">
+              {suggestions.slice(0, 3).map(s => (
+                <button
+                  key={s.text}
+                  onClick={() => sendMessage(s.text)}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-cyan-500/60 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 transition-all whitespace-nowrap"
+                >
+                  <s.icon size={11} className="text-cyan-500 dark:text-cyan-400" />
+                  {s.text.length > 40 ? s.text.slice(0, 38) + "…" : s.text}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <p className="text-center text-[10px] text-slate-400 dark:text-slate-500 mt-2">
+            ELABS AI has live database access · Answers are based on real-time lab data
+          </p>
         </div>
-        <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "0.78rem", marginTop: 8 }}>
-          Connected as: <strong>{userEmail || "Guest Student"}</strong> · AI responses are retrieved live from the ELABS database.
-        </div>
-      </section>
+      </div>
     </AppShell>
   );
 }
