@@ -1,77 +1,57 @@
+import { useEffect, useState } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "./routes";
+import { loadTokenFromStorage } from "../lib/auth";
+import { apiGet } from "../lib/api";
 import { colors } from "../lib/theme";
+import { View, ActivityIndicator } from "react-native";
+import type { RootStackParamList } from "./routes";
 
 import LoginScreen from "../screens/LoginScreen";
-import DashboardScreen from "../screens/DashboardScreen";
-import ScanEntryScreen from "../screens/ScanEntryScreen";
-import ScanExitScreen from "../screens/ScanExitScreen";
-import ScanBorrowScreen from "../screens/ScanBorrowScreen";
-import ScanReturnScreen from "../screens/ScanReturnScreen";
-import InventoryScreen from "../screens/InventoryScreen";
-import MyLabsScreen from "../screens/MyLabsScreen";
-import LabGroupScreen from "../screens/LabGroupScreen";
-import ModuleDetailScreen from "../screens/ModuleDetailScreen";
-import SessionDetailScreen from "../screens/SessionDetailScreen";
-import NotificationsScreen from "../screens/NotificationsScreen";
-import MessagesScreen from "../screens/MessagesScreen";
-import AiAssistantScreen from "../screens/AiAssistantScreen";
-import SettingsScreen from "../screens/SettingsScreen";
+import { TabNavigator } from "./TabNavigator";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const darkHeader = {
-  headerStyle: { backgroundColor: colors.surface },
-  headerTintColor: colors.textPrimary,
-  headerTitleStyle: { fontWeight: "600" as const },
-  headerShadowVisible: false,
-};
-
 export function RootNavigator() {
+  const [ready, setReady] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    loadTokenFromStorage().then((token) => {
+      setIsLoggedIn(!!token);
+      setReady(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    async function fetchUnread() {
+      try {
+        const data = await apiGet<{ messages: any[] }>("/messages/inbox");
+        const unread = (data.messages ?? []).filter((m: any) => !m.isRead).length;
+        setUnreadCount(unread);
+      } catch {}
+    }
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
+
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
   return (
-    <Stack.Navigator
-      initialRouteName="Login"
-      screenOptions={{
-        ...darkHeader,
-        contentStyle: { backgroundColor: colors.bg },
-        animation: "slide_from_right",
-      }}
+    <Stack.Navigator 
+      initialRouteName={isLoggedIn ? "Dashboard" : "Login"}
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
     >
-      <Stack.Screen
-        name="Login"
-        component={LoginScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Dashboard"
-        component={DashboardScreen}
-        options={{ title: "ELABS", headerBackVisible: false }}
-      />
-      <Stack.Screen name="ScanEntry" component={ScanEntryScreen} options={{ title: "Scan Entry" }} />
-      <Stack.Screen name="ScanExit" component={ScanExitScreen} options={{ title: "Scan Exit" }} />
-      <Stack.Screen name="ScanBorrow" component={ScanBorrowScreen} options={{ title: "Borrow Equipment" }} />
-      <Stack.Screen name="ScanReturn" component={ScanReturnScreen} options={{ title: "Return Equipment" }} />
-      <Stack.Screen name="Inventory" component={InventoryScreen} options={{ title: "Inventory" }} />
-      <Stack.Screen name="MyLabs" component={MyLabsScreen} options={{ title: "Lab Groups" }} />
-      <Stack.Screen
-        name="LabGroup"
-        component={LabGroupScreen}
-        options={({ route }) => ({ title: route.params.groupName })}
-      />
-      <Stack.Screen
-        name="ModuleDetail"
-        component={ModuleDetailScreen}
-        options={({ route }) => ({ title: `${route.params.moduleCode}: ${route.params.moduleName}` })}
-      />
-      <Stack.Screen
-        name="SessionDetail"
-        component={SessionDetailScreen}
-        options={{ title: "Lab Session" }}
-      />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: "Notifications" }} />
-      <Stack.Screen name="Messages" component={MessagesScreen} options={{ title: "Messages" }} />
-      <Stack.Screen name="AiAssistant" component={AiAssistantScreen} options={{ title: "AI Assistant" }} />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Dashboard" children={() => <TabNavigator unreadCount={unreadCount} />} />
     </Stack.Navigator>
   );
 }
