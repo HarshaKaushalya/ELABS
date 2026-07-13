@@ -69,4 +69,69 @@ router.get("/my-records", requireAuth, async (req: AuthedRequest, res) => {
   }
 });
 
+// Used by the Vision service (or frontend) to sync YOLO active occupancy counts
+router.post("/sync-occupancy", async (req, res) => {
+  try {
+    const { labId, count } = z.object({
+      labId: z.number(),
+      count: z.number()
+    }).parse(req.body);
+
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    try {
+      // 1. Get current active attendance records (where exit_time is NULL)
+      const [activeRecords] = await conn.query(
+        `SELECT id, student_id FROM attendance_records WHERE lab_id = :labId AND exit_time IS NULL`,
+        { labId }
+      ) as any[];
+
+      const currentCount = activeRecords.length;
+
+      if (count > currentCount) {
+        const diff = count - currentCount;
+        
+        // Find students who are NOT currently checked in to this lab
+        const [availableStudents] = await conn.query(
+          `SELECT id FROM users 
+           WHERE id NOT IN (
+             SELECT student_id FROM attendance_records WHERE lab_id = :labId AND exit_time IS NULL
+           ) AND id >= 4 AND id <= 40 LIMIT :limit`,
+          { labId, limit: diff }
+        ) as any[];
+
+        for (const student of availableStudents) {
+          await conn.query(
+            `INSERT INTO attendance_records (lab_id, student_id, entry_time)
+             VALUES (:labId, :studentId, NOW())`,
+            { labId, studentId: student.id }
+          );
+        }
+      } else if (count < currentCount) {
+        const diff = currentCount - count;
+        const recordsToExit = activeRecords.slice(0, diff);
+
+        for (const record of recordsToExit) {
+          await conn.query(
+            `UPDATE attendance_records SET exit_time = NOW() WHERE id = :id`,
+            { id: record.id }
+          );
+        }
+      }
+
+      await conn.commit();
+      res.json({ success: true, newCount: count });
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+  } catch (e) {
+    console.error("Sync occupancy error:", e);
+    res.status(500).json({ error: "Failed to sync occupancy" });
+  }
+});
+
 export default router;

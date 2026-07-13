@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
@@ -16,6 +17,7 @@ import attendanceRoutes from "./modules/attendance/attendance.routes";
 import messagesRoutes from "./modules/messages/messages.routes";
 import notificationsRoutes from "./modules/notifications/notifications.routes";
 import timetableRoutes from "./modules/academic/timetable.routes";
+import assessmentRoutes from "./modules/academic/assessments.routes";
 
 export const app = express();
 
@@ -39,6 +41,8 @@ app.use("/attendance", attendanceRoutes);
 app.use("/messages", messagesRoutes);
 app.use("/notifications", notificationsRoutes);
 app.use("/timetable", timetableRoutes);
+app.use("/academic", assessmentRoutes);
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Global Error Handler to prevent crashes
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -218,6 +218,7 @@ router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async
         try { return new Date(iso).toISOString().replace("T", " ").substring(0, 19); } catch { return null; }
       };
 
+      const finalDueAt = toMysqlDt(body.dueAt) || toMysqlDt(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString());
 
       // create transaction
       const [txRes] = await conn.query(
@@ -233,7 +234,7 @@ router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async
           borrowerGroupCode: body.borrowerType === "GROUP" ? (body.borrowerGroupCode ?? null) : null,
           issuedBy,
           purpose: body.purpose ?? null,
-          dueAt: toMysqlDt(body.dueAt),
+          dueAt: finalDueAt,
         }
       );
       const transactionId = (txRes as any).insertId;

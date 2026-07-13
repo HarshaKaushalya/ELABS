@@ -71,7 +71,7 @@ export async function sendMessage(
 
     // Bulk notifications
     const notifType = "BROADCAST";
-    const notifTitle = `📢 ${subject}`;
+    const notifTitle = `[Broadcast] ${subject}`;
     const metaObj = { messageId, senderName };
     const metaStr = JSON.stringify(metaObj);
     const notifValues = recipientIds.map((uid) => [uid, notifType, notifTitle, body, metaStr]);

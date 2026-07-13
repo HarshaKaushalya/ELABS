@@ -295,7 +295,7 @@ async function main() {
 
   await pool.end();
 
-  console.log(`\n✅ Done!`);
+  console.log(`\n[SUCCESS] Done!`);
   console.log(`   Inserted: ${inserted} new students`);
   console.log(`   Skipped (already existed): ${skipped}`);
   console.log(`   Timetable entries seeded: ${timetable.reduce((s, e) => s + e.groups.length, 0)}`);

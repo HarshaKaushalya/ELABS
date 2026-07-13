@@ -42,4 +42,23 @@ router.patch("/read-all", requireAuth, async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
+import { getIO } from "../../realtime/socket";
+import { SOCKET_EVENTS } from "../../realtime/events";
+
+/** POST /notifications/webhook — Internal route for Vision Service to trigger real-time alerts */
+router.post("/webhook", async (req, res) => {
+  const { type, message, metadata } = req.body;
+  
+  // Broadcast to all admins and technicians
+  const io = getIO();
+  io.to("role:admin").to("role:technician").emit("SYSTEM_ALERT", {
+    type,
+    message,
+    metadata,
+    timestamp: new Date().toISOString()
+  });
+  
+  res.json({ ok: true, broadcasted: true });
+});
+
 export default router;

@@ -10,9 +10,8 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "./jwt";
 const router = Router();
 
 router.post("/login", async (req, res) => {
-  const body = z.object({ email: z.string().email(), password: z.string().min(6) }).parse(req.body);
-
   try {
+    const body = z.object({ email: z.string().email(), password: z.string().min(6) }).parse(req.body);
     const { accessToken, refreshToken, user } = await login(body.email, body.password);
 
     // HttpOnly refresh cookie
@@ -27,6 +26,8 @@ router.post("/login", async (req, res) => {
 
     return res.json({ accessToken, user });
   } catch (e: any) {
+    console.error("Login Error:", e);
+    if (e instanceof z.ZodError) return res.status(400).json({ error: "Validation error", issues: e.issues });
     if (e?.message === "INVALID_CREDENTIALS") return res.status(401).json({ error: "Invalid credentials" });
     return res.status(500).json({ error: "Server error" });
   }
