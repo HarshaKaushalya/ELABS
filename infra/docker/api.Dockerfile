@@ -1,0 +1,24 @@
+FROM node:20-alpine
+ENV NPM_CONFIG_FETCH_RETRIES=10
+ENV NPM_CONFIG_FETCH_RETRY_FACTOR=2
+ENV NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000
+ENV NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+ENV NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
+ENV NPM_CONFIG_AUDIT=false
+ENV NPM_CONFIG_FUND=false
+WORKDIR /app
+ENV no_proxy="*"
+ENV NO_PROXY="*"
+COPY packages/shared/package*.json /app/packages/shared/
+COPY packages/api/package*.json /app/packages/api/
+WORKDIR /app/packages/shared
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && npm config rm proxy || true && npm config rm https-proxy || true && npm ci --no-audit --no-fund
+WORKDIR /app/packages/api
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && npm config rm proxy || true && npm config rm https-proxy || true && npm ci --no-audit --no-fund
+COPY packages/shared /app/packages/shared
+COPY packages/api /app/packages/api
+RUN npm --prefix /app/packages/shared run build
+RUN npm --prefix /app/packages/api run build
+WORKDIR /app/packages/api
+EXPOSE 4000
+CMD ["npm", "start"]

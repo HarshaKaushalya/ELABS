@@ -1,0 +1,16 @@
+pyproject.toml
+src/main.py
+src/api/routes_analyze_video.py
+src/api/routes_health.py
+src/core/config.py
+src/core/logging.py
+src/elabs_vision.egg-info/PKG-INFO
+src/elabs_vision.egg-info/SOURCES.txt
+src/elabs_vision.egg-info/dependency_links.txt
+src/elabs_vision.egg-info/requires.txt
+src/elabs_vision.egg-info/top_level.txt
+src/pipelines/events.py
+src/pipelines/face_recognition.py
+src/pipelines/occupancy.py
+src/utils/frames.py
+src/utils/video_io.py

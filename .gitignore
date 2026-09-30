@@ -1,0 +1,39 @@
+# Node
+node_modules/
+.npm/
+
+# Build outputs
+dist/
+.next/
+out/
+coverage/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.production.example
+**/.env
+**/.env.*
+
+# Logs
+*.log
+
+# IDE
+.DS_Store
+Thumbs.db
+
+# Vision service — large uploaded/processed video files
+packages/vision/src/storage/uploads/
+packages/vision/src/storage/outputs/

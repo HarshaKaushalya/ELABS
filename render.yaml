@@ -1,0 +1,60 @@
+# ========================================================
+# ELABS Platform — Render.com Blueprint
+# 100% Free Hosting without Credit Card
+# ========================================================
+services:
+  # ── Express API Backend Service ──
+  - type: web
+    name: elabs-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm --prefix packages/shared run build && npm --prefix packages/api run build
+    startCommand: npm --prefix packages/api run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        value: elabs
+      - key: MYSQL_SSL
+        value: "true"
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*"
+
+  # ── Next.js Web Frontend Service ──
+  - type: web
+    name: elabs-web
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm --prefix packages/shared run build && npm --prefix packages/web run build
+    startCommand: npm --prefix packages/web run start -- --port 10000
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: NEXT_PUBLIC_API_BASE
+        fromService:
+          type: web
+          name: elabs-api
+          property: host
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: elabs-api
+          property: host

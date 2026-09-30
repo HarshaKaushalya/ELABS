@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GroupNumber_Summary</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 11mm 14mm 11mm 14mm;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 9.2pt;
+      line-height: 1.34;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 0;
+    }
+    .header {
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 5px;
+      margin-bottom: 7px;
+    }
+    h1 {
+      font-size: 14.5pt;
+      margin: 0 0 2px 0;
+      color: #1e3a8a;
+      letter-spacing: -0.2px;
+    }
+    .meta {
+      font-size: 8.2pt;
+      color: #4b5563;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .sprint-block {
+      margin-bottom: 7px;
+      padding: 5px 8px;
+      background: #f8fafc;
+      border-left: 3.5px solid #2563eb;
+      border-radius: 2px;
+    }
+    .sprint-title {
+      font-size: 10pt;
+      font-weight: 700;
+      color: #1e40af;
+      margin: 0 0 3px 0;
+    }
+    ul {
+      margin: 0;
+      padding-left: 15px;
+    }
+    li {
+      margin-bottom: 2px;
+      text-align: justify;
+    }
+    strong {
+      color: #0f172a;
+    }
+    .footer {
+      margin-top: 5px;
+      font-size: 7.5pt;
+      color: #6b7280;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 3px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>ELABS — Advanced Laboratory Inventory Management & LMS Platform</h1>
+    <div class="meta">
+      <span><strong>Dept. of Electrical & Information Engineering</strong>, University of Ruhuna</span>
+      <span><strong>Submission Deadline:</strong> 30 September 2026</span>
+    </div>
+    <div class="meta" style="margin-top: 2px;">
+      <span><strong>Team Members:</strong> Harsha (Frontend) &bull; Priyan (Backend) &bull; Pamudu (Vision & Hardware) &bull; Imal (AI Specialist)</span>
+      <span><strong>Document ID:</strong> GroupNumber_Summary</span>
+    </div>
+  </div>
+
+  <div class="sprint-block">
+    <div class="sprint-title">Sprint 1: Inventory Architecture, Normalized Schema & Core Authentication</div>
+    <ul>
+      <li><strong>Frontend (Harsha):</strong> Set up Next.js App Router monorepo (`packages/web`); created UI design system, technician/student dashboard layouts, and inventory navigation framework.</li>
+      <li><strong>Backend (Priyan):</strong> Developed Express TypeScript API (`packages/api`); architected MySQL schema with normalized inventory tables (`inventory_items`, `borrow_transactions`, `labs`); implemented JWT auth and RBAC roles.</li>
+      <li><strong>Vision & Hardware (Pamudu):</strong> Configured OpenCV image processing pipeline for optical barcode/tag frame ingestion; calibrated camera resolution and lighting normalization for laboratory benches.</li>
+      <li><strong>AI Engine (Imal):</strong> Configured FastAPI service (`packages/ai`); built SQLAlchemy connection pooling to MySQL inventory tables; established baseline local LLM inference client via Ollama.</li>
+    </ul>
+  </div>
+
+  <div class="sprint-block">
+    <div class="sprint-title">Sprint 2: Core Equipment Registry & LMS Academic Integration</div>
+    <ul>
+      <li><strong>Frontend (Harsha):</strong> Built Equipment Catalog interface with category filters (Measurement, Power Supplies, Oscilloscopes); created LMS Course Hub for lab practical module registration.</li>
+      <li><strong>Backend (Priyan):</strong> Implemented RESTful inventory endpoints (`/inventory/items`); developed barcode query routing (`/items/barcode/:tag`) and category-based item filtering per laboratory.</li>
+      <li><strong>Vision & Hardware (Pamudu):</strong> Built real-time 1D/2D optical barcode and QR tag reader for equipment labels (`elabs_tag`); tested tag recognition under varying laboratory lighting conditions.</li>
+      <li><strong>AI Engine (Imal):</strong> Created deterministic regex intent classifier and parameterized SQL query generator for zero-hallucination equipment availability checks and lab schedule queries.</li>
+    </ul>
+  </div>
+
+  <div class="sprint-block">
+    <div class="sprint-title">Sprint 3: Borrow Workflows, Real-Time Messaging & Assessment Engine</div>
+    <ul>
+      <li><strong>Frontend (Harsha):</strong> Developed initial check-out modal, interactive student practical checklists, and Socket.IO chat interface (`/messages`) between students and lab technicians.</li>
+      <li><strong>Backend (Priyan):</strong> Built transactional borrow request endpoints; added Socket.IO real-time event broadcaster for inventory status updates; implemented assessment grading and report uploads.</li>
+      <li><strong>Vision & Hardware (Pamudu):</strong> Integrated ByteTrack tracking for lab entry/exit monitoring; deployed YOLOv8-pose skeleton estimation for laboratory area presence and technician counter activity.</li>
+      <li><strong>AI Engine (Imal):</strong> Built RAG (Retrieval-Augmented Generation) document indexing pipeline; vectorized PDF equipment manuals and experiment procedure guides for semantic retrieval.</li>
+    </ul>
+  </div>
+
+  <div class="sprint-block">
+    <div class="sprint-title">Sprint 4: Smart Inventory Automation, Barcode Workflows & Intelligent Retrieval</div>
+    <ul>
+      <li><strong>Frontend (Harsha):</strong> Deployed complete Smart Inventory Hub (`/inventory`): live equipment status badges (Available, Borrowed, Maintenance, Overdue), technician issue-station with instant student index lookup (`EG/2022/xxxx`), in-browser Barcode/QR camera scanner (`html5-qrcode`), and student borrow history tracking.</li>
+      <li><strong>Backend (Priyan):</strong> Engineered atomic inventory transaction engine (multi-item check-outs, returns, state transitions); automated overdue borrow detection with real-time Socket.IO notifications; implemented full inventory `audit_logs` tracking technician and student IDs.</li>
+      <li><strong>Vision & Hardware (Pamudu):</strong> Built optical equipment verification station: automated scanning of equipment barcode tags (`elabs_tag`), optical check of returned instrument presence, and laboratory benchtop occupancy synchronization (`/attendance/sync-occupancy`).</li>
+      <li><strong>AI Engine (Imal):</strong> Delivered natural language inventory assistant with dynamic student context injection (active borrows, due dates, course practicals); built hybrid RAG engine retrieving equipment operating specs and calibration procedures from manuals with SSE token streaming.</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    ELABS Monorepo Project &bull; Department of Electrical & Information Engineering &bull; Sprint 1–4 Execution Summary
+  </div>
+
+</body>
+</html>

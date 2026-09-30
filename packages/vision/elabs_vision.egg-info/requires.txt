@@ -1,0 +1,12 @@
+fastapi>=0.115.6
+uvicorn[standard]>=0.32.1
+pydantic-settings>=2.7.0
+python-multipart>=0.0.9
+ultralytics>=8.3.0
+opencv-python-headless>=4.10.0
+pillow>=11.0
+numpy>=1.26
+aiofiles>=24.1.0
+
+[dev]
+pytest>=8.3.4
