@@ -5,7 +5,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useSocket } from "@/hooks/useSocket";
 import { Mail, Globe, Users, User, AlertTriangle, Clock, Send, Inbox, Check, MailOpen, CornerUpLeft, MessageSquare, X } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_BASE ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { API_BASE } from "@/lib/api";
+
+const API = API_BASE;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Message {
