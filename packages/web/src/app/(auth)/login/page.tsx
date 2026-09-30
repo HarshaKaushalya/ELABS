@@ -37,6 +37,7 @@ export default function LoginPage() {
       const data = await res.json();
       setAccessToken(data.accessToken);
       setToken(data.accessToken);
+      document.cookie = `elabs_refresh=1; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
 
       const meRes = await apiFetch("/auth/me");
       if (meRes.ok) {

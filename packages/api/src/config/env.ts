@@ -18,7 +18,7 @@ const schema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
 
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
-  COOKIE_DOMAIN: z.string().default("localhost"),
+  COOKIE_DOMAIN: z.string().optional(),
 });
 
 const raw = { ...process.env } as Record<string, string | undefined>;

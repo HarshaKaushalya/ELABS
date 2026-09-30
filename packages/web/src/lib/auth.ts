@@ -15,6 +15,7 @@ export function clearToken(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
+  document.cookie = "elabs_refresh=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 }
 
 export type StoredUser = { id: number; email: string; fullName: string; roles: string[], mustChangePassword?: boolean };
