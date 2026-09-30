@@ -1,7 +1,19 @@
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@elabs/shared"]
+  transpilePackages: ["@elabs/shared"],
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://localhost:4000/:path*",
+      },
+      {
+        source: "/socket.io/:path*",
+        destination: "http://localhost:4000/socket.io/:path*",
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
