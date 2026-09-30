@@ -1,7 +1,8 @@
 # ELABS - Advanced Laboratory Inventory Management & LMS Platform
 **Course / Department:** Department of Electrical & Information Engineering, University of Ruhuna  
 **Core Domain:** Advanced Laboratory Equipment Inventory Management, Tracking & Academic Operations  
-**Team Members:** Harsha (Frontend), Priyan (Backend), Pamudu (Vision & Hardware Tracking), Imal (AI Specialist)
+**Team Members:** Harsha (Frontend), Priyan (Backend), Pamudu (Vision & Hardware Tracking), Imal (AI Specialist)  
+**Submission Deadline:** 30 September 2026
 
 ---
 
@@ -29,8 +30,8 @@
 
 ---
 
-### Sprint 4: Smart Inventory Automation, Barcode Workflows & Intelligent Retrieval
-* **Frontend (Harsha):** Deployed complete Smart Inventory Hub (`/inventory`): live equipment status badges (Available, Borrowed, Maintenance, Overdue), technician issue-station with instant student index lookup (`EG/2022/xxxx`), in-browser Barcode/QR camera scanner (`html5-qrcode`), and student borrow history tracking.
-* **Backend (Priyan):** Engineered atomic inventory transaction engine (multi-item check-outs, returns, state transitions); automated overdue borrow detection with real-time Socket.IO notifications; implemented full inventory `audit_logs` tracking technician and student IDs.
-* **Vision & Hardware (Pamudu):** Built optical equipment verification station: automated scanning of equipment barcode tags (`elabs_tag`), optical check of returned instrument presence, and laboratory benchtop occupancy synchronization (`/attendance/sync-occupancy`).
+### Sprint 4: Smart Inventory Hub, Barcode Automation & Cloud Hosting Deployment
+* **Frontend (Harsha):** Deployed Smart Inventory Hub (`/inventory`) with status badges (Available, Borrowed, Maintenance, Overdue), technician issue-station with instant student index lookup (`EG/2022/xxxx`), in-browser Barcode/QR camera scanner (`html5-qrcode`), and production Cloudflare Edge Network HTTPS deployment with zero Mixed Content issues.
+* **Backend (Priyan):** Engineered atomic inventory transaction engine (multi-item check-outs, returns, state transitions) with real-time Socket.IO alerts; implemented full `audit_logs`; deployed production cloud MySQL on TiDB Cloud Serverless with TLS/SSL encryption and containerized API gateway.
+* **Vision & Hardware (Pamudu):** Built optical equipment verification station: automated scanning of equipment barcode tags (`elabs_tag`), optical check of returned instrument presence, and laboratory benchtop equipment tracking.
 * **AI Engine (Imal):** Delivered natural language inventory assistant with dynamic student context injection (active borrows, due dates, course practicals); built hybrid RAG engine retrieving equipment operating specs and calibration procedures from manuals with SSE token streaming.
