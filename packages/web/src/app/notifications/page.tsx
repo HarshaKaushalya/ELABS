@@ -5,7 +5,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useSocket } from "@/hooks/useSocket";
 import { CheckCircle2, AlertTriangle, Package, Calendar, Flame, Megaphone, Settings, Bell, BellOff, Pin, Check } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_BASE ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+import { API_BASE } from "@/lib/api";
+
+const API = API_BASE;
 
 interface Notification {
   id: number;

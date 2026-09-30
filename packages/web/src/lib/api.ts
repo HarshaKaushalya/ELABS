@@ -1,7 +1,15 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ??
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://localhost:4000";
+export function getApiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_BASE) return process.env.NEXT_PUBLIC_API_BASE;
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) return process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (typeof window !== "undefined") {
+    if (window.location.protocol === "https:" || (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1")) {
+      return "/api";
+    }
+  }
+  return "/api";
+}
+
+export const API_BASE = getApiBase();
 
 let accessToken: string | null = null;
 
