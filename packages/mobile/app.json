@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "ELABS Mobile",
+    "slug": "elabs-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "entryPoint": "./src/App.tsx",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050c1d"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elabs.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ELABS needs camera access for barcode scanning"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#050c1d"
+      },
+      "package": "com.elabs.mobile",
+      "permissions": [
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ELABS needs camera access for barcode scanning"
+        }
+      ],
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}
