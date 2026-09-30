@@ -15,11 +15,12 @@ router.post("/login", async (req, res) => {
     const { accessToken, refreshToken, user } = await login(body.email, body.password);
 
     // HttpOnly refresh cookie
+    const isHttps = req.secure || req.headers["x-forwarded-proto"] === "https";
     res.cookie("elabs_refresh", refreshToken, {
       httpOnly: true,
-      sameSite: "lax",
-      secure: false, // set true in prod behind https
-      domain: env.COOKIE_DOMAIN,
+      sameSite: isHttps ? "none" : "lax",
+      secure: isHttps,
+      domain: env.COOKIE_DOMAIN && env.COOKIE_DOMAIN !== "localhost" ? env.COOKIE_DOMAIN : undefined,
       path: "/",
       maxAge: 7 * 24 * 3600 * 1000,
     });
@@ -78,11 +79,12 @@ router.post("/refresh", async (req, res) => {
     );
 
     // 3) set new cookie
+    const isHttps = req.secure || req.headers["x-forwarded-proto"] === "https";
     res.cookie("elabs_refresh", newRefresh, {
       httpOnly: true,
-      sameSite: "lax",
-      secure: false, // set true in prod behind https
-      domain: env.COOKIE_DOMAIN,
+      sameSite: isHttps ? "none" : "lax",
+      secure: isHttps,
+      domain: env.COOKIE_DOMAIN && env.COOKIE_DOMAIN !== "localhost" ? env.COOKIE_DOMAIN : undefined,
       path: "/",
       maxAge: 7 * 24 * 3600 * 1000,
     });
