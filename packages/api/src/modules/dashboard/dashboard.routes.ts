@@ -148,7 +148,12 @@ router.get("/my-borrows", requireAuth, async (req: any, res) => {
       JOIN labs l ON l.id = t.lab_id
       JOIN borrow_transaction_items bti ON bti.transaction_id = t.id
       JOIN inventory_items i ON i.id = bti.item_id
-      WHERE t.borrower_user_id = :userId
+      WHERE (
+        t.borrower_user_id = :userId
+        OR (t.borrower_group_code IS NOT NULL AND t.borrower_group_code IN (
+          SELECT group_code FROM student_profiles WHERE user_id = :userId
+        ))
+      )
         AND t.status = 'BORROWED'
       GROUP BY t.id
       ORDER BY t.due_at ASC
