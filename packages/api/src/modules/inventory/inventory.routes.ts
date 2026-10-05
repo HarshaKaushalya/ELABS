@@ -79,10 +79,10 @@ router.get("/my-borrows", requireAuth, async (req: any, res) => {
   const userId = req.user.id;
   const [rows] = await pool.query(
     `
-    SELECT t.id, t.lab_id as labId, l.name as labName,
+    SELECT t.id, t.lab_id as labId, ANY_VALUE(l.name) as labName,
            t.purpose, t.due_at as dueAt, t.returned_at as returnedAt,
            t.status, t.created_at as createdAt,
-           u.full_name as issuedByName,
+           ANY_VALUE(u.full_name) as issuedByName,
            JSON_ARRAYAGG(
              JSON_OBJECT(
                'itemId',    i.id,
@@ -105,7 +105,7 @@ router.get("/my-borrows", requireAuth, async (req: any, res) => {
         SELECT group_code FROM student_profiles WHERE user_id = :userId
       ))
     )
-    GROUP BY t.id
+    GROUP BY t.id, t.lab_id, t.purpose, t.due_at, t.returned_at, t.status, t.created_at
     ORDER BY t.created_at DESC
     LIMIT 100
     `,
