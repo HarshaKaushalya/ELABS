@@ -14,8 +14,18 @@ import { pool } from "../../db/mysql";
 const router = Router();
 
 // ─── File Upload Setup ────────────────────────────────────────────────────────
-const uploadDir = path.join(process.cwd(), "uploads", "submissions");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const uploadDir = isServerless
+  ? path.join("/tmp", "uploads", "submissions")
+  : path.join(process.cwd(), "uploads", "submissions");
+
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn("Could not create upload directory, file uploads may fail:", e);
+}
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
