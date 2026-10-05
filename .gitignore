@@ -37,3 +37,6 @@ Thumbs.db
 # Vision service — large uploaded/processed video files
 packages/vision/src/storage/uploads/
 packages/vision/src/storage/outputs/
+
+# Spreadsheets
+*.xlsx
