@@ -87,9 +87,9 @@ router.get("/overdue", requireAuth, async (_req, res) => {
         t.purpose,
         t.borrower_type AS borrowerType,
         t.borrower_group_code AS borrowerGroupCode,
-        u.full_name AS borrowerName,
-        u.email AS borrowerEmail,
-        l.name AS labName,
+        ANY_VALUE(u.full_name) AS borrowerName,
+        ANY_VALUE(u.email) AS borrowerEmail,
+        ANY_VALUE(l.name) AS labName,
         TIMESTAMPDIFF(DAY, t.due_at, NOW()) AS daysOverdue,
         JSON_ARRAYAGG(
           JSON_OBJECT(
@@ -108,7 +108,7 @@ router.get("/overdue", requireAuth, async (_req, res) => {
       WHERE t.status = 'BORROWED'
         AND t.due_at IS NOT NULL
         AND t.due_at < NOW()
-      GROUP BY t.id
+      GROUP BY t.id, t.due_at, t.created_at, t.purpose, t.borrower_type, t.borrower_group_code
       ORDER BY t.due_at ASC
       LIMIT 50
     `);
@@ -133,7 +133,7 @@ router.get("/my-borrows", requireAuth, async (req: any, res) => {
         t.due_at AS dueAt,
         t.created_at AS createdAt,
         t.status,
-        l.name AS labName,
+        ANY_VALUE(l.name) AS labName,
         t.purpose,
         TIMESTAMPDIFF(DAY, t.due_at, NOW()) AS daysOverdue,
         JSON_ARRAYAGG(
@@ -155,7 +155,7 @@ router.get("/my-borrows", requireAuth, async (req: any, res) => {
         ))
       )
         AND t.status = 'BORROWED'
-      GROUP BY t.id
+      GROUP BY t.id, t.due_at, t.created_at, t.status, t.purpose
       ORDER BY t.due_at ASC
     `, { userId });
     const borrowsList = (rows as any[]).map((r) => ({
