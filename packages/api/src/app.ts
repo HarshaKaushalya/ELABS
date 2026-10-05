@@ -28,6 +28,17 @@ app.use(cookieParser());
 
 app.use(cors(corsOptions));
 
+// Normalize URLs so both /api/auth/login and /auth/login work seamlessly
+app.use((req, res, next) => {
+  if (req.url.startsWith("/api/")) {
+    req.url = req.url.replace(/^\/api/, "");
+  } else if (req.url === "/api") {
+    req.url = "/";
+  }
+  next();
+});
+
+app.get("/", (_, res) => res.json({ service: "elabs-api", status: "ok" }));
 app.get("/health", (_, res) => res.json({ ok: true }));
 
 app.use("/auth", authRoutes);
