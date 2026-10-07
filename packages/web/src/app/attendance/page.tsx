@@ -22,6 +22,8 @@ import {
   Building2,
   GraduationCap,
   Sparkles,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 
 type Lab = {
@@ -2187,7 +2189,7 @@ export default function AttendancePage() {
   );
 }
 
-// Inline Camera Scanner Modal using html5-qrcode
+// Upgraded High-Precision Camera & Photo Barcode Scanner Modal
 function CameraScannerModal({
   onScan,
   onClose,
@@ -2195,45 +2197,220 @@ function CameraScannerModal({
   onScan: (decodedText: string) => void;
   onClose: () => void;
 }) {
-  const scannerRef = useRef<HTMLDivElement>(null);
+  const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>("");
+  const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading");
+  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [manualInput, setManualInput] = useState<string>("");
+  const [isProcessingFile, setIsProcessingFile] = useState<boolean>(false);
+  const [fileError, setFileError] = useState<string>("");
 
-  useEffect(() => {
-    let scannerInstance: any = null;
+  const html5QrCodeRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-    async function initScanner() {
+  // Helper function to rotate an image using HTML5 Canvas to handle 90° rotated ID card photos
+  const rotateImageBlob = async (imageFile: File, degrees: number): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas context unavailable"));
+
+        if (degrees === 90 || degrees === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((degrees * Math.PI) / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return reject(new Error("Blob creation failed"));
+          const rotatedFile = new File([blob], `rotated_${degrees}_${imageFile.name}`, {
+            type: "image/png",
+          });
+          resolve(rotatedFile);
+        }, "image/png");
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(imageFile);
+    });
+  };
+
+  // Start Camera Scanning
+  const startCamera = useCallback(
+    async (cameraId?: string) => {
       try {
-        const { Html5QrcodeScanner } = await import("html5-qrcode");
-        scannerInstance = new Html5QrcodeScanner(
-          "attendance-qr-reader",
-          {
-            fps: 10,
-            qrbox: { width: 280, height: 180 },
-          },
-          /* verbose= */ false
-        );
+        setStatus("loading");
+        setErrorMessage("");
 
-        scannerInstance.render(
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+
+        // Stop any running instance
+        if (html5QrCodeRef.current) {
+          try {
+            await html5QrCodeRef.current.stop();
+          } catch {
+            // Ignored
+          }
+        }
+
+        const scanner = new Html5Qrcode("attendance-interactive-scanner", {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ],
+          verbose: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true,
+          },
+        });
+
+        html5QrCodeRef.current = scanner;
+
+        // Fetch available cameras if not yet listed
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          setCameras(devices);
+        }
+
+        const cameraTarget = cameraId
+          ? { deviceId: { exact: cameraId } }
+          : devices && devices.length > 0
+          ? { deviceId: { exact: devices[devices.length - 1].id } }
+          : { facingMode: "environment" };
+
+        await scanner.start(
+          cameraTarget,
+          {
+            fps: 20,
+            qrbox: (viewWidth: number, viewHeight: number) => {
+              // 1D barcodes need a wide horizontal strip
+              const width = Math.min(Math.floor(viewWidth * 0.9), 420);
+              const height = Math.min(Math.floor(viewHeight * 0.55), 220);
+              return { width, height };
+            },
+            aspectRatio: 1.333333,
+          },
           (decodedText: string) => {
-            scannerInstance.clear().catch(console.error);
-            onScan(decodedText);
+            scanner
+              .stop()
+              .catch(() => {})
+              .finally(() => {
+                onScan(decodedText);
+              });
           },
           () => {
-            // Frame scan miss, normal
+            // Periodic frame scan miss
           }
         );
-      } catch (err) {
-        console.error("Camera scanner init error:", err);
-      }
-    }
 
-    initScanner();
+        setStatus("scanning");
+      } catch (err: any) {
+        console.error("Camera startup error:", err);
+        setStatus("error");
+        setErrorMessage(
+          err?.message ||
+            "Could not access camera. Please verify permissions or upload a card photo instead."
+        );
+      }
+    },
+    [onScan]
+  );
+
+  useEffect(() => {
+    startCamera();
 
     return () => {
-      if (scannerInstance) {
-        scannerInstance.clear().catch(console.error);
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current
+          .stop()
+          .catch(() => {})
+          .then(() => {
+            html5QrCodeRef.current?.clear();
+          });
       }
     };
-  }, [onScan]);
+  }, [startCamera]);
+
+  // Handle Photo File Upload with 4-angle rotation fallback
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessingFile(true);
+    setFileError("");
+
+    try {
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+
+      let fileScanner = html5QrCodeRef.current;
+      if (!fileScanner) {
+        fileScanner = new Html5Qrcode("attendance-interactive-scanner", {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ],
+          verbose: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true,
+          },
+        });
+      }
+
+      // Try 0°, 90°, 180°, 270° angles to handle rotated card photos
+      const angles = [0, 90, 270, 180];
+      let foundCode: string | null = null;
+
+      for (const angle of angles) {
+        try {
+          const testFile = angle === 0 ? file : await rotateImageBlob(file, angle);
+          const result = await fileScanner.scanFile(testFile, false);
+          if (result) {
+            foundCode = result;
+            break;
+          }
+        } catch {
+          // Angle did not match barcode orientation, proceed to next angle
+        }
+      }
+
+      if (foundCode) {
+        onScan(foundCode);
+      } else {
+        setFileError(
+          "Could not detect barcode from image. Please ensure the barcode stripes are clearly visible without glare, or enter the ID below."
+        );
+      }
+    } catch (err: any) {
+      console.error("File barcode scan error:", err);
+      setFileError("Failed to process image: " + (err?.message || "Unknown error"));
+    } finally {
+      setIsProcessingFile(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   return (
     <div
@@ -2241,7 +2418,7 @@ function CameraScannerModal({
         position: "fixed",
         inset: 0,
         zIndex: 120,
-        background: "rgba(0, 0, 0, 0.8)",
+        background: "rgba(0, 0, 0, 0.85)",
         backdropFilter: "blur(6px)",
         display: "flex",
         alignItems: "center",
@@ -2254,12 +2431,13 @@ function CameraScannerModal({
           background: "var(--panel)",
           border: "1px solid var(--cyan)",
           borderRadius: 16,
-          maxWidth: 480,
+          maxWidth: 520,
           width: "100%",
           overflow: "hidden",
-          boxShadow: "0 24px 48px rgba(0, 0, 0, 0.6)",
+          boxShadow: "0 24px 48px rgba(0, 0, 0, 0.7)",
         }}
       >
+        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -2267,14 +2445,34 @@ function CameraScannerModal({
             alignItems: "center",
             padding: "16px 20px",
             borderBottom: "1px solid var(--line)",
+            background: "rgba(5, 12, 29, 0.5)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Camera size={18} style={{ color: "var(--cyan)" }} />
-            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text)" }}>
-              Scan Student ID Barcode
-            </h3>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: "rgba(29, 213, 230, 0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--cyan)",
+              }}
+            >
+              <Camera size={18} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text)" }}>
+                Scan Student ID Barcode
+              </h3>
+              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
+                Code 128 / Code 39 / NIC barcode detector
+              </p>
+            </div>
           </div>
+
           <button
             type="button"
             onClick={onClose}
@@ -2283,37 +2481,265 @@ function CameraScannerModal({
               border: "none",
               color: "var(--muted)",
               cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
+              padding: 4,
             }}
           >
             <X size={20} />
           </button>
         </div>
 
-        <div style={{ padding: "20px" }}>
+        {/* Viewfinder Body */}
+        <div style={{ padding: "18px 20px" }}>
+          {/* Camera Selection Toolbar */}
+          {cameras.length > 1 && (
+            <div style={{ marginBottom: 12 }}>
+              <select
+                value={selectedCameraId}
+                onChange={(e) => {
+                  setSelectedCameraId(e.target.value);
+                  startCamera(e.target.value);
+                }}
+                style={{
+                  width: "100%",
+                  background: "var(--bg)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 8,
+                  padding: "7px 12px",
+                  color: "var(--text)",
+                  fontSize: "0.82rem",
+                  outline: "none",
+                }}
+              >
+                {cameras.map((cam) => (
+                  <option key={cam.id} value={cam.id}>
+                    📹 {cam.label || `Camera ${cam.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Interactive Camera Container */}
           <div
-            id="attendance-qr-reader"
-            ref={scannerRef}
             style={{
+              position: "relative",
               width: "100%",
-              borderRadius: 10,
+              minHeight: 280,
+              borderRadius: 12,
               overflow: "hidden",
-              background: "#000",
-            }}
-          />
-          <p
-            style={{
-              margin: "14px 0 0",
-              textAlign: "center",
-              fontSize: "0.82rem",
-              color: "var(--muted)",
+              background: "#000000",
+              border: "1px solid var(--line)",
             }}
           >
-            Align the barcode on the back or front of the Student ID card within the frame.
+            <div id="attendance-interactive-scanner" style={{ width: "100%" }} />
+
+            {/* Red Laser Alignment Line */}
+            {status === "scanning" && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: "10%",
+                  right: "10%",
+                  top: "50%",
+                  height: 2,
+                  background: "#ff4d57",
+                  boxShadow: "0 0 10px #ff4d57, 0 0 4px #ff4d57",
+                  pointerEvents: "none",
+                  zIndex: 10,
+                  transform: "translateY(-50%)",
+                }}
+              />
+            )}
+
+            {/* Loading / Status State */}
+            {status === "loading" && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(5, 12, 29, 0.9)",
+                  color: "var(--muted)",
+                  gap: 10,
+                  zIndex: 5,
+                }}
+              >
+                <RefreshCw size={24} className="spin" style={{ color: "var(--cyan)" }} />
+                <span style={{ fontSize: "0.85rem" }}>Initializing high-speed camera engine...</span>
+              </div>
+            )}
+
+            {/* Camera Error Message */}
+            {status === "error" && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(5, 12, 29, 0.95)",
+                  padding: 24,
+                  textAlign: "center",
+                  gap: 12,
+                  zIndex: 5,
+                }}
+              >
+                <AlertCircle size={32} style={{ color: "#ff4d57" }} />
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text)" }}>
+                  {errorMessage}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => startCamera(selectedCameraId)}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    border: "1px solid var(--cyan)",
+                    background: "rgba(29, 213, 230, 0.15)",
+                    color: "var(--cyan)",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Retry Camera
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Card Alignment Instructions */}
+          <p
+            style={{
+              margin: "12px 0 0",
+              textAlign: "center",
+              fontSize: "0.8rem",
+              color: "var(--muted)",
+              lineHeight: 1.4,
+            }}
+          >
+            Position the barcode along the <strong style={{ color: "#ff4d57" }}>red laser line</strong>. Hold steady ~15cm from camera.
           </p>
+
+          {/* Fallback Option 1: Upload Card Image */}
+          <div
+            style={{
+              marginTop: 14,
+              paddingTop: 12,
+              borderTop: "1px solid var(--line)",
+              display: "flex",
+              justifyContent: "center",
+              gap: 10,
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleFileUpload}
+            />
+            <button
+              type="button"
+              disabled={isProcessingFile}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid var(--line)",
+                background: "var(--bg)",
+                color: "var(--text)",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                cursor: isProcessingFile ? "not-allowed" : "pointer",
+              }}
+            >
+              {isProcessingFile ? (
+                <>
+                  <RefreshCw size={14} className="spin" />
+                  Scanning Card Image...
+                </>
+              ) : (
+                <>
+                  <Upload size={14} style={{ color: "var(--cyan)" }} />
+                  Upload / Snap Card Photo
+                </>
+              )}
+            </button>
+          </div>
+
+          {fileError && (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: "0.78rem",
+                color: "#ff4d57",
+                textAlign: "center",
+              }}
+            >
+              {fileError}
+            </p>
+          )}
+
+          {/* Fallback Option 2: Quick ID Manual Typing */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (manualInput.trim()) {
+                onScan(manualInput.trim());
+              }
+            }}
+            style={{
+              marginTop: 12,
+              display: "flex",
+              gap: 8,
+            }}
+          >
+            <input
+              type="text"
+              value={manualInput}
+              onChange={(e) => setManualInput(e.target.value)}
+              placeholder="Or type Reg No or Barcode (e.g. 200225401582 or 5401)..."
+              style={{
+                flex: 1,
+                background: "var(--bg)",
+                border: "1px solid var(--line)",
+                borderRadius: 8,
+                padding: "8px 12px",
+                color: "var(--text)",
+                fontSize: "0.82rem",
+                outline: "none",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={!manualInput.trim()}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: "var(--cyan)",
+                color: "#041224",
+                fontWeight: 700,
+                fontSize: "0.82rem",
+                cursor: !manualInput.trim() ? "not-allowed" : "pointer",
+                opacity: !manualInput.trim() ? 0.6 : 1,
+              }}
+            >
+              Submit
+            </button>
+          </form>
         </div>
       </div>
     </div>
   );
 }
+

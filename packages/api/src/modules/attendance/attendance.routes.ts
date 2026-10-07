@@ -46,26 +46,59 @@ router.post("/scan", requireAuth, async (req: AuthedRequest, res) => {
     const digitsOnly = rawCode.replace(/\D/g, "");
     const numericId = Number(digitsOnly);
 
+    if (digitsOnly) {
+      variations.push(digitsOnly);
+    }
+
+    // If barcode is a 12-digit Sri Lankan NIC (e.g. 200225401582) or 10-digit old NIC (e.g. 2002540158V)
+    // also extract potential embedded 4-digit student numbers
+    const embeddedCandidates: string[] = [];
+    if (digitsOnly.length >= 8) {
+      for (let i = 0; i <= digitsOnly.length - 4; i++) {
+        const sub = digitsOnly.substring(i, i + 4);
+        const subNum = Number(sub);
+        if (subNum >= 4000 && subNum <= 6000) {
+          embeddedCandidates.push(sub);
+          embeddedCandidates.push(`EG/2022/${sub}`);
+          embeddedCandidates.push(`EG/2021/${sub}`);
+          embeddedCandidates.push(`EG/2023/${sub}`);
+        }
+      }
+    }
+
     // 1. Resolve Student from users + student_profiles
     const [userRows] = await pool.query(
       `
       SELECT u.id, u.full_name AS fullName, u.email,
              COALESCE(u.index_no, sp.reg_number) AS regNo,
+             COALESCE(u.nic, sp.nic) AS nic,
              sp.group_code AS groupCode, sp.department, sp.semester
       FROM users u
       LEFT JOIN student_profiles sp ON sp.user_id = u.id
       WHERE u.index_no IN (:variations)
          OR u.email IN (:variations)
          OR sp.reg_number IN (:variations)
+         OR u.nic IN (:variations)
+         OR u.barcode IN (:variations)
+         OR sp.nic IN (:variations)
          OR (:numId > 0 AND u.id = :numId)
-         OR (LENGTH(:digits) >= 4 AND (u.index_no LIKE :likeDigits OR sp.reg_number LIKE :likeDigits OR u.email LIKE :likeDigits))
+         OR (LENGTH(:digits) >= 4 AND (
+              u.index_no LIKE :likeDigits
+              OR sp.reg_number LIKE :likeDigits
+              OR u.email LIKE :likeDigits
+              OR u.nic LIKE :likeDigits
+              OR u.barcode LIKE :likeDigits
+            ))
+         OR u.index_no IN (:embedded)
+         OR sp.reg_number IN (:embedded)
       LIMIT 1
       `,
       {
         variations,
-        numId: numericId || 0,
+        numId: numericId && numericId < 100000 ? numericId : 0,
         digits: digitsOnly,
         likeDigits: `%${digitsOnly}%`,
+        embedded: embeddedCandidates.length > 0 ? embeddedCandidates : ["__none__"],
       }
     ) as any[];
 
