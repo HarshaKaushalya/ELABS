@@ -31,7 +31,7 @@ const sections: NavSection[] = [
     links: [
       { label: "Inventory", href: "/inventory", icon: "inventory" },
       { label: "Laboratories", href: "/labs", icon: "labs" },
-      { label: "Attendance & Access", href: "/calendar", icon: "attendance", hideFor: ["STUDENT"] },
+      { label: "Attendance & Access", href: "/attendance", icon: "attendance", hideFor: ["STUDENT"] },
       { label: "Vision Monitoring",   href: "/vision",   icon: "vision" },
     ],
   },

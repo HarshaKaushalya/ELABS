@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PROTECTED = [
   "/dashboard",
+  "/attendance",
   "/calendar",
   "/labs",
   "/inventory",
@@ -34,6 +35,7 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/attendance/:path*",
     "/calendar/:path*",
     "/labs/:path*",
     "/inventory/:path*",
