@@ -17,6 +17,15 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/calendar",
+        destination: "/attendance",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

@@ -2071,13 +2071,15 @@ export default function AttendancePage() {
 
       {/* MODAL 1: CAMERA BARCODE SCANNER */}
       {cameraModalOpen && (
-        <CameraScannerModal
-          onScan={(decoded) => {
-            setCameraModalOpen(false);
-            handleProcessScan(decoded, "CAMERA");
-          }}
-          onClose={() => setCameraModalOpen(false)}
-        />
+        <CameraErrorBoundary onClose={() => setCameraModalOpen(false)}>
+          <CameraScannerInner
+            onScan={(decoded) => {
+              setCameraModalOpen(false);
+              handleProcessScan(decoded, "CAMERA");
+            }}
+            onClose={() => setCameraModalOpen(false)}
+          />
+        </CameraErrorBoundary>
       )}
 
       {/* MODAL 2: CONFIRM EXIT ALL OCCUPANTS */}
@@ -2189,8 +2191,134 @@ export default function AttendancePage() {
   );
 }
 
-// Upgraded High-Precision Camera & Photo Barcode Scanner Modal
-function CameraScannerModal({
+// Error Boundary to isolate camera and video stream errors without crashing Next.js
+class CameraErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: { children: React.ReactNode; onClose: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: "" };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return {
+      hasError: true,
+      error: error?.message || "An unexpected camera scanner error occurred.",
+    };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("CameraErrorBoundary caught an exception:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 120,
+            background: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: "var(--panel)",
+              border: "1px solid #ff4d57",
+              borderRadius: 16,
+              maxWidth: 480,
+              width: "100%",
+              padding: 24,
+              boxShadow: "0 24px 48px rgba(0, 0, 0, 0.7)",
+              color: "var(--text)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: "50%",
+                  background: "rgba(255, 77, 87, 0.15)",
+                  color: "#ff4d57",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <AlertCircle size={22} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
+                  Camera Scanner Error
+                </h3>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--muted)" }}>
+                  Webcam initialization or video frame failure
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={this.props.onClose}
+                style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ margin: "0 0 16px", fontSize: "0.85rem", color: "#ff8b94", lineHeight: 1.5 }}>
+              {this.state.error}
+            </p>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={this.props.onClose}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "1px solid var(--line)",
+                  background: "transparent",
+                  color: "var(--text)",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => this.setState({ hasError: false, error: "" })}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "var(--cyan)",
+                  color: "#041224",
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Upgraded High-Precision Camera & Photo Barcode Scanner Inner Modal
+function CameraScannerInner({
   onScan,
   onClose,
 }: {
@@ -2201,66 +2329,123 @@ function CameraScannerModal({
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [status, setStatus] = useState<"loading" | "scanning" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [scannedSuccessCode, setScannedSuccessCode] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState<string>("");
   const [isProcessingFile, setIsProcessingFile] = useState<boolean>(false);
   const [fileError, setFileError] = useState<string>("");
 
+  const scannerElementId = useRef<string>("scanner-" + Math.random().toString(36).substring(2, 9)).current;
   const html5QrCodeRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isStartingRef = useRef<boolean>(false);
+  const isStoppingRef = useRef<boolean>(false);
+  const hasScannedRef = useRef<boolean>(false);
+  const isMountedRef = useRef<boolean>(true);
+
+  // Helper function to safely stop and clean up scanner instance
+  const safeStopScanner = useCallback(async () => {
+    const scanner = html5QrCodeRef.current;
+    if (!scanner || isStoppingRef.current) return;
+    isStoppingRef.current = true;
+
+    try {
+      if (isStartingRef.current) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+    } catch (err) {
+      console.warn("Scanner stop suppressed error:", err);
+    }
+
+    try {
+      await scanner.clear();
+    } catch (err) {
+      console.warn("Scanner clear suppressed error:", err);
+    }
+
+    html5QrCodeRef.current = null;
+    isStoppingRef.current = false;
+  }, []);
 
   // Helper function to rotate an image using HTML5 Canvas to handle 90° rotated ID card photos
   const rotateImageBlob = async (imageFile: File, degrees: number): Promise<File> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("Canvas context unavailable"));
+        try {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("Canvas context unavailable"));
 
-        if (degrees === 90 || degrees === 270) {
-          canvas.width = img.height;
-          canvas.height = img.width;
-        } else {
-          canvas.width = img.width;
-          canvas.height = img.height;
+          if (degrees === 90 || degrees === 270) {
+            canvas.width = img.height;
+            canvas.height = img.width;
+          } else {
+            canvas.width = img.width;
+            canvas.height = img.height;
+          }
+
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.rotate((degrees * Math.PI) / 180);
+          ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+          canvas.toBlob((blob) => {
+            if (!blob) return reject(new Error("Blob creation failed"));
+            const rotatedFile = new File([blob], `rotated_${degrees}_${imageFile.name}`, {
+              type: "image/png",
+            });
+            resolve(rotatedFile);
+          }, "image/png");
+        } catch (err) {
+          reject(err);
+        } finally {
+          URL.revokeObjectURL(img.src);
         }
-
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((degrees * Math.PI) / 180);
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
-
-        canvas.toBlob((blob) => {
-          if (!blob) return reject(new Error("Blob creation failed"));
-          const rotatedFile = new File([blob], `rotated_${degrees}_${imageFile.name}`, {
-            type: "image/png",
-          });
-          resolve(rotatedFile);
-        }, "image/png");
       };
-      img.onerror = reject;
+      img.onerror = (err) => {
+        URL.revokeObjectURL(img.src);
+        reject(err);
+      };
       img.src = URL.createObjectURL(imageFile);
     });
   };
 
-  // Start Camera Scanning
+  // Safe Scan Completion Handler
+  const handleScanSuccess = useCallback(
+    async (decodedText: string) => {
+      if (hasScannedRef.current) return;
+      hasScannedRef.current = true;
+      setScannedSuccessCode(decodedText);
+
+      await safeStopScanner();
+
+      if (isMountedRef.current) {
+        setTimeout(() => {
+          onScan(decodedText);
+        }, 120);
+      }
+    },
+    [onScan, safeStopScanner]
+  );
+
+  // Safe Camera Startup
   const startCamera = useCallback(
     async (cameraId?: string) => {
+      if (!isMountedRef.current) return;
       try {
         setStatus("loading");
         setErrorMessage("");
+        isStartingRef.current = true;
 
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+        if (!isMountedRef.current) return;
 
-        // Stop any running instance
-        if (html5QrCodeRef.current) {
-          try {
-            await html5QrCodeRef.current.stop();
-          } catch {
-            // Ignored
-          }
-        }
+        await safeStopScanner();
+        if (!isMountedRef.current) return;
 
-        const scanner = new Html5Qrcode("attendance-interactive-scanner", {
+        const scanner = new Html5Qrcode(scannerElementId, {
           formatsToSupport: [
             Html5QrcodeSupportedFormats.CODE_128,
             Html5QrcodeSupportedFormats.CODE_39,
@@ -2280,70 +2465,100 @@ function CameraScannerModal({
 
         html5QrCodeRef.current = scanner;
 
-        // Fetch available cameras if not yet listed
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          setCameras(devices);
+        // Fetch cameras
+        let devices: any[] = [];
+        try {
+          devices = await Html5Qrcode.getCameras();
+          if (isMountedRef.current && devices && devices.length > 0) {
+            setCameras(devices.map((d: any) => ({ id: d.id, label: d.label || `Camera ${d.id}` })));
+          }
+        } catch (camErr) {
+          console.warn("Could not enumerate camera devices:", camErr);
         }
 
-        const cameraTarget = cameraId
-          ? { deviceId: { exact: cameraId } }
-          : devices && devices.length > 0
-          ? { deviceId: { exact: devices[devices.length - 1].id } }
-          : { facingMode: "environment" };
+        let cameraTarget: any = { facingMode: "user" };
+        if (cameraId) {
+          cameraTarget = { deviceId: { exact: cameraId } };
+        } else if (devices && devices.length > 0) {
+          cameraTarget = { deviceId: { exact: devices[0].id } };
+        }
 
         await scanner.start(
           cameraTarget,
           {
             fps: 20,
             qrbox: (viewWidth: number, viewHeight: number) => {
-              // 1D barcodes need a wide horizontal strip
-              const width = Math.min(Math.floor(viewWidth * 0.9), 420);
-              const height = Math.min(Math.floor(viewHeight * 0.55), 220);
+              const width = Math.min(Math.floor(viewWidth * 0.92), 440);
+              const height = Math.min(Math.floor(viewHeight * 0.6), 240);
               return { width, height };
             },
             aspectRatio: 1.333333,
           },
           (decodedText: string) => {
-            scanner
-              .stop()
-              .catch(() => {})
-              .finally(() => {
-                onScan(decodedText);
-              });
+            handleScanSuccess(decodedText);
           },
           () => {
             // Periodic frame scan miss
           }
         );
 
-        setStatus("scanning");
+        if (isMountedRef.current) {
+          setStatus("scanning");
+        }
       } catch (err: any) {
         console.error("Camera startup error:", err);
-        setStatus("error");
-        setErrorMessage(
-          err?.message ||
-            "Could not access camera. Please verify permissions or upload a card photo instead."
-        );
+        // Fallback: Try generic camera constraint if exact target failed
+        try {
+          if (html5QrCodeRef.current && isMountedRef.current) {
+            await html5QrCodeRef.current.start(
+              { facingMode: "user" },
+              {
+                fps: 15,
+                qrbox: { width: 300, height: 180 },
+              },
+              (decodedText: string) => {
+                handleScanSuccess(decodedText);
+              },
+              () => {}
+            );
+            if (isMountedRef.current) {
+              setStatus("scanning");
+              return;
+            }
+          }
+        } catch (fallbackErr) {
+          console.warn("Camera fallback also failed:", fallbackErr);
+        }
+
+        if (isMountedRef.current) {
+          setStatus("error");
+          setErrorMessage(
+            err?.message ||
+              "Could not access camera. Please verify permissions or upload a card photo instead."
+          );
+        }
+      } finally {
+        isStartingRef.current = false;
       }
     },
-    [onScan]
+    [handleScanSuccess, safeStopScanner, scannerElementId]
   );
 
+  // Close with cleanup
+  const handleClose = async () => {
+    await safeStopScanner();
+    onClose();
+  };
+
   useEffect(() => {
+    isMountedRef.current = true;
     startCamera();
 
     return () => {
-      if (html5QrCodeRef.current) {
-        html5QrCodeRef.current
-          .stop()
-          .catch(() => {})
-          .then(() => {
-            html5QrCodeRef.current?.clear();
-          });
-      }
+      isMountedRef.current = false;
+      safeStopScanner();
     };
-  }, [startCamera]);
+  }, [startCamera, safeStopScanner]);
 
   // Handle Photo File Upload with 4-angle rotation fallback
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2358,7 +2573,7 @@ function CameraScannerModal({
 
       let fileScanner = html5QrCodeRef.current;
       if (!fileScanner) {
-        fileScanner = new Html5Qrcode("attendance-interactive-scanner", {
+        fileScanner = new Html5Qrcode(scannerElementId, {
           formatsToSupport: [
             Html5QrcodeSupportedFormats.CODE_128,
             Html5QrcodeSupportedFormats.CODE_39,
@@ -2395,7 +2610,7 @@ function CameraScannerModal({
       }
 
       if (foundCode) {
-        onScan(foundCode);
+        handleScanSuccess(foundCode);
       } else {
         setFileError(
           "Could not detect barcode from image. Please ensure the barcode stripes are clearly visible without glare, or enter the ID below."
@@ -2475,7 +2690,7 @@ function CameraScannerModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               background: "transparent",
               border: "none",
@@ -2531,10 +2746,10 @@ function CameraScannerModal({
               border: "1px solid var(--line)",
             }}
           >
-            <div id="attendance-interactive-scanner" style={{ width: "100%" }} />
+            <div id={scannerElementId} style={{ width: "100%", minHeight: 280 }} />
 
             {/* Red Laser Alignment Line */}
-            {status === "scanning" && (
+            {status === "scanning" && !scannedSuccessCode && (
               <div
                 style={{
                   position: "absolute",
@@ -2551,8 +2766,34 @@ function CameraScannerModal({
               />
             )}
 
+            {/* Success Overlay */}
+            {scannedSuccessCode && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(34, 197, 94, 0.9)",
+                  color: "#ffffff",
+                  gap: 12,
+                  zIndex: 20,
+                }}
+              >
+                <CheckCircle2 size={44} />
+                <span style={{ fontSize: "1.05rem", fontWeight: 700 }}>
+                  Barcode Detected!
+                </span>
+                <span style={{ fontSize: "0.85rem", opacity: 0.9 }}>
+                  {scannedSuccessCode}
+                </span>
+              </div>
+            )}
+
             {/* Loading / Status State */}
-            {status === "loading" && (
+            {status === "loading" && !scannedSuccessCode && (
               <div
                 style={{
                   position: "absolute",
@@ -2573,7 +2814,7 @@ function CameraScannerModal({
             )}
 
             {/* Camera Error Message */}
-            {status === "error" && (
+            {status === "error" && !scannedSuccessCode && (
               <div
                 style={{
                   position: "absolute",
@@ -2694,7 +2935,7 @@ function CameraScannerModal({
             onSubmit={(e) => {
               e.preventDefault();
               if (manualInput.trim()) {
-                onScan(manualInput.trim());
+                handleScanSuccess(manualInput.trim());
               }
             }}
             style={{
@@ -2742,4 +2983,7 @@ function CameraScannerModal({
     </div>
   );
 }
+
+// Internal modal components for page.tsx
+
 
