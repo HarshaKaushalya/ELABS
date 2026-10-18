@@ -21,7 +21,7 @@ import {
   X,
   Building2,
   GraduationCap,
-  Sparkles,
+  ArrowLeftRight,
   Upload,
   Image as ImageIcon,
 } from "lucide-react";
@@ -499,7 +499,7 @@ export default function AttendancePage() {
   return (
     <AppShell
       title="Attendance & Access Control"
-      subtitle="Barcode scanner terminal and automated laboratory presence tracking"
+      subtitle="Student ID barcode check-in terminal, live presence monitoring, and access logs"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {/* TOP BAR CONTROLS: Lab Selector, Mode Pills, Audio Toggle */}
@@ -606,17 +606,17 @@ export default function AttendancePage() {
                   gap: 6,
                   padding: "7px 14px",
                   borderRadius: 7,
-                  border: "none",
-                  background: scanMode === "AUTO" ? "linear-gradient(135deg, #1dd5e6, #18d18f)" : "transparent",
-                  color: scanMode === "AUTO" ? "#041224" : "var(--muted)",
+                  border: scanMode === "AUTO" ? "1px solid var(--line)" : "1px solid transparent",
+                  background: scanMode === "AUTO" ? "var(--panel-2)" : "transparent",
+                  color: scanMode === "AUTO" ? "var(--text)" : "var(--muted)",
                   fontWeight: 600,
                   fontSize: "0.85rem",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                 }}
               >
-                <Sparkles size={14} />
-                Smart Auto
+                <ArrowLeftRight size={14} style={{ color: scanMode === "AUTO" ? "var(--cyan)" : "inherit" }} />
+                Auto (Entry/Exit)
               </button>
 
               <button
@@ -628,9 +628,9 @@ export default function AttendancePage() {
                   gap: 6,
                   padding: "7px 14px",
                   borderRadius: 7,
-                  border: "none",
-                  background: scanMode === "ENTRY" ? "#18d18f" : "transparent",
-                  color: scanMode === "ENTRY" ? "#041224" : "var(--muted)",
+                  border: scanMode === "ENTRY" ? "1px solid rgba(24, 209, 143, 0.4)" : "1px solid transparent",
+                  background: scanMode === "ENTRY" ? "rgba(24, 209, 143, 0.15)" : "transparent",
+                  color: scanMode === "ENTRY" ? "#18d18f" : "var(--muted)",
                   fontWeight: 600,
                   fontSize: "0.85rem",
                   cursor: "pointer",
@@ -650,9 +650,9 @@ export default function AttendancePage() {
                   gap: 6,
                   padding: "7px 14px",
                   borderRadius: 7,
-                  border: "none",
-                  background: scanMode === "EXIT" ? "#3d83f6" : "transparent",
-                  color: scanMode === "EXIT" ? "#ffffff" : "var(--muted)",
+                  border: scanMode === "EXIT" ? "1px solid rgba(61, 131, 246, 0.4)" : "1px solid transparent",
+                  background: scanMode === "EXIT" ? "rgba(61, 131, 246, 0.15)" : "transparent",
+                  color: scanMode === "EXIT" ? "#60a5fa" : "var(--muted)",
                   fontWeight: 600,
                   fontSize: "0.85rem",
                   cursor: "pointer",
@@ -670,7 +670,7 @@ export default function AttendancePage() {
             <button
               type="button"
               onClick={() => setSoundEnabled(!soundEnabled)}
-              title={soundEnabled ? "Audio chimes active (Click to mute)" : "Audio muted (Click to enable)"}
+              title={soundEnabled ? "Audio feedback active" : "Audio feedback muted"}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -678,15 +678,15 @@ export default function AttendancePage() {
                 padding: "8px 12px",
                 borderRadius: 8,
                 border: "1px solid var(--line)",
-                background: soundEnabled ? "rgba(24, 209, 143, 0.1)" : "rgba(255, 77, 87, 0.1)",
-                color: soundEnabled ? "#18d18f" : "#ff4d57",
+                background: "var(--bg)",
+                color: soundEnabled ? "var(--text)" : "var(--muted)",
                 fontSize: "0.82rem",
                 fontWeight: 600,
                 cursor: "pointer",
               }}
             >
-              {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              {soundEnabled ? "Chimes On" : "Muted"}
+              {soundEnabled ? <Volume2 size={15} style={{ color: "#18d18f" }} /> : <VolumeX size={15} />}
+              {soundEnabled ? "Sound On" : "Muted"}
             </button>
 
             <button
@@ -765,25 +765,38 @@ export default function AttendancePage() {
                   style={{
                     fontSize: "2rem",
                     fontWeight: 700,
-                    color: "#18d18f",
+                    color: "var(--text)",
                     marginTop: 4,
                     display: "flex",
                     alignItems: "center",
-                    gap: 8,
+                    gap: 10,
                   }}
                 >
                   {stats.activeNow}
                   <span
                     style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: "50%",
-                      background: "#18d18f",
-                      display: "inline-block",
-                      boxShadow: "0 0 10px #18d18f",
-                      animation: "pulse 2s infinite",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "2px 8px",
+                      borderRadius: 12,
+                      background: "rgba(24, 209, 143, 0.12)",
+                      border: "1px solid rgba(24, 209, 143, 0.3)",
+                      color: "#18d18f",
+                      fontSize: "0.72rem",
+                      fontWeight: 600,
                     }}
-                  />
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: "#18d18f",
+                      }}
+                    />
+                    Live
+                  </span>
                 </div>
               </div>
               <div
@@ -1005,11 +1018,10 @@ export default function AttendancePage() {
         {/* SCANNER CONSOLE & BARCODE TERMINAL */}
         <section
           style={{
-            background: "linear-gradient(135deg, rgba(15, 34, 68, 0.95), rgba(10, 23, 50, 0.95))",
-            border: "1px solid var(--cyan)",
+            background: "var(--panel)",
+            border: "1px solid var(--line)",
             borderRadius: 16,
-            padding: "24px",
-            boxShadow: "0 8px 32px rgba(29, 213, 230, 0.08)",
+            padding: "22px 24px",
             position: "relative",
           }}
         >
@@ -1023,27 +1035,28 @@ export default function AttendancePage() {
               gap: 12,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: "rgba(29, 213, 230, 0.15)",
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: "rgba(61, 131, 246, 0.12)",
+                  border: "1px solid rgba(61, 131, 246, 0.25)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "var(--cyan)",
+                  color: "var(--blue)",
                 }}
               >
                 <Barcode size={22} />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text)" }}>
-                  Student ID Barcode Scanner Console
+                <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--text)" }}>
+                  Student Attendance Check-in Terminal
                 </h3>
                 <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--muted)" }}>
-                  Scan barcode with handheld USB laser gun or webcam to log Entry &amp; Exit
+                  Scan student ID barcode via USB handheld scanner, camera, or manual entry
                 </p>
               </div>
             </div>
@@ -1056,18 +1069,18 @@ export default function AttendancePage() {
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  padding: "9px 16px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(29, 213, 230, 0.3)",
-                  background: "rgba(29, 213, 230, 0.12)",
-                  color: "var(--cyan)",
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  border: "1px solid var(--line)",
+                  background: "var(--bg)",
+                  color: "var(--text)",
                   fontSize: "0.85rem",
                   fontWeight: 600,
                   cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  transition: "background 0.15s ease",
                 }}
               >
-                <Camera size={16} />
+                <Camera size={16} style={{ color: "var(--blue)" }} />
                 Camera Scanner
               </button>
             </div>
@@ -1089,44 +1102,40 @@ export default function AttendancePage() {
                   type="text"
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
-                  placeholder="Scan Student ID card barcode or enter Reg No (e.g. EG/2022/4904 or 4904)..."
+                  placeholder="Scan Student ID card barcode or enter Reg No (e.g. EG/2022/4904, 4904, or 200225401582)..."
                   disabled={isScanning}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
-                    background: "rgba(5, 12, 29, 0.9)",
-                    border: "2px solid #204072",
-                    borderRadius: 12,
-                    padding: "16px 20px 16px 50px",
-                    color: "#ffffff",
-                    fontSize: "1.05rem",
+                    background: "var(--bg)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 10,
+                    padding: "14px 20px 14px 48px",
+                    color: "var(--text)",
+                    fontSize: "0.98rem",
                     fontWeight: 600,
-                    letterSpacing: "0.5px",
                     outline: "none",
-                    boxShadow: isScanning
-                      ? "0 0 15px rgba(29, 213, 230, 0.5)"
-                      : "0 2px 10px rgba(0, 0, 0, 0.3)",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    transition: "border-color 0.15s ease",
                   }}
                   onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "var(--cyan)";
+                    e.currentTarget.style.borderColor = "var(--blue)";
                   }}
                   onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "#204072";
+                    e.currentTarget.style.borderColor = "var(--line)";
                   }}
                 />
                 <div
                   style={{
                     position: "absolute",
-                    left: 18,
+                    left: 16,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    color: "var(--cyan)",
+                    color: "var(--muted)",
                     display: "flex",
                     alignItems: "center",
                   }}
                 >
-                  <Barcode size={22} />
+                  <Barcode size={20} />
                 </div>
               </div>
 
@@ -1137,27 +1146,26 @@ export default function AttendancePage() {
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  padding: "0 28px",
-                  borderRadius: 12,
+                  padding: "0 24px",
+                  borderRadius: 10,
                   border: "none",
-                  background: "linear-gradient(135deg, #1dd5e6 0%, #18d18f 100%)",
-                  color: "#041224",
-                  fontSize: "1rem",
-                  fontWeight: 700,
+                  background: isScanning || !barcodeInput.trim() ? "var(--panel-2)" : "#2563eb",
+                  color: isScanning || !barcodeInput.trim() ? "var(--muted)" : "#ffffff",
+                  fontSize: "0.92rem",
+                  fontWeight: 600,
                   cursor: isScanning || !barcodeInput.trim() ? "not-allowed" : "pointer",
-                  opacity: isScanning || !barcodeInput.trim() ? 0.6 : 1,
-                  boxShadow: "0 4px 14px rgba(29, 213, 230, 0.3)",
+                  transition: "background 0.15s ease",
                 }}
               >
                 {isScanning ? (
                   <>
-                    <RefreshCw size={18} className="spin" />
-                    Scanning...
+                    <RefreshCw size={16} className="spin" />
+                    Recording...
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 size={18} />
-                    Process Scan
+                    <CheckCircle2 size={16} />
+                    Record Attendance
                   </>
                 )}
               </button>
@@ -1178,10 +1186,10 @@ export default function AttendancePage() {
             }}
           >
             <span>
-              💡 <strong>Instant USB Scanning:</strong> Connect any standard USB barcode gun. Card scans are auto-detected and processed on Enter.
+              <strong>USB Scanner:</strong> Connect any standard handheld USB barcode scanner. Scans will be processed automatically.
             </span>
             <span>
-              Target: <strong style={{ color: "var(--text)" }}>{selectedLabObj?.name || "Lab"}</strong>
+              Active Lab: <strong style={{ color: "var(--text)" }}>{selectedLabObj?.name || "Laboratory"}</strong>
             </span>
           </div>
 
@@ -1199,16 +1207,16 @@ export default function AttendancePage() {
                 gap: 16,
                 background:
                   feedback.type === "success_entry"
-                    ? "rgba(24, 209, 143, 0.15)"
+                    ? "rgba(24, 209, 143, 0.1)"
                     : feedback.type === "success_exit"
-                    ? "rgba(61, 131, 246, 0.15)"
-                    : "rgba(255, 77, 87, 0.15)",
+                    ? "rgba(61, 131, 246, 0.1)"
+                    : "rgba(255, 77, 87, 0.1)",
                 border:
                   feedback.type === "success_entry"
-                    ? "1px solid #18d18f"
+                    ? "1px solid rgba(24, 209, 143, 0.3)"
                     : feedback.type === "success_exit"
-                    ? "1px solid #3d83f6"
-                    : "1px solid #ff4d57",
+                    ? "1px solid rgba(61, 131, 246, 0.3)"
+                    : "1px solid rgba(255, 77, 87, 0.3)",
                 animation: "fadeIn 0.25s ease",
               }}
             >
@@ -1223,10 +1231,10 @@ export default function AttendancePage() {
                     justifyContent: "center",
                     background:
                       feedback.type === "success_entry"
-                        ? "rgba(24, 209, 143, 0.25)"
+                        ? "rgba(24, 209, 143, 0.15)"
                         : feedback.type === "success_exit"
-                        ? "rgba(61, 131, 246, 0.25)"
-                        : "rgba(255, 77, 87, 0.25)",
+                        ? "rgba(61, 131, 246, 0.15)"
+                        : "rgba(255, 77, 87, 0.15)",
                     color:
                       feedback.type === "success_entry"
                         ? "#18d18f"
@@ -1273,7 +1281,7 @@ export default function AttendancePage() {
                     display: "flex",
                     alignItems: "center",
                     gap: 12,
-                    background: "rgba(5, 12, 29, 0.6)",
+                    background: "var(--bg)",
                     padding: "8px 14px",
                     borderRadius: 10,
                     border: "1px solid var(--line)",
@@ -1284,7 +1292,7 @@ export default function AttendancePage() {
                       {feedback.student.regNo || feedback.student.email}
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-                      Group: <span style={{ color: "var(--cyan)", fontWeight: 600 }}>{feedback.student.groupCode || "EE01"}</span>
+                      Group: <span style={{ color: "var(--text)", fontWeight: 600 }}>{feedback.student.groupCode || "EE01"}</span>
                       {feedback.durationFormatted && (
                         <> • Duration: <span style={{ color: "var(--amber)", fontWeight: 600 }}>{feedback.durationFormatted}</span></>
                       )}
@@ -1323,11 +1331,11 @@ export default function AttendancePage() {
                 border: "none",
                 borderRadius: "10px 10px 0 0",
                 background: activeTab === "live" ? "var(--panel)" : "transparent",
-                color: activeTab === "live" ? "var(--cyan)" : "var(--muted)",
+                color: activeTab === "live" ? "var(--text)" : "var(--muted)",
                 fontWeight: 700,
                 fontSize: "0.92rem",
                 cursor: "pointer",
-                borderBottom: activeTab === "live" ? "2px solid var(--cyan)" : "2px solid transparent",
+                borderBottom: activeTab === "live" ? "2px solid var(--blue)" : "2px solid transparent",
                 transition: "all 0.15s ease",
               }}
             >
@@ -1346,11 +1354,11 @@ export default function AttendancePage() {
                 border: "none",
                 borderRadius: "10px 10px 0 0",
                 background: activeTab === "history" ? "var(--panel)" : "transparent",
-                color: activeTab === "history" ? "var(--cyan)" : "var(--muted)",
+                color: activeTab === "history" ? "var(--text)" : "var(--muted)",
                 fontWeight: 700,
                 fontSize: "0.92rem",
                 cursor: "pointer",
-                borderBottom: activeTab === "history" ? "2px solid var(--cyan)" : "2px solid transparent",
+                borderBottom: activeTab === "history" ? "2px solid var(--blue)" : "2px solid transparent",
                 transition: "all 0.15s ease",
               }}
             >
@@ -1369,11 +1377,11 @@ export default function AttendancePage() {
                 border: "none",
                 borderRadius: "10px 10px 0 0",
                 background: activeTab === "analytics" ? "var(--panel)" : "transparent",
-                color: activeTab === "analytics" ? "var(--cyan)" : "var(--muted)",
+                color: activeTab === "analytics" ? "var(--text)" : "var(--muted)",
                 fontWeight: 700,
                 fontSize: "0.92rem",
                 cursor: "pointer",
-                borderBottom: activeTab === "analytics" ? "2px solid var(--cyan)" : "2px solid transparent",
+                borderBottom: activeTab === "analytics" ? "2px solid var(--blue)" : "2px solid transparent",
                 transition: "all 0.15s ease",
               }}
             >
@@ -1460,7 +1468,7 @@ export default function AttendancePage() {
                     gap: 6,
                     padding: "4px 10px",
                     borderRadius: 20,
-                    background: "rgba(24, 209, 143, 0.15)",
+                    background: "rgba(24, 209, 143, 0.12)",
                     color: "#18d18f",
                     fontSize: "0.78rem",
                     fontWeight: 700,
@@ -1472,7 +1480,6 @@ export default function AttendancePage() {
                       height: 8,
                       borderRadius: "50%",
                       background: "#18d18f",
-                      boxShadow: "0 0 8px #18d18f",
                     }}
                   />
                   LIVE MONITORING
@@ -1524,7 +1531,7 @@ export default function AttendancePage() {
                 style={{
                   padding: "50px 20px",
                   textAlign: "center",
-                  background: "rgba(5, 12, 29, 0.4)",
+                  background: "var(--bg)",
                   borderRadius: 12,
                   border: "1px dashed var(--line)",
                 }}
@@ -1582,11 +1589,11 @@ export default function AttendancePage() {
                         <tr
                           key={student.recordId}
                           style={{
-                            borderBottom: "1px solid rgba(32, 64, 114, 0.5)",
+                            borderBottom: "1px solid var(--line)",
                             transition: "background 0.15s ease",
                           }}
                           onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = "rgba(18, 42, 84, 0.4)";
+                            (e.currentTarget as HTMLElement).style.background = "var(--panel-2)";
                           }}
                           onMouseLeave={(e) => {
                             (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -1600,8 +1607,9 @@ export default function AttendancePage() {
                                   width: 36,
                                   height: 36,
                                   borderRadius: "50%",
-                                  background: "linear-gradient(135deg, #18d18f, #1dd5e6)",
-                                  color: "#041224",
+                                  background: "rgba(61, 131, 246, 0.12)",
+                                  border: "1px solid rgba(61, 131, 246, 0.25)",
+                                  color: "var(--blue)",
                                   fontWeight: 700,
                                   fontSize: "0.8rem",
                                   display: "flex",
@@ -1625,11 +1633,11 @@ export default function AttendancePage() {
                               style={{
                                 fontFamily: "monospace",
                                 fontWeight: 700,
-                                color: "var(--cyan)",
-                                background: "rgba(29, 213, 230, 0.08)",
+                                color: "var(--text)",
+                                background: "var(--bg)",
                                 padding: "4px 8px",
                                 borderRadius: 6,
-                                border: "1px solid rgba(29, 213, 230, 0.2)",
+                                border: "1px solid var(--line)",
                               }}
                             >
                               {student.regNo || "—"}
@@ -1822,7 +1830,7 @@ export default function AttendancePage() {
                 style={{
                   padding: "50px 20px",
                   textAlign: "center",
-                  background: "rgba(5, 12, 29, 0.4)",
+                  background: "var(--bg)",
                   borderRadius: 12,
                   border: "1px dashed var(--line)",
                 }}
@@ -1855,14 +1863,14 @@ export default function AttendancePage() {
                       <tr
                         key={r.recordId}
                         style={{
-                          borderBottom: "1px solid rgba(32, 64, 114, 0.4)",
+                          borderBottom: "1px solid var(--line)",
                         }}
                       >
                         <td style={{ padding: "12px 14px" }}>
                           <strong style={{ color: "var(--text)" }}>{r.fullName}</strong>
                           <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>{r.email}</div>
                         </td>
-                        <td style={{ padding: "12px 14px", fontFamily: "monospace", color: "var(--cyan)" }}>
+                        <td style={{ padding: "12px 14px", fontFamily: "monospace", color: "var(--text)" }}>
                           {r.regNo || "—"}
                         </td>
                         <td style={{ padding: "12px 14px" }}>
@@ -1902,7 +1910,7 @@ export default function AttendancePage() {
                               padding: "3px 8px",
                               borderRadius: 6,
                               fontSize: "0.75rem",
-                              fontWeight: 700,
+                              fontWeight: 600,
                               background:
                                 r.status === "ACTIVE"
                                   ? "rgba(24, 209, 143, 0.15)"
@@ -2299,10 +2307,10 @@ class CameraErrorBoundary extends React.Component<
                   padding: "8px 16px",
                   borderRadius: 8,
                   border: "none",
-                  background: "var(--cyan)",
-                  color: "#041224",
+                  background: "#2563eb",
+                  color: "#ffffff",
                   fontSize: "0.85rem",
-                  fontWeight: 700,
+                  fontWeight: 600,
                   cursor: "pointer",
                 }}
               >
@@ -2644,7 +2652,7 @@ function CameraScannerInner({
       <div
         style={{
           background: "var(--panel)",
-          border: "1px solid var(--cyan)",
+          border: "1px solid var(--line)",
           borderRadius: 16,
           maxWidth: 520,
           width: "100%",
@@ -2669,11 +2677,11 @@ function CameraScannerInner({
                 width: 32,
                 height: 32,
                 borderRadius: 8,
-                background: "rgba(29, 213, 230, 0.15)",
+                background: "rgba(61, 131, 246, 0.12)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "var(--cyan)",
+                color: "var(--blue)",
               }}
             >
               <Camera size={18} />
@@ -2683,7 +2691,7 @@ function CameraScannerInner({
                 Scan Student ID Barcode
               </h3>
               <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--muted)" }}>
-                Code 128 / Code 39 / NIC barcode detector
+                Align the barcode on the student ID card inside the frame
               </p>
             </div>
           </div>
@@ -2748,22 +2756,39 @@ function CameraScannerInner({
           >
             <div id={scannerElementId} style={{ width: "100%", minHeight: 280 }} />
 
-            {/* Red Laser Alignment Line */}
+            {/* Viewfinder Centering Guide Frame */}
             {status === "scanning" && !scannedSuccessCode && (
               <div
                 style={{
                   position: "absolute",
-                  left: "10%",
-                  right: "10%",
-                  top: "50%",
-                  height: 2,
-                  background: "#ff4d57",
-                  boxShadow: "0 0 10px #ff4d57, 0 0 4px #ff4d57",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   pointerEvents: "none",
                   zIndex: 10,
-                  transform: "translateY(-50%)",
                 }}
-              />
+              >
+                <div
+                  style={{
+                    width: "75%",
+                    maxWidth: 320,
+                    height: 120,
+                    border: "1.5px solid rgba(255, 255, 255, 0.4)",
+                    borderRadius: 8,
+                    position: "relative",
+                  }}
+                >
+                  {/* Top-left corner bracket */}
+                  <div style={{ position: "absolute", top: -2, left: -2, width: 14, height: 14, borderTop: "3px solid #3d83f6", borderLeft: "3px solid #3d83f6", borderTopLeftRadius: 6 }} />
+                  {/* Top-right corner bracket */}
+                  <div style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14, borderTop: "3px solid #3d83f6", borderRight: "3px solid #3d83f6", borderTopRightRadius: 6 }} />
+                  {/* Bottom-left corner bracket */}
+                  <div style={{ position: "absolute", bottom: -2, left: -2, width: 14, height: 14, borderBottom: "3px solid #3d83f6", borderLeft: "3px solid #3d83f6", borderBottomLeftRadius: 6 }} />
+                  {/* Bottom-right corner bracket */}
+                  <div style={{ position: "absolute", bottom: -2, right: -2, width: 14, height: 14, borderBottom: "3px solid #3d83f6", borderRight: "3px solid #3d83f6", borderBottomRightRadius: 6 }} />
+                </div>
+              </div>
             )}
 
             {/* Success Overlay */}
@@ -2784,7 +2809,7 @@ function CameraScannerInner({
               >
                 <CheckCircle2 size={44} />
                 <span style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                  Barcode Detected!
+                  Barcode Detected
                 </span>
                 <span style={{ fontSize: "0.85rem", opacity: 0.9 }}>
                   {scannedSuccessCode}
@@ -2808,8 +2833,8 @@ function CameraScannerInner({
                   zIndex: 5,
                 }}
               >
-                <RefreshCw size={24} className="spin" style={{ color: "var(--cyan)" }} />
-                <span style={{ fontSize: "0.85rem" }}>Initializing high-speed camera engine...</span>
+                <RefreshCw size={22} className="spin" style={{ color: "var(--muted)" }} />
+                <span style={{ fontSize: "0.85rem" }}>Connecting to camera...</span>
               </div>
             )}
 
@@ -2840,9 +2865,9 @@ function CameraScannerInner({
                   style={{
                     padding: "6px 14px",
                     borderRadius: 6,
-                    border: "1px solid var(--cyan)",
-                    background: "rgba(29, 213, 230, 0.15)",
-                    color: "var(--cyan)",
+                    border: "none",
+                    background: "#2563eb",
+                    color: "#ffffff",
                     fontSize: "0.8rem",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -2864,7 +2889,7 @@ function CameraScannerInner({
               lineHeight: 1.4,
             }}
           >
-            Position the barcode along the <strong style={{ color: "#ff4d57" }}>red laser line</strong>. Hold steady ~15cm from camera.
+            Align student ID barcode within the frame. Hold card steady ~15cm from camera.
           </p>
 
           {/* Fallback Option 1: Upload Card Image */}
@@ -2910,7 +2935,7 @@ function CameraScannerInner({
                 </>
               ) : (
                 <>
-                  <Upload size={14} style={{ color: "var(--cyan)" }} />
+                  <Upload size={14} style={{ color: "var(--blue)" }} />
                   Upload / Snap Card Photo
                 </>
               )}
@@ -2948,7 +2973,7 @@ function CameraScannerInner({
               type="text"
               value={manualInput}
               onChange={(e) => setManualInput(e.target.value)}
-              placeholder="Or type Reg No or Barcode (e.g. 200225401582 or 5401)..."
+              placeholder="Or enter Reg No or Barcode (e.g. 200225401582 or 5401)..."
               style={{
                 flex: 1,
                 background: "var(--bg)",
@@ -2967,9 +2992,9 @@ function CameraScannerInner({
                 padding: "8px 16px",
                 borderRadius: 8,
                 border: "none",
-                background: "var(--cyan)",
-                color: "#041224",
-                fontWeight: 700,
+                background: "#2563eb",
+                color: "#ffffff",
+                fontWeight: 600,
                 fontSize: "0.82rem",
                 cursor: !manualInput.trim() ? "not-allowed" : "pointer",
                 opacity: !manualInput.trim() ? 0.6 : 1,
