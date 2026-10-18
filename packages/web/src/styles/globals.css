@@ -2742,7 +2742,7 @@ tr:hover td {
 .dual-bar-entry {
   flex: 1;
   border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, #28d0de 0%, #157f92 100%);
+  background: #18d18f;
   min-height: 4px;
   transition: height 0.6s cubic-bezier(0.2, 0.85, 0.3, 1);
 }
@@ -2750,7 +2750,7 @@ tr:hover td {
 .dual-bar-exit {
   flex: 1;
   border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, #ff545f 0%, #9f2e45 100%);
+  background: #3d83f6;
   min-height: 4px;
   transition: height 0.6s cubic-bezier(0.2, 0.85, 0.3, 1);
 }
