@@ -18,6 +18,7 @@ import messagesRoutes from "./modules/messages/messages.routes";
 import notificationsRoutes from "./modules/notifications/notifications.routes";
 import timetableRoutes from "./modules/academic/timetable.routes";
 import assessmentRoutes from "./modules/academic/assessments.routes";
+import analyticsRoutes from "./modules/analytics/analytics.routes";
 
 export const app = express();
 
@@ -53,6 +54,7 @@ app.use("/messages", messagesRoutes);
 app.use("/notifications", notificationsRoutes);
 app.use("/timetable", timetableRoutes);
 app.use("/academic", assessmentRoutes);
+app.use("/analytics", analyticsRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Global Error Handler to prevent crashes
