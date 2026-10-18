@@ -36,13 +36,6 @@ const sections: NavSection[] = [
     ],
   },
   {
-    title: "ACADEMIC",
-    links: [
-      { label: "Courses & LMS", href: "/courses", icon: "courses" },
-      { label: "Reports & Grades", href: "/analytics", icon: "reports" },
-    ],
-  },
-  {
     title: "COMMUNICATION",
     links: [
       { label: "Messages", href: "/messages", icon: "messages", badge: 3 },
