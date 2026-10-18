@@ -198,6 +198,64 @@ export default function ModulePage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
 
+  // Read tab from URL query params (e.g. ?tab=assignments)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      const queryTab = sp.get("tab");
+      if (
+        queryTab &&
+        ["practicals", "schedule", "sessions", "assignments", "quizzes"].includes(queryTab)
+      ) {
+        setTab(queryTab as any);
+      }
+    }
+  }, []);
+
+  // Listen to popstate for back/forward navigation
+  useEffect(() => {
+    const handleUrlChange = () => {
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        const queryTab = sp.get("tab");
+        if (
+          queryTab &&
+          ["practicals", "schedule", "sessions", "assignments", "quizzes"].includes(queryTab)
+        ) {
+          setTab(queryTab as any);
+        }
+      }
+    };
+    window.addEventListener("popstate", handleUrlChange);
+    return () => window.removeEventListener("popstate", handleUrlChange);
+  }, []);
+
+  // Scroll to targeted assignment hash if present
+  useEffect(() => {
+    if (tab === "assignments" && typeof window !== "undefined" && window.location.hash) {
+      const targetId = window.location.hash.slice(1);
+      setTimeout(() => {
+        const el = document.getElementById(targetId);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.style.boxShadow = "0 0 0 3px #10b981";
+          setTimeout(() => {
+            el.style.boxShadow = "";
+          }, 3000);
+        }
+      }, 350);
+    }
+  }, [tab, assignments]);
+
+  const switchTab = (nextTab: typeof tab) => {
+    setTab(nextTab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", nextTab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
+
   useEffect(() => {
     try {
       const u = JSON.parse(readStorage("elabs_user") ?? "{}");
@@ -356,34 +414,34 @@ export default function ModulePage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
-        <button style={tabStyle("practicals", "#3d83f6")} onClick={() => setTab("practicals")}>
+        <button style={tabStyle("practicals", "#3d83f6")} onClick={() => switchTab("practicals")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <FlaskConical size={14} />
             <span>List of Practicals</span>
           </span>
         </button>
-        <button style={tabStyle("schedule", "#1dd5e6")} onClick={() => setTab("schedule")}>
+        <button style={tabStyle("schedule", "#1dd5e6")} onClick={() => switchTab("schedule")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <Calendar size={14} />
             <span>Lab Schedule</span>
             {schedule.length > 0 && <span style={{ background: "#1dd5e630", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem" }}>{schedule.length}</span>}
           </span>
         </button>
-        <button style={tabStyle("sessions", "#18d18f")} onClick={() => setTab("sessions")}>
+        <button style={tabStyle("sessions", "#18d18f")} onClick={() => switchTab("sessions")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <ClipboardList size={14} />
             <span>Sessions</span>
             {sessions.length > 0 && <span style={{ background: "#18d18f30", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem" }}>{sessions.length}</span>}
           </span>
         </button>
-        <button style={tabStyle("assignments", "#f59e0b")} onClick={() => setTab("assignments")}>
+        <button style={tabStyle("assignments", "#f59e0b")} onClick={() => switchTab("assignments")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <FileText size={14} />
             <span>Assignments</span>
             {assignments.length > 0 && <span style={{ background: "#f59e0b30", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem" }}>{assignments.length}</span>}
           </span>
         </button>
-        <button style={tabStyle("quizzes", "#8b5cf6")} onClick={() => setTab("quizzes")}>
+        <button style={tabStyle("quizzes", "#8b5cf6")} onClick={() => switchTab("quizzes")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <BookOpen size={14} />
             <span>Quizzes</span>
@@ -593,12 +651,14 @@ export default function ModulePage() {
 
                 return (
                   <Link key={asgn.id} href={`/labs/module/${moduleId}/assignment/${asgn.id}`} style={{ textDecoration: "none" }}>
-                    <div style={{
-                      background: "var(--bg-card)", border: `1px solid ${isOverdue ? "#ef444440" : "var(--border-color)"}`,
-                      borderLeft: `4px solid ${typeColor}`, borderRadius: "0 12px 12px 0",
-                      padding: "16px 20px", cursor: "pointer", transition: "border-color 0.15s",
-                      display: "flex", alignItems: "center", gap: 16,
-                    }}
+                    <div
+                      id={`assignment-${asgn.id}`}
+                      style={{
+                        background: "var(--bg-card)", border: `1px solid ${isOverdue ? "#ef444440" : "var(--border-color)"}`,
+                        borderLeft: `4px solid ${typeColor}`, borderRadius: "0 12px 12px 0",
+                        padding: "16px 20px", cursor: "pointer", transition: "border-color 0.15s, box-shadow 0.3s ease",
+                        display: "flex", alignItems: "center", gap: 16,
+                      }}
                       onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = typeColor + "80"}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = isOverdue ? "#ef444440" : "var(--border-color)"}
                     >

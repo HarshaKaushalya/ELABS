@@ -60,6 +60,30 @@ async function isInstructor(userId: number): Promise<boolean> {
 // ASSIGNMENTS
 // ============================================================
 
+/** GET /academic/assignments — list all assignments accessible to current user */
+router.get("/assignments", requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.user!.id;
+  try {
+    const [rows] = await pool.query(`
+      SELECT a.id, a.module_id AS moduleId, a.title, a.type, a.description,
+             a.opened_at AS openedAt, a.due_at AS dueAt, a.max_score AS maxScore,
+             a.created_at AS createdAt,
+             m.code AS moduleCode, m.name AS moduleName,
+             sub.id AS submissionId, sub.submitted_at AS submittedAt,
+             sub.score, sub.file_name AS fileName, sub.file_url AS fileUrl,
+             sub.graded_at AS gradedAt, sub.feedback
+      FROM assignments a
+      JOIN modules m ON m.id = a.module_id
+      LEFT JOIN assignment_submissions sub ON sub.assignment_id = a.id AND sub.student_id = :userId
+      ORDER BY a.due_at ASC, a.created_at DESC
+    `, { userId });
+    res.json({ assignments: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 /** GET /academic/modules/:id/assignments */
 router.get("/modules/:id/assignments", requireAuth, async (req: AuthedRequest, res) => {
   const moduleId = Number(req.params.id);

@@ -32,14 +32,42 @@ type TimetableSlot = {
   status: "UPCOMING" | "COMPLETED" | "CANCELLED";
 };
 
+type AssignmentItem = {
+  id: number;
+  moduleId: number;
+  title: string;
+  type: "REPORT" | "PRE_LAB" | "OTHER";
+  openedAt: string | null;
+  dueAt: string | null;
+  maxScore: number;
+  moduleCode: string;
+  moduleName: string;
+  submissionId?: number | null;
+  submittedAt?: string | null;
+};
+
+type QuizItem = {
+  id: number;
+  moduleId: number;
+  title: string;
+  openedAt: string | null;
+  closedAt: string | null;
+  moduleCode: string;
+  moduleName: string;
+};
+
 type TimelineEvent = {
   id: string;
   date: Date;
   title: string;
+  shortTitle: string;
   subtitle: string;
-  type: "PRE_LAB" | "LAB_SESSION";
+  type: "PRE_LAB" | "LAB_SESSION" | "ASSIGNMENT" | "REPORT" | "QUIZ";
   color: string;
   moduleId: number;
+  linkUrl: string;
+  time?: string;
+  badge?: string;
 };
 
 type DashStats = {
@@ -179,26 +207,38 @@ function SectionHeader({
 /* ─── Page ──────────────────────────────────────────────────────── */
 export default function DashboardPage() {
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
   const [stats, setStats] = useState<DashStats | null>(null);
   const [overdue, setOverdue] = useState<OverdueTx[]>([]);
   const [myBorrows, setMyBorrows] = useState<MyBorrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [timeRange, setTimeRange] = useState<7 | 30>(7);
+  const [timeRange, setTimeRange] = useState<7 | 30>(30);
 
   useEffect(() => {
     async function loadAll() {
       try {
-        const [ttRes, summRes, overdueRes, myBRes] = await Promise.all([
+        const [ttRes, summRes, overdueRes, myBRes, asgnRes] = await Promise.all([
           apiFetch("/timetable"),
           apiFetch("/dashboard/summary"),
           apiFetch("/dashboard/overdue"),
           apiFetch("/dashboard/my-borrows"),
+          apiFetch("/academic/assignments").catch(() => ({ ok: false } as any)),
         ]);
+
+        let loadedAssignments: AssignmentItem[] = [];
+        let loadedQuizzes: QuizItem[] = [];
 
         if (ttRes.ok) {
           const d = await ttRes.json();
           setSlots(d.slots ?? []);
+          if (Array.isArray(d.assignments)) {
+            loadedAssignments = d.assignments;
+          }
+          if (Array.isArray(d.quizzes)) {
+            loadedQuizzes = d.quizzes;
+          }
         }
         if (summRes.ok) {
           const d = await summRes.json();
@@ -212,6 +252,25 @@ export default function DashboardPage() {
           const d = await myBRes.json();
           setMyBorrows(d.borrows ?? []);
         }
+
+        // Merge from /academic/assignments if available
+        if (asgnRes && "ok" in asgnRes && asgnRes.ok) {
+          try {
+            const ad = await (asgnRes as any).json();
+            if (Array.isArray(ad.assignments)) {
+              const existingIds = new Set(loadedAssignments.map((a) => a.id));
+              for (const a of ad.assignments) {
+                if (!existingIds.has(a.id)) {
+                  loadedAssignments.push(a);
+                  existingIds.add(a.id);
+                }
+              }
+            }
+          } catch {}
+        }
+
+        setAssignments(loadedAssignments);
+        setQuizzes(loadedQuizzes);
       } catch (err) {
         console.error("Dashboard load error:", err);
       } finally {
@@ -225,6 +284,7 @@ export default function DashboardPage() {
   const generateTimelineEvents = (): TimelineEvent[] => {
     const events: TimelineEvent[] = [];
 
+    // 1. Timetable sessions
     slots.forEach((slot) => {
       const sessionDate = new Date(slot.date);
 
@@ -232,24 +292,84 @@ export default function DashboardPage() {
         id: `lab-${slot.id}`,
         date: sessionDate,
         title: `Laboratory Session — ${slot.lab}`,
+        shortTitle: `${slot.lab} (${slot.moduleCode})`,
         subtitle: `${slot.moduleCode} ${slot.moduleName} • ${slot.time}`,
         type: "LAB_SESSION",
         color: "#f59e0b",
         moduleId: slot.moduleId,
-      });
-
-      const preLabDate = new Date(sessionDate);
-      preLabDate.setDate(preLabDate.getDate() - 2);
-      events.push({
-        id: `prelab-${slot.id}`,
-        date: preLabDate,
-        title: `PRE-LAB is due`,
-        subtitle: `Assignment due • ${slot.moduleCode} ${slot.moduleName}`,
-        type: "PRE_LAB",
-        color: "#10b981",
-        moduleId: slot.moduleId,
+        linkUrl: `/labs/module/${slot.moduleId}?tab=schedule`,
+        time: slot.time,
+        badge: "Lab Session",
       });
     });
+
+    // 2. Real assignments with due dates
+    assignments.forEach((asgn) => {
+      if (!asgn.dueAt) return;
+      const dueDate = new Date(asgn.dueAt);
+      const isPreLab = asgn.type === "PRE_LAB";
+      const isReport = asgn.type === "REPORT";
+      const color = isPreLab ? "#10b981" : isReport ? "#f59e0b" : "#3d83f6";
+      const typeLabel = isPreLab ? "Pre-Lab" : isReport ? "Lab Report" : "Assignment";
+      const timeStr = dueDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+      events.push({
+        id: `asgn-${asgn.id}`,
+        date: dueDate,
+        title: `${typeLabel}: ${asgn.title}`,
+        shortTitle: `${typeLabel}: ${asgn.title} (${asgn.moduleCode || "EE5304"})`,
+        subtitle: `${typeLabel} deadline • ${asgn.moduleCode} ${asgn.moduleName} · Max score: ${asgn.maxScore}`,
+        type: isPreLab ? "PRE_LAB" : isReport ? "REPORT" : "ASSIGNMENT",
+        color,
+        moduleId: asgn.moduleId,
+        linkUrl: `/labs/module/${asgn.moduleId}?tab=assignments#assignment-${asgn.id}`,
+        time: timeStr !== "00:00" ? timeStr : "23:59",
+        badge: `${typeLabel} Due`,
+      });
+    });
+
+    // 3. Real quizzes with closing deadlines
+    quizzes.forEach((quiz) => {
+      if (!quiz.closedAt) return;
+      const closeDate = new Date(quiz.closedAt);
+      const timeStr = closeDate.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+      events.push({
+        id: `quiz-${quiz.id}`,
+        date: closeDate,
+        title: `Quiz: ${quiz.title}`,
+        shortTitle: `Quiz: ${quiz.title} (${quiz.moduleCode})`,
+        subtitle: `Quiz closing deadline • ${quiz.moduleCode} ${quiz.moduleName}`,
+        type: "QUIZ",
+        color: "#8b5cf6",
+        moduleId: quiz.moduleId,
+        linkUrl: `/labs/module/${quiz.moduleId}?tab=quizzes`,
+        time: timeStr !== "00:00" ? timeStr : "23:59",
+        badge: "Quiz Closes",
+      });
+    });
+
+    // 4. Fallback: If no real assignments exist in the database, keep synthetic pre-lab 2 days before slots
+    if (assignments.length === 0) {
+      slots.forEach((slot) => {
+        const sessionDate = new Date(slot.date);
+        const preLabDate = new Date(sessionDate);
+        preLabDate.setDate(preLabDate.getDate() - 2);
+        events.push({
+          id: `prelab-${slot.id}`,
+          date: preLabDate,
+          title: `PRE-LAB is due`,
+          shortTitle: `Pre-Lab (${slot.moduleCode})`,
+          subtitle: `Assignment due • ${slot.moduleCode} ${slot.moduleName}`,
+          type: "PRE_LAB",
+          color: "#10b981",
+          moduleId: slot.moduleId,
+          linkUrl: `/labs/module/${slot.moduleId}?tab=assignments`,
+          time: "23:59",
+          badge: "Pre-Lab Due",
+        });
+      });
+    }
 
     return events.sort((a, b) => a.date.getTime() - b.date.getTime());
   };
@@ -693,7 +813,7 @@ export default function DashboardPage() {
                           }}
                         >
                           <div style={{ color: "var(--muted)", fontSize: "0.85rem", minWidth: 45 }}>
-                            {event.type === "PRE_LAB" ? "23:59" : ""}
+                            {event.time || "23:59"}
                           </div>
                           <div
                             style={{
@@ -724,8 +844,8 @@ export default function DashboardPage() {
                               {event.subtitle}
                             </div>
                           </div>
-                          {event.moduleId ? (
-                            <Link href={`/labs/module/${event.moduleId}`}>
+                          {event.linkUrl || event.moduleId ? (
+                            <Link href={event.linkUrl || `/labs/module/${event.moduleId}?tab=assignments`}>
                               <button
                                 style={{
                                   padding: "6px 14px",
@@ -890,7 +1010,7 @@ export default function DashboardPage() {
                             {dayEvts.map((evt) => (
                               <Link
                                 key={evt.id}
-                                href={evt.moduleId ? `/labs/module/${evt.moduleId}` : "#"}
+                                href={evt.linkUrl || (evt.moduleId ? `/labs/module/${evt.moduleId}?tab=assignments` : "#")}
                                 style={{ textDecoration: "none" }}
                               >
                                 <div
@@ -899,17 +1019,26 @@ export default function DashboardPage() {
                                     color: evt.color,
                                     fontWeight: 600,
                                     background: evt.color + "14",
+                                    border: `1px solid ${evt.color}35`,
                                     borderRadius: 4,
-                                    padding: "2px 5px",
+                                    padding: "2px 6px",
                                     lineHeight: 1.4,
                                     wordBreak: "break-word",
                                     cursor: "pointer",
+                                    transition: "background 0.15s ease",
                                   }}
+                                  title={`${evt.title} — ${evt.subtitle}`}
                                 >
                                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                                     {evt.type === "PRE_LAB" ? <ClipboardList size={10} /> : <FlaskConical size={10} />}
-                                     <span>{evt.type === "PRE_LAB" ? "Pre-lab" : evt.title.replace("Laboratory Session — ", "") || "Lab"}</span>
-                                   </span>
+                                    {evt.type === "PRE_LAB" ? (
+                                      <ClipboardList size={10} />
+                                    ) : evt.type === "LAB_SESSION" ? (
+                                      <FlaskConical size={10} />
+                                    ) : (
+                                      <FileText size={10} />
+                                    )}
+                                    <span>{evt.shortTitle || evt.title}</span>
+                                  </span>
                                 </div>
                               </Link>
                             ))}
@@ -933,7 +1062,9 @@ export default function DashboardPage() {
             >
               {[
                 { color: "#f59e0b", label: "Lab Session" },
-                { color: "#10b981", label: "Pre-lab Due" },
+                { color: "#10b981", label: "Pre-Lab Due" },
+                { color: "#3d83f6", label: "Assignment / Report Due" },
+                { color: "#8b5cf6", label: "Quiz Closes" },
               ].map((l) => (
                 <div
                   key={l.label}
