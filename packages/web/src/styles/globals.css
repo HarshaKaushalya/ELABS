@@ -70,12 +70,13 @@
   color: #1a2540;
 }
 [data-theme="light"] .topbar h1 { 
-  background: linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #0f172a;
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: initial;
   text-shadow: none;
 }
-[data-theme="light"] .topbar p  { color: #5a6a8a; }
+[data-theme="light"] .topbar p  { color: #64748b; }
 
 /* Light theme: dark panel/card backgrounds → white */
 [data-theme="light"] .panel,
@@ -409,14 +410,11 @@ a {
 
 .topbar h1 {
   margin: 0;
-  font-size: 2.1rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0px 4px 20px rgba(79, 172, 254, 0.4);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
+  text-transform: none;
 }
 
 .topbar p {

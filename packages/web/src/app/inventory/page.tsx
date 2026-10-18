@@ -24,21 +24,21 @@ type BorrowSuccess = { transactionId: number; borrowedItems: { elabsTag: string;
 type Student = { id: number; fullName: string; indexNo: string; email: string };
 
 function statusBadge(status: string) {
-  const map: Record<string, { label: string; color: string; icon: React.ComponentType<any> }> = {
-    AVAILABLE:     { label: "Available",      color: "#18d18f", icon: CheckCircle2 },
-    BORROWED:      { label: "Borrowed",       color: "#f3ae2a", icon: ArrowLeftRight },
-    MAINTENANCE:   { label: "Maintenance",    color: "#3d83f6", icon: Wrench },
-    OUT_OF_SERVICE:{ label: "Out of Service", color: "#ff4d57", icon: XCircle },
-    RETURNED:      { label: "Returned",       color: "#18d18f", icon: CheckCircle2 },
-    OVERDUE:       { label: "Overdue",        color: "#ff4d57", icon: AlertTriangle },
+  const map: Record<string, { label: string; color: string; bg: string; icon: React.ComponentType<any> }> = {
+    AVAILABLE:     { label: "Available",      color: "#059669", bg: "rgba(5, 150, 105, 0.1)", icon: CheckCircle2 },
+    BORROWED:      { label: "Borrowed",       color: "#d97706", bg: "rgba(217, 119, 6, 0.1)", icon: ArrowLeftRight },
+    MAINTENANCE:   { label: "Maintenance",    color: "#2563eb", bg: "rgba(37, 99, 235, 0.1)", icon: Wrench },
+    OUT_OF_SERVICE:{ label: "Out of Service", color: "#dc2626", bg: "rgba(220, 38, 38, 0.1)", icon: XCircle },
+    RETURNED:      { label: "Returned",       color: "#059669", bg: "rgba(5, 150, 105, 0.1)", icon: CheckCircle2 },
+    OVERDUE:       { label: "Overdue",        color: "#dc2626", bg: "rgba(220, 38, 38, 0.1)", icon: AlertTriangle },
   };
   const s = map[status];
   if (!s) {
-    return <span style={{ color: "var(--text-muted)", fontWeight: 600, fontSize: "0.82rem", background: "rgba(255,255,255,0.05)", padding: "2px 10px", borderRadius: 20 }}>{status}</span>;
+    return <span style={{ color: "var(--text-muted)", fontWeight: 500, fontSize: "0.8rem", background: "rgba(148, 163, 184, 0.1)", padding: "3px 8px", borderRadius: 6 }}>{status}</span>;
   }
   const Icon = s.icon;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: s.color, fontWeight: 600, fontSize: "0.82rem", background: `${s.color}15`, padding: "2px 10px", borderRadius: 20 }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: s.color, fontWeight: 600, fontSize: "0.78rem", background: s.bg, padding: "3px 8px", borderRadius: 6, border: `1px solid ${s.color}25` }}>
       <Icon size={12} />
       <span>{s.label}</span>
     </span>
@@ -59,37 +59,33 @@ function BorrowSuccessCard({ result, onDone }: { result: BorrowSuccess; onDone: 
   useEffect(() => { const t = setTimeout(() => setVisible(true), 50); return () => clearTimeout(t); }, []);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,8,20,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(8px)", opacity: visible ? 1 : 0, transition: "opacity 0.25s ease" }}>
-      <div style={{ background: "linear-gradient(135deg,var(--bg-card),var(--bg-app))", border: "1px solid #18d18f40", borderRadius: 20, padding: 36, minWidth: 400, maxWidth: 520, transform: visible ? "scale(1)" : "scale(0.88)", transition: "transform 0.25s ease", boxShadow: "0 24px 80px rgba(29,209,143,0.18)" }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24 }}>
-          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#18d18f20", border: "2px solid #18d18f", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14, color: "#18d18f" }}>
-            <CheckCircle2 size={36} />
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(6px)", opacity: visible ? 1 : 0, transition: "opacity 0.2s ease" }}>
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 32, minWidth: 380, maxWidth: 500, transform: visible ? "scale(1)" : "scale(0.95)", transition: "transform 0.2s ease", boxShadow: "0 20px 40px rgba(0,0,0,0.3)" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(5,150,105,0.12)", border: "1px solid rgba(5,150,105,0.3)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12, color: "#059669" }}>
+            <CheckCircle2 size={28} />
           </div>
-          <h2 style={{ margin: 0, color: "#18d18f", fontWeight: 700, fontSize: "1.2rem" }}>Borrow Issued!</h2>
-          <p style={{ margin: "6px 0 0", color: "var(--text-muted)", fontSize: "0.88rem" }}>Transaction <strong style={{ color: "#1dd5e6", fontFamily: "monospace" }}>#{result.transactionId}</strong> created</p>
+          <h2 style={{ margin: 0, color: "var(--text-main)", fontWeight: 700, fontSize: "1.2rem" }}>Borrow Request Issued</h2>
+          <p style={{ margin: "6px 0 0", color: "var(--text-muted)", fontSize: "0.85rem" }}>Transaction Reference <strong style={{ color: "#2563eb", fontFamily: "monospace" }}>#{result.transactionId}</strong></p>
         </div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 700, letterSpacing: 1, marginBottom: 10 }}>BORROWED ITEMS</div>
+          <div style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.04em", marginBottom: 8, textTransform: "uppercase" }}>Allocated Items</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {result.borrowedItems.map((item, idx) => (
-              <div key={item.elabsTag} style={{ display: "flex", alignItems: "center", gap: 12, background: "#18d18f08", border: "1px solid #18d18f30", borderRadius: 10, padding: "10px 14px", animation: `slideIn 0.3s ease ${idx * 0.08}s both` }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#18d18f20", border: "2px solid #18d18f", display: "flex", alignItems: "center", justifyContent: "center", color: "#18d18f", flexShrink: 0 }}>
-                  <Check size={16} />
-                </div>
+            {result.borrowedItems.map((item) => (
+              <div key={item.elabsTag} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "8px 12px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: "#1dd5e6", fontFamily: "monospace", fontWeight: 700, fontSize: "0.88rem" }}>{item.elabsTag}</div>
+                  <div style={{ color: "#2563eb", fontFamily: "monospace", fontWeight: 600, fontSize: "0.85rem" }}>{item.elabsTag}</div>
                   <div style={{ color: "var(--text-main)", fontSize: "0.82rem", marginTop: 2 }}>{item.name}</div>
                 </div>
-                <span style={{ background: "#f3ae2a15", border: "1px solid #f3ae2a40", borderRadius: 20, color: "#f3ae2a", fontSize: "0.72rem", fontWeight: 600, padding: "2px 10px", flexShrink: 0 }}>BORROWED</span>
+                <span style={{ background: "rgba(217,119,6,0.12)", border: "1px solid rgba(217,119,6,0.25)", borderRadius: 6, color: "#d97706", fontSize: "0.75rem", fontWeight: 600, padding: "2px 8px" }}>BORROWED</span>
               </div>
             ))}
           </div>
         </div>
-        <button onClick={onDone} style={{ width: "100%", padding: "12px 0", background: "linear-gradient(135deg,#18d18f,#1dd5e6)", border: "none", borderRadius: 10, color: "var(--bg-app)", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer" }}>
+        <button onClick={onDone} style={{ width: "100%", padding: "10px 0", background: "#2563eb", border: "none", borderRadius: 8, color: "#ffffff", fontWeight: 600, fontSize: "0.9rem", cursor: "pointer" }}>
           View in Active Borrows →
         </button>
       </div>
-      <style>{`@keyframes slideIn{from{transform:translateX(-16px);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
     </div>
   );
 }
@@ -260,12 +256,12 @@ function BorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: BorrowSuc
           </div>
           {/* Student found card */}
           {student && (
-            <div style={{ marginTop: 8, background: "#18d18f10", border: "1px solid #18d18f40", borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#18d18f,#1dd5e6)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--bg-app)", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
+            <div style={{ marginTop: 8, background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.3)", borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", color: "#ffffff", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
                 {student.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <div style={{ color: "#18d18f", fontWeight: 700, fontSize: "0.88rem", display: "flex", alignItems: "center", gap: 4 }}>
+                <div style={{ color: "#059669", fontWeight: 700, fontSize: "0.88rem", display: "flex", alignItems: "center", gap: 4 }}>
                   <CheckCircle2 size={14} />
                   <span>{student.fullName}</span>
                 </div>
@@ -305,18 +301,18 @@ function BorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: BorrowSuc
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600 }}>
             Select Items to Borrow
-            <span style={{ marginLeft: 8, color: "#1dd5e6", background: "#1dd5e615", borderRadius: 20, padding: "1px 8px", fontSize: "0.72rem" }}>
+            <span style={{ marginLeft: 8, color: "#2563eb", background: "rgba(37,99,235,0.1)", borderRadius: 6, padding: "2px 8px", fontSize: "0.75rem", fontWeight: 600 }}>
               {availableItems.length} available
             </span>
             {selectedTags.size > 0 && (
-              <span style={{ marginLeft: 6, color: "#f3ae2a", background: "#f3ae2a15", borderRadius: 20, padding: "1px 8px", fontSize: "0.72rem" }}>
+              <span style={{ marginLeft: 6, color: "#d97706", background: "rgba(217,119,6,0.1)", borderRadius: 6, padding: "2px 8px", fontSize: "0.75rem", fontWeight: 600 }}>
                 {selectedTags.size} selected
               </span>
             )}
           </label>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={selectAll} style={{ background: "var(--border-color)", border: "1px solid #2a4a7a", borderRadius: 6, color: "var(--text-muted)", padding: "4px 12px", cursor: "pointer", fontSize: "0.78rem" }}>Select All</button>
-            <button type="button" onClick={clearAll} style={{ background: "var(--border-color)", border: "1px solid #2a4a7a", borderRadius: 6, color: "var(--text-muted)", padding: "4px 12px", cursor: "pointer", fontSize: "0.78rem" }}>Clear</button>
+            <button type="button" onClick={selectAll} style={{ background: "var(--border-color)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-main)", padding: "4px 12px", cursor: "pointer", fontSize: "0.78rem" }}>Select All</button>
+            <button type="button" onClick={clearAll} style={{ background: "var(--border-color)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-main)", padding: "4px 12px", cursor: "pointer", fontSize: "0.78rem" }}>Clear</button>
           </div>
         </div>
 
@@ -355,33 +351,33 @@ function BorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: BorrowSuc
                       style={{
                         display: "flex", alignItems: "center", gap: 12,
                         padding: "10px 14px", cursor: "pointer",
-                        background: checked ? "#18d18f0a" : "transparent",
-                        borderBottom: "1px solid var(--bg-card)",
+                        background: checked ? "rgba(37,99,235,0.06)" : "transparent",
+                        borderBottom: "1px solid var(--border-color)",
                         transition: "background 0.15s",
                       }}
                       onMouseEnter={(e) => { if (!checked) (e.currentTarget as HTMLElement).style.background = "var(--border-color)30"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = checked ? "#18d18f0a" : "transparent"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = checked ? "rgba(37,99,235,0.06)" : "transparent"; }}
                     >
                       {/* Custom checkbox */}
                       <div style={{
-                        width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                        background: checked ? "#18d18f" : "transparent",
-                        border: `2px solid ${checked ? "#18d18f" : "#2a4a7a"}`,
+                        width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                        background: checked ? "#2563eb" : "transparent",
+                        border: `1.5px solid ${checked ? "#2563eb" : "var(--border-color)"}`,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        transition: "all 0.15s", color: "var(--bg-app)", fontWeight: 700, fontSize: "0.8rem",
+                        transition: "all 0.15s", color: "#ffffff", fontWeight: 700, fontSize: "0.8rem",
                       }}>
-                        {checked && <Check size={14} />}
+                        {checked && <Check size={13} />}
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ color: "#1dd5e6", fontFamily: "monospace", fontWeight: 700, fontSize: "0.85rem" }}>{item.elabsTag}</span>
-                          <span style={{ color: checked ? "var(--text-main)" : "#b0c8e8", fontSize: "0.88rem" }}>{item.name}</span>
+                          <span style={{ color: "#2563eb", fontFamily: "monospace", fontWeight: 600, fontSize: "0.85rem" }}>{item.elabsTag}</span>
+                          <span style={{ color: checked ? "var(--text-main)" : "var(--text-main)", fontSize: "0.88rem" }}>{item.name}</span>
                         </div>
                         <div style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: 1 }}>{item.model}</div>
                       </div>
 
-                      <span style={{ color: "#18d18f", fontSize: "0.72rem", background: "#18d18f15", borderRadius: 20, padding: "2px 8px", flexShrink: 0 }}>Available</span>
+                      <span style={{ color: "#059669", fontSize: "0.72rem", background: "rgba(5,150,105,0.1)", borderRadius: 6, padding: "2px 8px", flexShrink: 0, fontWeight: 500 }}>Available</span>
                     </div>
                   );
                 })}
@@ -394,11 +390,11 @@ function BorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: BorrowSuc
       {/* Submit */}
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <button type="submit" disabled={submitting || selectedTags.size === 0 || !student} style={{
-          background: (submitting || selectedTags.size === 0 || !student) ? "var(--border-color)" : "linear-gradient(135deg,#1dd5e6,#3d83f6)",
-          border: "none", borderRadius: 10,
+          background: (submitting || selectedTags.size === 0 || !student) ? "var(--border-color)" : "#2563eb",
+          border: "none", borderRadius: 8,
           color: (submitting || selectedTags.size === 0 || !student) ? "var(--text-muted)" : "#fff",
-          fontWeight: 700, padding: "12px 28px", cursor: (submitting || selectedTags.size === 0 || !student) ? "not-allowed" : "pointer",
-          fontSize: "0.95rem", display: "flex", alignItems: "center", gap: 8, transition: "all 0.15s",
+          fontWeight: 600, padding: "10px 24px", cursor: (submitting || selectedTags.size === 0 || !student) ? "not-allowed" : "pointer",
+          fontSize: "0.9rem", display: "flex", alignItems: "center", gap: 8, transition: "all 0.15s",
         }}>
           {submitting ? (
             <><span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid var(--text-muted)", borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />Processing…</>
@@ -406,8 +402,8 @@ function BorrowForm({ labs, onSuccess }: { labs: Lab[]; onSuccess: (r: BorrowSuc
         </button>
         {selectedTags.size > 0 && student && (
           <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>
-            Borrowing <strong style={{ color: "#1dd5e6" }}>{selectedTags.size}</strong> item(s) for{" "}
-            <strong style={{ color: "#18d18f" }}>{student.fullName}</strong>
+            Borrowing <strong style={{ color: "#2563eb" }}>{selectedTags.size}</strong> item(s) for{" "}
+            <strong style={{ color: "#059669" }}>{student.fullName}</strong>
           </div>
         )}
       </div>
@@ -471,31 +467,31 @@ function StudentBorrowForm({ labs, userId, onSuccess }: { labs: Lab[]; userId: n
       </div>
       <div style={{ marginBottom: 20 }}>
         <label style={{ display: "block", color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: 8, fontWeight: 600 }}>
-          SELECT ITEMS <span style={{ color: "#3d83f6" }}>({availableItems.length} available)</span>
-          {selectedTags.size > 0 && <span style={{ color: "#18d18f", marginLeft: 8 }}>· {selectedTags.size} selected</span>}
+          SELECT ITEMS <span style={{ color: "#2563eb" }}>({availableItems.length} available)</span>
+          {selectedTags.size > 0 && <span style={{ color: "#059669", marginLeft: 8 }}>· {selectedTags.size} selected</span>}
         </label>
         {loadingItems ? <div style={{ color: "var(--text-muted)", padding: 20, textAlign: "center" }}>Loading items…</div> : availableItems.length === 0 ? <div style={{ color: "var(--text-muted)", padding: 20, textAlign: "center", background: "var(--bg-app)", borderRadius: 8, border: "1px dashed var(--border-color)" }}>No available items in this lab.</div> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {availableItems.map(item => {
               const checked = selectedTags.has(item.elabsTag);
               return (
-                <div key={item.elabsTag} onClick={() => setSelectedTags(prev => { const n = new Set(prev); checked ? n.delete(item.elabsTag) : n.add(item.elabsTag); return n; })} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: checked ? "#3d83f610" : "var(--bg-app)", border: `1px solid ${checked ? "#3d83f660" : "var(--border-color)"}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s" }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 4, background: checked ? "#3d83f6" : "transparent", border: `2px solid ${checked ? "#3d83f6" : "#2a4060"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "white" }}>
-                    {checked && <Check size={14} />}
+                <div key={item.elabsTag} onClick={() => setSelectedTags(prev => { const n = new Set(prev); checked ? n.delete(item.elabsTag) : n.add(item.elabsTag); return n; })} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: checked ? "rgba(37,99,235,0.06)" : "var(--bg-app)", border: `1px solid ${checked ? "#2563eb" : "var(--border-color)"}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s" }}>
+                  <div style={{ width: 18, height: 18, borderRadius: 4, background: checked ? "#2563eb" : "transparent", border: `1.5px solid ${checked ? "#2563eb" : "var(--border-color)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "white" }}>
+                    {checked && <Check size={13} />}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <span style={{ color: "#1dd5e6", fontFamily: "monospace", fontWeight: 600, fontSize: "0.85rem" }}>{item.elabsTag}</span>
+                    <span style={{ color: "#2563eb", fontFamily: "monospace", fontWeight: 600, fontSize: "0.85rem" }}>{item.elabsTag}</span>
                     <span style={{ color: checked ? "var(--text-main)" : "var(--text-muted)", marginLeft: 10, fontSize: "0.85rem" }}>{item.name}</span>
                     <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.78rem" }}>{item.model}</span>
                   </div>
-                  <span style={{ background: "#18d18f15", border: "1px solid #18d18f30", borderRadius: 20, color: "#18d18f", fontSize: "0.72rem", fontWeight: 600, padding: "2px 10px" }}>Available</span>
+                  <span style={{ background: "rgba(5,150,105,0.1)", border: "1px solid rgba(5,150,105,0.25)", borderRadius: 6, color: "#059669", fontSize: "0.72rem", fontWeight: 600, padding: "2px 8px" }}>Available</span>
                 </div>
               );
             })}
           </div>
         )}
       </div>
-      <button type="submit" disabled={submitting || selectedTags.size === 0} style={{ width: "100%", padding: "12px 0", background: selectedTags.size === 0 ? "var(--border-color)" : "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 10, color: selectedTags.size === 0 ? "var(--text-muted)" : "#fff", fontWeight: 700, fontSize: "0.95rem", cursor: selectedTags.size === 0 ? "not-allowed" : "pointer" }}>
+      <button type="submit" disabled={submitting || selectedTags.size === 0} style={{ width: "100%", padding: "11px 0", background: selectedTags.size === 0 ? "var(--border-color)" : "#2563eb", border: "none", borderRadius: 8, color: selectedTags.size === 0 ? "var(--text-muted)" : "#fff", fontWeight: 600, fontSize: "0.9rem", cursor: selectedTags.size === 0 ? "not-allowed" : "pointer" }}>
         {submitting ? "Processing…" : `Borrow (${selectedTags.size} item${selectedTags.size !== 1 ? "s" : ""})`}
       </button>
     </form>
@@ -512,6 +508,9 @@ export default function InventoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [myBorrows, setMyBorrows] = useState<Borrow[]>([]);
   const [search, setSearch] = useState("");
+  const [selectedLab, setSelectedLab] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isScanning, setIsScanning] = useState(false);
   const [scannedItem, setScannedItem] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -531,11 +530,22 @@ export default function InventoryPage() {
     setActiveTab(isStudent ? "borrow" : "items");
   }, [isStudent, fetchItems, fetchLabs, fetchTransactions, fetchMyBorrows]);
 
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((it) => { if (it.category) set.add(it.category); });
+    return Array.from(set).sort();
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return items;
-    return items.filter((it) => [it.elabsTag, it.name, it.category, it.labName, it.status].join(" ").toLowerCase().includes(q));
-  }, [items, search]);
+    return items.filter((it) => {
+      if (selectedLab !== "all" && it.labName !== selectedLab && String(it.labId) !== selectedLab) return false;
+      if (selectedCategory !== "all" && it.category !== selectedCategory) return false;
+      if (selectedStatus !== "all" && it.status !== selectedStatus) return false;
+      if (!q) return true;
+      return [it.elabsTag, it.name, it.category, it.labName, it.model, it.serialNo, it.status].join(" ").toLowerCase().includes(q);
+    });
+  }, [items, search, selectedLab, selectedCategory, selectedStatus]);
 
   const handleBorrowSuccess = (result: BorrowSuccess) => {
     setBorrowSuccess(result);
@@ -596,37 +606,162 @@ export default function InventoryPage() {
 
       {/* ── ITEMS TAB ── */}
       {activeTab === "items" && (
-        <section className="panel">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div className="topbar-search" style={{ minWidth: 280 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6e96c8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" placeholder="Search by tag, name, category…" value={search} onChange={(e) => setSearch(e.target.value)} className="topbar-search-input" />
+        <section className="panel" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* Top Summary Stat Tiles */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+            <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "14px 18px" }}>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Total Inventory</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-main)", marginTop: 4 }}>{items.length}</div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="primary-btn" onClick={() => setIsScanning(true)} style={{ display: "flex", alignItems: "center", gap: 6 }}><QrCode size={14} /> Scan Barcode</button>
-              <button className="secondary-btn" onClick={fetchItems}>↻ Refresh</button>
+            <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "14px 18px" }}>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Available in Labs</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#059669", marginTop: 4 }}>
+                {items.filter(i => i.status === "AVAILABLE").length}
+              </div>
+            </div>
+            <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "14px 18px" }}>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Currently Borrowed</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#d97706", marginTop: 4 }}>
+                {items.filter(i => i.status === "BORROWED").length}
+              </div>
+            </div>
+            <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "14px 18px" }}>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Under Service</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#2563eb", marginTop: 4 }}>
+                {items.filter(i => i.status === "MAINTENANCE" || i.status === "OUT_OF_SERVICE").length}
+              </div>
             </div>
           </div>
+
+          {/* Filter Bar */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", flex: 1 }}>
+              <div className="topbar-search" style={{ minWidth: 240, maxWidth: 300, margin: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6e96c8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input
+                  type="text"
+                  placeholder="Search tag, name, model, serial..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="topbar-search-input"
+                />
+              </div>
+
+              {/* Lab Filter */}
+              <select
+                value={selectedLab}
+                onChange={(e) => setSelectedLab(e.target.value)}
+                style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", color: "var(--text-main)", borderRadius: 8, padding: "8px 12px", fontSize: "0.85rem", minWidth: 150 }}
+              >
+                <option value="all">All Laboratories</option>
+                {labs.map((l) => (
+                  <option key={l.id} value={l.name}>{l.name}</option>
+                ))}
+              </select>
+
+              {/* Category Filter */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", color: "var(--text-main)", borderRadius: 8, padding: "8px 12px", fontSize: "0.85rem", minWidth: 140 }}
+              >
+                <option value="all">All Categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", color: "var(--text-main)", borderRadius: 8, padding: "8px 12px", fontSize: "0.85rem", minWidth: 130 }}
+              >
+                <option value="all">All Statuses</option>
+                <option value="AVAILABLE">Available</option>
+                <option value="BORROWED">Borrowed</option>
+                <option value="MAINTENANCE">Maintenance</option>
+                <option value="OUT_OF_SERVICE">Out of Service</option>
+              </select>
+
+              {(search || selectedLab !== "all" || selectedCategory !== "all" || selectedStatus !== "all") && (
+                <button
+                  onClick={() => { setSearch(""); setSelectedLab("all"); setSelectedCategory("all"); setSelectedStatus("all"); }}
+                  style={{ background: "transparent", border: "1px solid var(--border-color)", color: "var(--text-muted)", borderRadius: 8, padding: "8px 12px", fontSize: "0.82rem", cursor: "pointer" }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button className="primary-btn" onClick={() => setIsScanning(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", fontSize: "0.85rem" }}>
+                <QrCode size={14} /> Scan Barcode
+              </button>
+              <button className="secondary-btn" onClick={fetchItems} style={{ padding: "8px 14px", fontSize: "0.85rem" }}>
+                ↻ Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Results Count Line */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", color: "var(--text-muted)" }}>
+            <span>Showing <strong style={{ color: "var(--text-main)" }}>{filteredItems.length}</strong> of {items.length} equipment items</span>
+          </div>
+
+          {/* Table */}
           {loading ? (
             <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading inventory…</div>
+          ) : filteredItems.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", background: "var(--bg-app)", borderRadius: 8, border: "1px dashed var(--border-color)" }}>
+              No equipment found matching the selected filters.
+            </div>
           ) : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>ELABS Tag</th><th>Item Name</th><th>Category</th><th>Model</th><th>Lab</th><th>Status</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>ELABS Tag</th>
+                    <th>Equipment Name</th>
+                    <th>Category</th>
+                    <th>Laboratory</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: "right" }}>Action</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {filteredItems.map((item) => {
                     const justBorrowed = borrowedTags.has(item.elabsTag);
                     return (
-                      <tr key={item.id} style={{ background: justBorrowed ? "#18d18f08" : undefined, transition: "background 0.4s" }}>
-                        <td style={{ fontFamily: "monospace", color: "#1dd5e6", fontWeight: 600 }}>
-                          {item.elabsTag}
-                          {justBorrowed && <span style={{ marginLeft: 8, background: "#18d18f", color: "var(--bg-app)", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem", fontWeight: 700 }}>NEW</span>}
+                      <tr
+                        key={item.id}
+                        onClick={() => setScannedItem(item)}
+                        style={{ cursor: "pointer", background: justBorrowed ? "rgba(5, 150, 105, 0.04)" : undefined, transition: "background 0.2s" }}
+                      >
+                        <td>
+                          <span style={{ fontFamily: "monospace", color: "#2563eb", fontWeight: 600, background: "rgba(37, 99, 235, 0.08)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(37, 99, 235, 0.2)" }}>
+                            {item.elabsTag}
+                          </span>
                         </td>
-                        <td><strong style={{ color: justBorrowed ? "#18d18f" : "var(--text-main)" }}>{item.name}</strong></td>
-                        <td>{item.category}</td>
-                        <td style={{ color: "var(--text-muted)" }}>{item.model}</td>
-                        <td>{item.labName}</td>
+                        <td>
+                          <strong style={{ color: "var(--text-main)", display: "block" }}>{item.name}</strong>
+                          {item.model && <span style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>{item.model}</span>}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: "0.78rem", padding: "2px 8px", borderRadius: 4, background: "rgba(100, 116, 139, 0.12)", color: "var(--text-main)", fontWeight: 500 }}>
+                            {item.category}
+                          </span>
+                        </td>
+                        <td style={{ color: "var(--text-main)", fontSize: "0.85rem" }}>{item.labName}</td>
                         <td>{statusBadge(item.status)}</td>
+                        <td style={{ textAlign: "right" }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setScannedItem(item); }}
+                            style={{ padding: "4px 10px", fontSize: "0.78rem", borderRadius: 6, border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-main)", cursor: "pointer" }}
+                          >
+                            Details
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -674,20 +809,20 @@ export default function InventoryPage() {
                     const overdue = isOverdue(tx.dueAt, tx.status);
                     const isNew = borrowSuccess?.transactionId === tx.id;
                     return (
-                      <tr key={tx.id} style={{ background: isNew ? "#18d18f08" : undefined }}>
-                        <td style={{ color: "#1dd5e6", fontWeight: 600, fontFamily: "monospace" }}>
-                          #{tx.id}{isNew && <span style={{ marginLeft: 6, background: "#18d18f", color: "var(--bg-app)", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem", fontWeight: 700 }}>NEW</span>}
+                      <tr key={tx.id} style={{ background: isNew ? "rgba(5,150,105,0.06)" : undefined }}>
+                        <td style={{ color: "#2563eb", fontWeight: 600, fontFamily: "monospace" }}>
+                          #{tx.id}{isNew && <span style={{ marginLeft: 6, background: "#059669", color: "#ffffff", borderRadius: 4, padding: "1px 6px", fontSize: "0.7rem", fontWeight: 600 }}>NEW</span>}
                         </td>
                         <td>{tx.labName}</td>
                         <td>{tx.borrowerUserId ? `User #${tx.borrowerUserId}` : tx.borrowerGroupCode ?? "—"}</td>
                         <td>{tx.purpose || "—"}</td>
-                        <td style={{ color: overdue ? "#ff4d57" : "var(--text-main)" }}>
+                        <td style={{ color: overdue ? "#dc2626" : "var(--text-main)" }}>
                           {fmt(tx.dueAt)}
-                          {overdue && <AlertTriangle size={14} style={{ display: "inline-block", marginLeft: 6, color: "#ff4d57", verticalAlign: "text-bottom" }} />}
+                          {overdue && <AlertTriangle size={14} style={{ display: "inline-block", marginLeft: 6, color: "#dc2626", verticalAlign: "text-bottom" }} />}
                         </td>
                         <td>{statusBadge(tx.status)}</td>
                         <td style={{ color: "var(--text-muted)" }}>{tx.issuedBy}</td>
-                        <td>{tx.status === "BORROWED" && <button onClick={() => handleReturn(tx.id)} style={{ background: "#18d18f20", border: "1px solid #18d18f40", borderRadius: 6, color: "#18d18f", padding: "5px 14px", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 }}>↩ Return</button>}</td>
+                        <td>{tx.status === "BORROWED" && <button onClick={() => handleReturn(tx.id)} style={{ background: "rgba(5,150,105,0.1)", border: "1px solid rgba(5,150,105,0.3)", borderRadius: 6, color: "#059669", padding: "5px 14px", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 }}>↩ Return</button>}</td>
                       </tr>
                     );
                   })}
@@ -713,10 +848,10 @@ export default function InventoryPage() {
                 const overdue = isOverdue(borrow.dueAt, borrow.status);
                 const parsedItems: BorrowItem[] = typeof borrow.items === "string" ? JSON.parse(borrow.items) : borrow.items;
                 return (
-                  <div key={borrow.id} style={{ background: "var(--bg-card)", border: `1px solid ${overdue ? "#ff4d5740" : "var(--border-color)"}`, borderRadius: 14, padding: 20 }}>
+                  <div key={borrow.id} style={{ background: "var(--bg-card)", border: `1px solid ${overdue ? "rgba(220,38,38,0.3)" : "var(--border-color)"}`, borderRadius: 12, padding: 18 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                       <div>
-                        <span style={{ color: "#1dd5e6", fontWeight: 700, fontFamily: "monospace" }}>#{borrow.id}</span>
+                        <span style={{ color: "#2563eb", fontWeight: 700, fontFamily: "monospace" }}>#{borrow.id}</span>
                         <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginLeft: 10 }}>{borrow.labName}</span>
                         {borrow.purpose && <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginLeft: 10 }}>— {borrow.purpose}</span>}
                       </div>
@@ -724,21 +859,21 @@ export default function InventoryPage() {
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                       {parsedItems.map((item) => (
-                        <span key={item.elabsTag} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--border-color)", borderRadius: 8, padding: "5px 12px", fontSize: "0.82rem" }}>
-                          <Check size={12} color="#18d18f" />
-                          <span style={{ color: "#1dd5e6", fontFamily: "monospace", fontWeight: 600 }}>{item.elabsTag}</span>
+                        <span key={item.elabsTag} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "4px 10px", fontSize: "0.8rem" }}>
+                          <Check size={12} color="#059669" />
+                          <span style={{ color: "#2563eb", fontFamily: "monospace", fontWeight: 600 }}>{item.elabsTag}</span>
                           <span style={{ color: "var(--text-main)" }}>{item.name}</span>
                         </span>
                       ))}
                     </div>
                     <div style={{ display: "flex", gap: 20, fontSize: "0.82rem", color: "var(--text-muted)", flexWrap: "wrap", alignItems: "center" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Calendar size={12} /> {fmt(borrow.createdAt)}</span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: overdue ? "#ff4d57" : "var(--text-muted)" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: overdue ? "#dc2626" : "var(--text-muted)" }}>
                         {overdue ? <AlertTriangle size={12} /> : <Calendar size={12} />}
                         <span>Due: {fmt(borrow.dueAt)}</span>
                       </span>
                       {borrow.returnedAt && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#18d18f" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#059669" }}>
                           <CheckCircle2 size={12} />
                           <span>Returned: {fmt(borrow.returnedAt)}</span>
                         </span>
