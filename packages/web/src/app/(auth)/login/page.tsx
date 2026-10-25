@@ -6,23 +6,7 @@ import { setUser, setToken } from "@/lib/auth";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
-import {
-  School,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  Zap,
-  Activity,
-  Cpu,
-  ShieldCheck,
-  ArrowRight,
-  CheckCircle2,
-  LockKeyhole,
-} from "lucide-react";
-import { LabOscilloscope } from "@/components/laboratory/LabOscilloscope";
-import { LabCircuitBackground } from "@/components/laboratory/LabCircuitBackground";
+import { School, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,7 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Quick preset accounts for evaluation & testing
+  // Quick evaluation presets
   const presets = [
     { label: "Admin", email: "admin@elabs.local", pass: "Admin123!" },
     { label: "Lecturer", email: "lecturer@elabs.local", pass: "Lecturer123!" },
@@ -91,189 +75,170 @@ export default function LoginPage() {
       router.push("/dashboard");
     } catch (err) {
       setLoading(false);
-      setError("Cannot connect to the server. Please verify network or API connectivity.");
+      setError("Cannot connect to the server. Please make sure the API is running.");
     }
   }
 
   return (
     <div className="login-page">
-      {/* Full-screen background image with deep laboratory gradient overlay */}
+      {/* Full-screen background photo */}
       <div className="login-bg">
         <img src="/university-bg.png" alt="University of Ruhuna" />
         <div className="login-bg-overlay" />
-        {/* Animated ambient engineering circuit bus lines and pulses */}
-        <LabCircuitBackground />
       </div>
 
-      {/* Main Content Grid */}
+      {/* Content wrapper */}
       <div className="login-content">
-        {/* Left Column: Department Hero & Interactive Oscilloscope */}
+        {/* Left: Department information */}
         <div className="login-hero">
           <div className="login-hero-inner">
-            {/* Institutional Department Badges */}
-            <div className="login-institution-badges">
-              <div className="login-hero-badge">
-                <School size={14} />
-                <span>Faculty of Engineering • University of Ruhuna</span>
-              </div>
-              <div className="login-dept-tag">
-                <span>DEPT. OF ELECTRICAL & INFORMATION ENGINEERING</span>
-              </div>
+            <div className="login-hero-badge" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <School size={16} />
+              <span>Faculty of Engineering • University of Ruhuna</span>
             </div>
 
             <h1 className="login-hero-title">
               ELABS
-              <span>Smart Laboratory Management Platform</span>
+              <span>Laboratory Management System</span>
             </h1>
 
-            <p className="login-hero-desc">
-              Integrated operational system for experimental laboratories, high-voltage impulse testing,
-              calibrated instrumentation, Cisco network infrastructure, and real-time student access.
+            <p className="login-hero-desc" style={{ color: "#a8cfff", fontSize: "1rem", lineHeight: 1.6, margin: "0 0 28px" }}>
+              Department of Electrical & Information Engineering portal for practical timetables, equipment inventory, and workstation access.
             </p>
 
-            {/* Interactive Laboratory Oscilloscope Visualizer */}
-            <LabOscilloscope />
-
-            {/* Official Department Operational Capabilities (replacing AI Assistant) */}
             <div className="login-hero-features">
               <div className="login-hero-feature">
                 <div className="login-hero-feature-icon">
-                  <Zap size={20} />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
                 </div>
                 <div>
-                  <strong>Power Systems & HV</strong>
-                  <span>Impulse voltages, surge analysis & insulation testing</span>
+                  <strong>Lab Practicals</strong>
+                  <span>Workstations, timetables & schedules</span>
                 </div>
               </div>
 
               <div className="login-hero-feature">
                 <div className="login-hero-feature-icon">
-                  <Activity size={20} />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                 </div>
                 <div>
-                  <strong>Electronics & Measurement</strong>
-                  <span>Oscilloscopes, logic analyzers & FPGA workstations</span>
+                  <strong>Equipment Inventory</strong>
+                  <span>Instrument loans & calibration records</span>
                 </div>
               </div>
 
               <div className="login-hero-feature">
                 <div className="login-hero-feature-icon">
-                  <Cpu size={20} />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                 </div>
                 <div>
-                  <strong>Information Engineering</strong>
-                  <span>Cisco switching, VLAN topologies & routing labs</span>
+                  <strong>Student Access</strong>
+                  <span>Barcode & RFID session verification</span>
                 </div>
               </div>
 
               <div className="login-hero-feature">
                 <div className="login-hero-feature-icon">
-                  <ShieldCheck size={20} />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 </div>
                 <div>
-                  <strong>Access & Circulation</strong>
-                  <span>Barcode student ID verification & safety monitoring</span>
+                  <strong>Safety Clearances</strong>
+                  <span>Safety compliance & laboratory protocols</span>
                 </div>
               </div>
-            </div>
-
-            {/* Department Laboratories Status Ticker */}
-            <div className="login-labs-status-bar">
-              <div className="status-dot-live" />
-              <span className="status-text-bold">6 Active Department Facilities:</span>
-              <span className="status-labs-list">
-                Power Systems & HV • Electric Machines • Electronics & Measurement • Communication Systems • Information Eng. • 24×7 Project Lab
-              </span>
             </div>
           </div>
         </div>
 
-        {/* Right Column: High-Precision Enterprise Login Card */}
+        {/* Right: Login card */}
         <div className="login-card-wrap">
           <div className="login-glass-card">
-            {/* Corner Crosshairs for Engineering Aesthetic */}
-            <div className="card-corner top-left">+</div>
-            <div className="card-corner top-right">+</div>
-            <div className="card-corner bottom-left">+</div>
-            <div className="card-corner bottom-right">+</div>
-
-            {/* University Crest & Title */}
+            {/* Logo */}
             <div className="login-card-logo">
               <div className="login-logo-circle">
-                <Image
-                  src="/logo.png"
-                  alt="Faculty of Engineering"
-                  width={48}
-                  height={48}
-                  style={{ borderRadius: 8, objectFit: "contain" }}
-                  priority
-                />
+                <img src="/logo.png" alt="Faculty of Engineering" width="48" height="48" style={{ borderRadius: 8, objectFit: "contain" }} />
               </div>
-              <h2>Institutional Sign In</h2>
+              <h2>Sign In</h2>
               <p>Department of Electrical & Information Engineering</p>
             </div>
 
-            {/* Quick Preset Selector for Easy Testing */}
-            <div className="login-preset-wrap">
-              <span className="preset-label">Quick Sign-In Presets:</span>
-              <div className="preset-buttons">
-                {presets.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className={`preset-btn ${email === preset.email ? "active" : ""}`}
-                    onClick={() => handleSelectPreset(preset)}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
+            {/* Quick Demo Presets */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 18, background: "rgba(255,255,255,0.06)", padding: "4px 6px", borderRadius: 8 }}>
+              {presets.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => handleSelectPreset(preset)}
+                  style={{
+                    flex: 1,
+                    padding: "7px 4px",
+                    background: email === preset.email ? "#3d83f6" : "transparent",
+                    color: email === preset.email ? "#ffffff" : "#a8cfff",
+                    border: "none",
+                    borderRadius: 6,
+                    fontSize: "0.78rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {preset.label}
+                </button>
+              ))}
             </div>
 
-            {/* Authentication Form */}
+            {/* Form */}
             <form onSubmit={onSubmit} className="login-form-modern">
               <div className="login-field">
                 <label htmlFor="email">
-                  <Mail size={15} />
-                  <span>Institutional Email</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  Institutional Email
                 </label>
-                <div className="login-input-wrap">
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="user@elabs.local"
-                    required
-                    autoComplete="email"
-                  />
-                </div>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@elabs.local"
+                  required
+                  autoComplete="email"
+                />
               </div>
 
               <div className="login-field">
-                <div className="login-field-header">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <label htmlFor="password">
-                    <Lock size={15} />
-                    <span>Password</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    Password
                   </label>
-                  <Link href="/forgot-password" className="login-forgot">
-                    Forgot password?
-                  </Link>
+                  <Link href="/forgot-password" className="login-forgot">Forgot password?</Link>
                 </div>
-                <div className="login-input-wrap">
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                   <input
                     id="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter security password"
+                    placeholder="Enter your password"
                     required
                     autoComplete="current-password"
+                    style={{ width: "100%", paddingRight: 40 }}
                   />
                   <button
                     type="button"
-                    className="password-toggle-btn"
                     onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      background: "none",
+                      border: "none",
+                      color: "#7ea5d6",
+                      cursor: "pointer",
+                      padding: 4,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                     title={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -281,49 +246,41 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Remember Me Option */}
+              {/* Remember Me */}
               <div className="login-options">
                 <label className="login-remember">
                   <input type="checkbox" defaultChecked />
-                  <span>Keep session active on this workstation</span>
+                  <span>Remember me on this workstation</span>
                 </label>
               </div>
 
-              {/* Error Message */}
+              {/* Error */}
               {error && (
                 <div className="login-error">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                  <span>{error}</span>
+                  {error}
                 </div>
               )}
 
-              {/* Submit Button */}
+              {/* Submit */}
               <button type="submit" disabled={loading} className="login-submit-btn">
                 {loading ? (
                   <>
                     <span className="login-spinner" />
-                    <span>Verifying Credentials...</span>
+                    Signing in...
                   </>
                 ) : (
                   <>
-                    <span>Sign In to Platform</span>
-                    <ArrowRight size={18} />
+                    Sign In to ELABS
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                   </>
                 )}
               </button>
             </form>
 
-            {/* Footer Institutional Badges */}
+            {/* Footer */}
             <div className="login-card-footer">
-              <div className="security-guarantee">
-                <LockKeyhole size={13} />
-                <span>TLS 1.3 256-Bit Encrypted Session</span>
-              </div>
-              <div className="login-copyright">
-                <span>© 2026 Faculty of Engineering</span>
-                <span>•</span>
-                <span>University of Ruhuna</span>
-              </div>
+              <span>Faculty of Engineering • University of Ruhuna</span>
             </div>
           </div>
         </div>
