@@ -1,11 +1,11 @@
 /* ===== LAB DATA ===== */
 export const labs = [
-  { name: "Electronics Laboratory", block: "Block A", occupancy: "18/25", fill: 72, manager: "Hafiz Zakaria", items: 84, available: 61, courses: 4, color: "#1dd5e6" },
-  { name: "Power Systems Laboratory", block: "Block A", occupancy: "8/20", fill: 40, manager: "Ahmad Farid", items: 56, available: 47, courses: 3, color: "#f3ae2a" },
-  { name: "Communication Laboratory", block: "Block B", occupancy: "0/20", fill: 0, manager: "Siti Mariam", items: 42, available: 38, courses: 2, color: "#7d5cff" },
-  { name: "Biomedical Laboratory", block: "Block B", occupancy: "12/24", fill: 50, manager: "Dr. Rashidah", items: 38, available: 30, courses: 2, color: "#ff4d57" },
-  { name: "Software Laboratory", block: "Block C", occupancy: "28/30", fill: 93, manager: "Nizam Hassan", items: 62, available: 30, courses: 5, color: "#a798ff" },
-  { name: "Undergraduate Research Lab", block: "Block D", occupancy: "3/15", fill: 20, manager: "Dr. Lim Wei", items: 28, available: 25, courses: 1, color: "#18d18f" },
+  { name: "Power Systems and High Voltage Laboratory", block: "Block C", occupancy: "14/25", fill: 56, manager: "Eng. Power Systems", items: 17, available: 15, courses: 4, color: "#2563eb" },
+  { name: "Electric Machines and Power Electronics Laboratory", block: "Block C", occupancy: "8/20", fill: 40, manager: "Eng. Machines", items: 8, available: 8, courses: 3, color: "#d97706" },
+  { name: "Electronics and Measurement Laboratory", block: "Block A", occupancy: "18/30", fill: 60, manager: "Eng. Electronics", items: 15, available: 14, courses: 5, color: "#059669" },
+  { name: "Communication and Systems Engineering Laboratory", block: "Block B", occupancy: "6/20", fill: 30, manager: "Eng. Communication", items: 7, available: 6, courses: 3, color: "#7c3aed" },
+  { name: "Information Engineering Laboratory", block: "Block C", occupancy: "20/30", fill: 66, manager: "Cisco Academy Lead", items: 15, available: 14, courses: 4, color: "#0891b2" },
+  { name: "24 × 7 Undergraduate Development Project Laboratory", block: "Block D", occupancy: "12/24", fill: 50, manager: "Project Coordinator", items: 12, available: 11, courses: 2, color: "#475569" },
 ];
 
 /* ===== INVENTORY TABLE DATA ===== */

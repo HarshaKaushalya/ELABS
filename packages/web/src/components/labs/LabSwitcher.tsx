@@ -1,13 +1,14 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 
 const options = [
-  "Electronics Laboratory",
-  "Power Systems Laboratory",
-  "Software Laboratory",
-  "Communication Laboratory",
-  "Biomedical Laboratory",
+  "Power Systems and High Voltage Laboratory",
+  "Electric Machines and Power Electronics Laboratory",
+  "Electronics and Measurement Laboratory",
+  "Communication and Systems Engineering Laboratory",
+  "Information Engineering Laboratory",
+  "24 × 7 Undergraduate Development Project Laboratory",
 ];
 
 export function LabSwitcher() {

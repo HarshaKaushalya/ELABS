@@ -12,6 +12,8 @@ router.get("/", requireAuth, async (_req, res) => {
       l.name,
       l.location,
       l.floor,
+      l.description,
+      l.facilities,
       COUNT(i.id) AS totalItems,
       SUM(CASE WHEN i.status = 'AVAILABLE' THEN 1 ELSE 0 END) AS availableItems,
       SUM(CASE WHEN i.status = 'BORROWED' THEN 1 ELSE 0 END) AS borrowedItems,
@@ -20,7 +22,7 @@ router.get("/", requireAuth, async (_req, res) => {
     FROM labs l
     LEFT JOIN inventory_items i ON i.lab_id = l.id
     GROUP BY l.id
-    ORDER BY l.name
+    ORDER BY l.id ASC
     `
   );
 
@@ -38,6 +40,8 @@ router.get("/:id", requireAuth, async (req, res) => {
       l.name,
       l.location,
       l.floor,
+      l.description,
+      l.facilities,
       COUNT(i.id) AS totalItems,
       SUM(CASE WHEN i.status = 'AVAILABLE' THEN 1 ELSE 0 END) AS availableItems,
       SUM(CASE WHEN i.status = 'BORROWED' THEN 1 ELSE 0 END) AS borrowedItems,

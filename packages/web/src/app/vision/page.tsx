@@ -151,14 +151,12 @@ function Stat({ label, value, color, icon: Icon }: { label: string; value: strin
 
 // ── Fixed laboratory sections ──────────────────────────────────────────────────
 const LABS = [
-  { id: 3, name: "Electric Machines and Power Systems Laboratory", icon: Zap },
-  { id: 10, name: "High Voltage and Renewable Energy Laboratory", icon: Sun },
-  { id: 2, name: "Electronics and Measurements Laboratory", icon: Activity },
-  { id: 16, name: "Electronics Workshop", icon: Wrench },
-  { id: 4, name: "Communication and Systems Laboratory", icon: Radio },
-  { id: 6, name: "Computer and Information Engineering Laboratory", icon: Laptop },
-  { id: 14, name: "Networking Laboratory", icon: Network },
-  { id: 13, name: "Undergraduate Project Development Laboratory", icon: FlaskConical }
+  { id: 1, name: "Power Systems and High Voltage Laboratory", icon: Zap },
+  { id: 2, name: "Electric Machines and Power Electronics Laboratory", icon: Activity },
+  { id: 3, name: "Electronics and Measurement Laboratory", icon: Wrench },
+  { id: 4, name: "Communication and Systems Engineering Laboratory", icon: Radio },
+  { id: 5, name: "Information Engineering Laboratory", icon: Network },
+  { id: 6, name: "24 × 7 Undergraduate Development Project Laboratory", icon: FlaskConical }
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────

@@ -17,19 +17,13 @@ INSERT IGNORE INTO semesters (name, level) VALUES
 -- ============================================================
 -- LABS — Ensure all physical labs exist
 -- ============================================================
-INSERT IGNORE INTO labs (name, location, floor) VALUES
-  ('Electronics Laboratory',          'Block A', '2'),
-  ('Power Systems Laboratory',        'Block A', '1'),
-  ('Communication Laboratory',        'Block B', '1'),
-  ('Biomedical Laboratory',           'Block B', '2'),
-  ('Software & Computing Laboratory', 'Block C', '3'),
-  ('Circuit Design Laboratory',       'Block A', '3'),
-  ('Microprocessor Laboratory',       'Block C', '2'),
-  ('Renewable Energy Laboratory',     'Block D', '1'),
-  ('Telecommunications Laboratory',   'Block B', '3'),
-  ('Control Systems Laboratory',      'Block C', '1'),
-  ('Undergraduate Research Lab',      'Block D', '4'),
-  ('Network & Security Laboratory',   'Block C', '4');
+INSERT IGNORE INTO labs (id, name, location, floor, description, facilities) VALUES
+  (1, 'Power Systems and High Voltage Laboratory',           'Block C', 'Ground Floor', 'Covers high-voltage engineering and electrical power-system experiments. The department describes facilities for generating and measuring AC, DC and impulse voltages, along with partial-discharge and corona studies.', 'High-voltage testing, insulation breakdown, surge-voltage measurement and power-system studies.'),
+  (2, 'Electric Machines and Power Electronics Laboratory',  'Block C', '1st Floor',    'Studies electrical machines, motor drives and power-electronic converters.', 'AC and DC motor testing, torque and speed measurements, rectifiers, converters, inverter-based drives and motor control.'),
+  (3, 'Electronics and Measurement Laboratory',              'Block A', '2nd Floor',    'Supports analog and digital electronics, electrical measurements and instrumentation.', 'Oscilloscopes, logic analysers, function generators, DC power supplies, FPGA development kits and electronic circuit testing.'),
+  (4, 'Communication and Systems Engineering Laboratory',    'Block B', '1st Floor',    'Supports practical learning in communication engineering and related systems.', 'Communication-system experiments and signal-related studies.'),
+  (5, 'Information Engineering Laboratory',                  'Block C', '4th Floor',    'The department describes networking facilities developed in collaboration with Cisco Networking Academy.', 'Router and switch configuration, VLANs, trunking, routing and digital communication-related practicals.'),
+  (6, '24 × 7 Undergraduate Development Project Laboratory', 'Block D', '4th Floor',    'A project workspace for undergraduate development and final-year projects. The website describes 16 workstations, soldering facilities, and cutting and drilling stations.', '16 workstations, soldering facilities, cutting and drilling stations, rapid prototyping and project development.');
 
 -- ============================================================
 -- MODULES — EE & Information Engineering

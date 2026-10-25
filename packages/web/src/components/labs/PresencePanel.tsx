@@ -1,8 +1,11 @@
-﻿export function PresencePanel() {
+export function PresencePanel() {
   const rows = [
-    ["Electronics Laboratory", "18/25", 72],
-    ["Software Laboratory", "28/30", 93],
-    ["Power Systems Laboratory", "8/20", 40],
+    ["Power Systems and High Voltage Laboratory", "14/25", 56],
+    ["Electric Machines and Power Electronics Laboratory", "8/20", 40],
+    ["Electronics and Measurement Laboratory", "18/30", 60],
+    ["Communication and Systems Engineering Laboratory", "6/20", 30],
+    ["Information Engineering Laboratory", "20/30", 66],
+    ["24 × 7 Undergraduate Development Project Laboratory", "12/24", 50],
   ];
 
   return (
