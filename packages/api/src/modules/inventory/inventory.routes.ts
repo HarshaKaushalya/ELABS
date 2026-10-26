@@ -6,7 +6,28 @@ import { pool } from "../../db/mysql";
 
 const router = Router();
 
-// Anyone logged in can view inventory list (students too)
+// Helper to get user roles
+async function getUserRoles(userId: number, connOrPool: any): Promise<string[]> {
+  const [rows] = await connOrPool.query(
+    `SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = :uid`,
+    { uid: userId }
+  );
+  return (rows as any[]).map((x: any) => x.name);
+}
+
+// MySQL DATETIME formatter helper ('YYYY-MM-DD HH:MM:SS')
+const toMysqlDt = (iso: string | null | undefined): string | null => {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().replace("T", " ").substring(0, 19);
+  } catch {
+    return null;
+  }
+};
+
+// ── 1. Items List (Open to all authenticated users) ──────────────────────────
 router.get("/items", requireAuth, async (req, res) => {
   const labId = req.query.labId ? Number(req.query.labId) : null;
 
@@ -26,7 +47,7 @@ router.get("/items", requireAuth, async (req, res) => {
   res.json({ items: rows });
 });
 
-// Available items for a specific lab (for borrow item picker)
+// ── 2. Available Items for a Lab ─────────────────────────────────────────────
 router.get("/available-items/:labId", requireAuth, async (req, res) => {
   const labId = Number(req.params.labId);
   if (!Number.isFinite(labId) || labId <= 0) return res.status(400).json({ error: "Invalid lab id" });
@@ -40,21 +61,33 @@ router.get("/available-items/:labId", requireAuth, async (req, res) => {
   res.json({ items: rows });
 });
 
-// Look up a student by index number e.g. EG/2022/5401
+// ── 3. Student Profile Lookup (by Reg Number, Email, or Index) ───────────────
 router.get("/student-lookup", requireAuth, async (req, res) => {
-  const indexNo = String(req.query.indexNo ?? "").trim();
-  if (!indexNo) return res.status(400).json({ error: "indexNo required" });
+  const query = String(req.query.indexNo ?? "").trim();
+  if (!query) return res.status(400).json({ error: "Search term required" });
+
   const [rows] = await pool.query(
-    `SELECT id, full_name as fullName, index_no as indexNo, email FROM users WHERE index_no = :indexNo LIMIT 1`,
-    { indexNo }
+    `
+    SELECT u.id, u.full_name as fullName,
+           COALESCE(sp.reg_number, u.index_no) as indexNo,
+           u.email, sp.group_code as groupCode
+    FROM users u
+    LEFT JOIN student_profiles sp ON sp.user_id = u.id
+    WHERE u.index_no = :query 
+       OR sp.reg_number = :query 
+       OR u.email = :query
+       OR u.full_name LIKE CONCAT('%', :query, '%')
+    LIMIT 1
+    `,
+    { query }
   );
   const student = (rows as any[])[0];
   if (!student) return res.status(404).json({ error: "Student not found" });
   res.json({ student });
 });
 
+// ── 4. Item Barcode Lookup ───────────────────────────────────────────────────
 router.get("/items/barcode/:tag", requireAuth, async (req, res) => {
-
   const tag = req.params.tag;
   const [rows] = await pool.query(
     `
@@ -74,116 +107,34 @@ router.get("/items/barcode/:tag", requireAuth, async (req, res) => {
   res.json({ item });
 });
 
-// Student views their own borrow history (no special permission needed beyond auth)
-router.get("/my-borrows", requireAuth, async (req: any, res) => {
-  const userId = req.user.id;
-  const [rows] = await pool.query(
-    `
-    SELECT t.id, t.lab_id as labId, ANY_VALUE(l.name) as labName,
-           t.purpose, t.due_at as dueAt, t.returned_at as returnedAt,
-           t.status, t.created_at as createdAt,
-           ANY_VALUE(u.full_name) as issuedByName,
-           JSON_ARRAYAGG(
-             JSON_OBJECT(
-               'itemId',    i.id,
-               'elabsTag',  i.elabs_tag,
-               'name',      i.name,
-               'category',  i.category,
-               'model',     i.model,
-               'condOut',   bti.condition_out,
-               'condIn',    bti.condition_in
-             )
-           ) as items
-    FROM borrow_transactions t
-    JOIN labs l ON l.id = t.lab_id
-    JOIN users u ON u.id = t.issued_by_user_id
-    JOIN borrow_transaction_items bti ON bti.transaction_id = t.id
-    JOIN inventory_items i ON i.id = bti.item_id
-    WHERE (
-      t.borrower_user_id = :userId
-      OR (t.borrower_group_code IS NOT NULL AND t.borrower_group_code IN (
-        SELECT group_code FROM student_profiles WHERE user_id = :userId
-      ))
-    )
-    GROUP BY t.id, t.lab_id, t.purpose, t.due_at, t.returned_at, t.status, t.created_at
-    ORDER BY t.created_at DESC
-    LIMIT 100
-    `,
-    { userId }
-  );
-  const borrowsList = (rows as any[]).map((r) => ({
-    ...r,
-    items: typeof r.items === "string" ? JSON.parse(r.items) : (r.items ?? []),
-  }));
-  res.json({ borrows: borrowsList });
-});
-
-router.get("/transactions", requireAuth, requirePermission("inventory:borrow"), async (req, res) => {
-  const labId = req.query.labId ? Number(req.query.labId) : null;
-
-  const [rows] = await pool.query(
-    `
-    SELECT t.id, t.lab_id as labId, l.name as labName, t.borrower_type as borrowerType,
-           t.borrower_user_id as borrowerUserId, t.borrower_group_code as borrowerGroupCode,
-           u.full_name as issuedBy, t.purpose, t.due_at as dueAt, t.returned_at as returnedAt, t.status, t.created_at as createdAt
-    FROM borrow_transactions t
-    JOIN labs l ON l.id = t.lab_id
-    JOIN users u ON u.id = t.issued_by_user_id
-    WHERE (:labId IS NULL OR t.lab_id = :labId)
-    ORDER BY t.created_at DESC
-    LIMIT 200
-    `,
-    { labId }
-  );
-
-  res.json({ transactions: rows });
-});
-
-router.get("/barcode-events", requireAuth, requirePermission("inventory:borrow"), async (req, res) => {
-  const labId = req.query.labId ? Number(req.query.labId) : null;
-
-  const [rows] = await pool.query(
-    `
-    SELECT e.id, e.event_type as eventType, e.lab_id as labId, l.name as labName,
-           e.elabs_tag as elabsTag, e.created_at as createdAt,
-           u.full_name as actorName
-    FROM barcode_events e
-    JOIN labs l ON l.id = e.lab_id
-    LEFT JOIN users u ON u.id = e.actor_user_id
-    WHERE (:labId IS NULL OR e.lab_id = :labId)
-    ORDER BY e.created_at DESC
-    LIMIT 200
-    `,
-    { labId }
-  );
-
-  res.json({ events: rows });
-});
-
-router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async (req: any, res) => {
+// ── 5. Student Submits a Borrow Request (2-Step Workflow) ────────────────────
+router.post("/request-borrow", requireAuth, async (req: any, res) => {
   try {
-    // Spread into new object — req.body may be read-only; also coerce empty strings to null
     const raw = { ...req.body } as Record<string, unknown>;
     if (!raw.dueAt || raw.dueAt === "") raw.dueAt = null;
     if (!raw.purpose || raw.purpose === "") raw.purpose = null;
-    if (!raw.conditionOut || raw.conditionOut === "") raw.conditionOut = null;
 
     const body = z.object({
       labId: z.number(),
-      borrowerType: z.enum(["STUDENT", "GROUP"]),
-      borrowerUserId: z.number().nullable().optional(),
-      borrowerGroupCode: z.string().nullable().optional(),
-      purpose: z.string().max(200).nullable().optional(),
-      dueAt: z.string().datetime().nullable().optional(),
+      usageType: z.enum(["IN_LAB", "OUTSIDE_LAB"]).default("IN_LAB"),
+      purpose: z.string().max(255).nullable().optional(),
+      dueAt: z.string().nullable().optional(),
       elabsTags: z.array(z.string().min(3)).min(1),
-      conditionOut: z.string().max(255).nullable().optional(),
     }).parse(raw);
+
+    const studentUserId = req.user.id;
+
+    // Outside-lab requires justification & due date
+    if (body.usageType === "OUTSIDE_LAB" && (!body.purpose || !body.dueAt)) {
+      return res.status(400).json({
+        error: "Taking equipment outside the lab requires a stated purpose and return due date.",
+      });
+    }
 
     const conn = await pool.getConnection();
     await conn.beginTransaction();
 
     try {
-      // fetch items by tags — use positional ? because named params don't expand arrays
       const placeholders = body.elabsTags.map(() => "?").join(", ");
       const [items] = await conn.query(
         `SELECT id, status, lab_id, elabs_tag, name FROM inventory_items WHERE elabs_tag IN (${placeholders}) FOR UPDATE`,
@@ -198,7 +149,330 @@ router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async
         return res.status(400).json({ error: `Items not found: ${missing.join(", ")}` });
       }
 
-      // validate availability (removed lab mismatch — items can be borrowed across labs)
+      for (const it of list) {
+        if (it.status !== "AVAILABLE") {
+          await conn.rollback(); conn.release();
+          return res.status(400).json({ error: `Item ${it.elabs_tag} (${it.name}) is currently ${it.status}.` });
+        }
+      }
+
+      // Look up student profile for group code
+      const [profileRows] = await conn.query(
+        `SELECT group_code FROM student_profiles WHERE user_id = :uid LIMIT 1`,
+        { uid: studentUserId }
+      );
+      const studentProfile = (profileRows as any[])[0];
+      const groupCode = studentProfile?.group_code ?? null;
+
+      // Default due dates
+      let finalDueAt = toMysqlDt(body.dueAt);
+      if (!finalDueAt) {
+        if (body.usageType === "OUTSIDE_LAB") {
+          finalDueAt = toMysqlDt(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString());
+        } else {
+          const endOfDay = new Date();
+          endOfDay.setHours(18, 0, 0, 0);
+          if (endOfDay.getTime() <= Date.now()) {
+            endOfDay.setDate(endOfDay.getDate() + 1);
+          }
+          finalDueAt = toMysqlDt(endOfDay.toISOString());
+        }
+      }
+
+      // Create borrow request transaction (issued_by_user_id IS NULL until technician approves)
+      const [txRes] = await conn.query(
+        `
+        INSERT INTO borrow_transactions
+        (lab_id, borrower_type, borrower_user_id, borrower_group_code, issued_by_user_id, purpose, usage_type, due_at, status)
+        VALUES (:labId, 'STUDENT', :studentUserId, :groupCode, NULL, :purpose, :usageType, :dueAt, 'REQUESTED')
+        `,
+        {
+          labId: body.labId,
+          studentUserId,
+          groupCode,
+          purpose: body.purpose ?? null,
+          usageType: body.usageType,
+          dueAt: finalDueAt,
+        }
+      );
+      const transactionId = (txRes as any).insertId;
+
+      for (const it of list) {
+        await conn.query(
+          `INSERT INTO borrow_transaction_items (transaction_id, item_id, condition_out) VALUES (:tx, :item, 'Good')`,
+          { tx: transactionId, item: it.id }
+        );
+      }
+
+      await conn.query(
+        `INSERT INTO audit_logs (actor_user_id, action, entity, entity_id, meta)
+         VALUES (:actor, 'BORROW_REQUEST', 'borrow_transaction', :tx, JSON_OBJECT('count', :count, 'usageType', :ut))`,
+        { actor: studentUserId, tx: String(transactionId), count: list.length, ut: body.usageType }
+      );
+
+      await conn.commit();
+      res.json({
+        ok: true,
+        transactionId,
+        message: body.usageType === "OUTSIDE_LAB"
+          ? "Outside-lab borrow request submitted. Please visit the lab technician to obtain authorization and collect the equipment."
+          : "Borrow request submitted. Please collect the equipment from the lab technician.",
+        requestedItems: list.map((it: any) => ({ elabsTag: it.elabs_tag, name: it.name, id: it.id })),
+      });
+    } catch (e: any) {
+      await conn.rollback();
+      console.error("Borrow request error:", e);
+      res.status(500).json({ error: "Failed to submit borrow request", detail: e?.message });
+    } finally {
+      conn.release();
+    }
+  } catch (e: any) {
+    return res.status(400).json({ error: "Invalid request body", detail: e?.issues?.[0]?.message ?? e?.message });
+  }
+});
+
+// ── 6. Staff Views Pending Borrow Requests ────────────────────────────────────
+router.get("/requests", requireAuth, async (req: any, res) => {
+  const labId = req.query.labId ? Number(req.query.labId) : null;
+  const roles = await getUserRoles(req.user.id, pool);
+  const isStaff = roles.some((r) => ["TECHNICIAN", "LECTURER", "SYSTEM_ADMIN"].includes(r));
+  if (!isStaff) return res.status(403).json({ error: "Staff only." });
+
+  const [rows] = await pool.query(
+    `
+    SELECT t.id, t.lab_id as labId, l.name as labName,
+           t.borrower_user_id as borrowerUserId,
+           u_borrower.full_name as borrowerName,
+           COALESCE(sp.reg_number, u_borrower.index_no) as borrowerIndexNo,
+           u_borrower.email as borrowerEmail,
+           sp.group_code as borrowerGroup,
+           t.purpose,
+           t.usage_type as usageType,
+           t.due_at as dueAt,
+           t.status,
+           t.created_at as createdAt,
+           JSON_ARRAYAGG(
+             JSON_OBJECT(
+               'itemId', i.id,
+               'elabsTag', i.elabs_tag,
+               'name', i.name,
+               'category', i.category,
+               'model', i.model,
+               'status', i.status
+             )
+           ) as items
+    FROM borrow_transactions t
+    JOIN labs l ON l.id = t.lab_id
+    JOIN users u_borrower ON u_borrower.id = t.borrower_user_id
+    LEFT JOIN student_profiles sp ON sp.user_id = t.borrower_user_id
+    JOIN borrow_transaction_items bti ON bti.transaction_id = t.id
+    JOIN inventory_items i ON i.id = bti.item_id
+    WHERE t.status = 'REQUESTED'
+      AND (:labId IS NULL OR t.lab_id = :labId)
+    GROUP BY t.id, t.lab_id, l.name, t.borrower_user_id,
+             u_borrower.full_name, sp.reg_number, u_borrower.index_no, u_borrower.email, sp.group_code,
+             t.purpose, t.usage_type, t.due_at, t.status, t.created_at
+    ORDER BY t.created_at DESC
+    `,
+    { labId }
+  );
+
+  const requests = (rows as any[]).map((r) => ({
+    ...r,
+    items: typeof r.items === "string" ? JSON.parse(r.items) : (r.items ?? []),
+  }));
+
+  res.json({ requests });
+});
+
+// ── 7. Technician Approves & Issues Equipment to Student ──────────────────────
+router.patch("/requests/:id/approve", requireAuth, async (req: any, res) => {
+  const reqId = Number(req.params.id);
+  if (!Number.isFinite(reqId)) return res.status(400).json({ error: "Invalid request ID" });
+
+  const roles = await getUserRoles(req.user.id, pool);
+  const isStaff = roles.some((r) => ["TECHNICIAN", "LECTURER", "SYSTEM_ADMIN"].includes(r));
+  if (!isStaff) return res.status(403).json({ error: "Only lab technicians and instructors can issue equipment." });
+
+  const conn = await pool.getConnection();
+  await conn.beginTransaction();
+
+  try {
+    const [txRows] = await conn.query(
+      `SELECT id, lab_id, status, borrower_user_id FROM borrow_transactions WHERE id = :id FOR UPDATE`,
+      { id: reqId }
+    );
+    const tx = (txRows as any[])[0];
+    if (!tx) {
+      await conn.rollback(); conn.release();
+      return res.status(404).json({ error: "Request not found" });
+    }
+    if (tx.status !== "REQUESTED") {
+      await conn.rollback(); conn.release();
+      return res.status(400).json({ error: `Cannot approve request with status: ${tx.status}` });
+    }
+
+    const [items] = await conn.query(
+      `SELECT i.id, i.elabs_tag, i.name, i.status 
+       FROM borrow_transaction_items bti
+       JOIN inventory_items i ON i.id = bti.item_id
+       WHERE bti.transaction_id = :id
+       FOR UPDATE`,
+      { id: reqId }
+    );
+
+    const list = items as any[];
+    for (const it of list) {
+      if (it.status !== "AVAILABLE") {
+        await conn.rollback(); conn.release();
+        return res.status(400).json({ error: `Item ${it.elabs_tag} is no longer available (currently ${it.status}).` });
+      }
+    }
+
+    const technicianId = req.user.id;
+
+    // Mark items as BORROWED
+    for (const it of list) {
+      await conn.query(`UPDATE inventory_items SET status = 'BORROWED' WHERE id = :id`, { id: it.id });
+      await conn.query(
+        `INSERT INTO barcode_events (event_type, lab_id, item_id, elabs_tag, actor_user_id, meta)
+         VALUES ('BORROW_SCAN', :labId, :itemId, :tag, :actor, JSON_OBJECT('transactionId', :tx, 'action', 'APPROVE'))`,
+        { labId: tx.lab_id, itemId: it.id, tag: it.elabs_tag, actor: technicianId, tx: tx.id }
+      );
+    }
+
+    // Set transaction status to BORROWED and record technician as issued_by_user_id!
+    await conn.query(
+      `UPDATE borrow_transactions 
+       SET status = 'BORROWED', issued_by_user_id = :issuedBy, updated_at = NOW()
+       WHERE id = :id`,
+      { issuedBy: technicianId, id: tx.id }
+    );
+
+    await conn.query(
+      `INSERT INTO audit_logs (actor_user_id, action, entity, entity_id, meta)
+       VALUES (:actor, 'BORROW_APPROVE', 'borrow_transaction', :tx, JSON_OBJECT('itemCount', :count))`,
+      { actor: technicianId, tx: String(tx.id), count: list.length }
+    );
+
+    await conn.commit();
+    res.json({ ok: true, transactionId: tx.id, message: "Equipment issued successfully." });
+  } catch (err: any) {
+    await conn.rollback();
+    console.error("Approve error:", err);
+    res.status(500).json({ error: "Failed to approve request", detail: err?.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// ── 8. Technician Rejects Borrow Request ──────────────────────────────────────
+router.patch("/requests/:id/reject", requireAuth, async (req: any, res) => {
+  const reqId = Number(req.params.id);
+  if (!Number.isFinite(reqId)) return res.status(400).json({ error: "Invalid request ID" });
+
+  const roles = await getUserRoles(req.user.id, pool);
+  const isStaff = roles.some((r) => ["TECHNICIAN", "LECTURER", "SYSTEM_ADMIN"].includes(r));
+  if (!isStaff) return res.status(403).json({ error: "Staff only." });
+
+  const reason = String(req.body.rejectionReason ?? "").trim() || "Rejected by technician";
+
+  const conn = await pool.getConnection();
+  await conn.beginTransaction();
+
+  try {
+    const [txRows] = await conn.query(
+      `SELECT id, status FROM borrow_transactions WHERE id = :id FOR UPDATE`,
+      { id: reqId }
+    );
+    const tx = (txRows as any[])[0];
+    if (!tx) {
+      await conn.rollback(); conn.release();
+      return res.status(404).json({ error: "Request not found" });
+    }
+    if (tx.status !== "REQUESTED") {
+      await conn.rollback(); conn.release();
+      return res.status(400).json({ error: `Cannot reject request with status: ${tx.status}` });
+    }
+
+    const technicianId = req.user.id;
+
+    await conn.query(
+      `UPDATE borrow_transactions 
+       SET status = 'REJECTED', rejection_reason = :reason, issued_by_user_id = :issuedBy
+       WHERE id = :id`,
+      { reason, issuedBy: technicianId, id: tx.id }
+    );
+
+    await conn.query(
+      `INSERT INTO audit_logs (actor_user_id, action, entity, entity_id, meta)
+       VALUES (:actor, 'BORROW_REJECT', 'borrow_transaction', :tx, JSON_OBJECT('reason', :reason))`,
+      { actor: technicianId, tx: String(tx.id), reason }
+    );
+
+    await conn.commit();
+    res.json({ ok: true, message: "Request rejected." });
+  } catch (err: any) {
+    await conn.rollback();
+    console.error("Reject error:", err);
+    res.status(500).json({ error: "Failed to reject request", detail: err?.message });
+  } finally {
+    conn.release();
+  }
+});
+
+// ── 9. Direct Walk-In Issue (Technician Counter Issue) ────────────────────────
+router.post("/borrow", requireAuth, async (req: any, res) => {
+  try {
+    const raw = { ...req.body } as Record<string, unknown>;
+    if (!raw.dueAt || raw.dueAt === "") raw.dueAt = null;
+    if (!raw.purpose || raw.purpose === "") raw.purpose = null;
+    if (!raw.conditionOut || raw.conditionOut === "") raw.conditionOut = "Good";
+
+    const body = z.object({
+      labId: z.number(),
+      borrowerType: z.enum(["STUDENT", "GROUP"]).default("STUDENT"),
+      borrowerUserId: z.number().nullable().optional(),
+      borrowerGroupCode: z.string().nullable().optional(),
+      purpose: z.string().max(255).nullable().optional(),
+      usageType: z.enum(["IN_LAB", "OUTSIDE_LAB"]).default("IN_LAB"),
+      dueAt: z.string().nullable().optional(),
+      elabsTags: z.array(z.string().min(3)).min(1),
+      conditionOut: z.string().max(255).nullable().optional(),
+    }).parse(raw);
+
+    const operatorUserId = req.user.id;
+    const roles = await getUserRoles(operatorUserId, pool);
+    const isStaff = roles.some((r) => ["TECHNICIAN", "LECTURER", "SYSTEM_ADMIN"].includes(r));
+
+    if (!isStaff) {
+      return res.status(403).json({
+        error: "Students must submit borrow requests via the Request Borrow feature. Direct issuing is restricted to lab staff.",
+      });
+    }
+
+    if (!body.borrowerUserId && !body.borrowerGroupCode) {
+      return res.status(400).json({ error: "A student or group must be specified as the borrower." });
+    }
+
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    try {
+      const placeholders = body.elabsTags.map(() => "?").join(", ");
+      const [items] = await conn.query(
+        `SELECT id, status, lab_id, elabs_tag, name FROM inventory_items WHERE elabs_tag IN (${placeholders}) FOR UPDATE`,
+        body.elabsTags
+      );
+
+      const list = items as any[];
+      if (list.length !== body.elabsTags.length) {
+        const foundTags = list.map((i: any) => i.elabs_tag);
+        const missing = body.elabsTags.filter((t) => !foundTags.includes(t));
+        await conn.rollback(); conn.release();
+        return res.status(400).json({ error: `Items not found: ${missing.join(", ")}` });
+      }
+
       for (const it of list) {
         if (it.status !== "AVAILABLE") {
           await conn.rollback(); conn.release();
@@ -206,53 +480,37 @@ router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async
         }
       }
 
-      const issuedBy = req.user.id;
-
-      // Security: look up the requester's roles
-      const [roleRows] = await conn.query(
-        `SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = :uid`,
-        { uid: issuedBy }
-      );
-      const userRoles = (roleRows as any[]).map((x: any) => x.name);
-      const isStudent = userRoles.includes("STUDENT") && !userRoles.includes("TECHNICIAN") && !userRoles.includes("SYSTEM_ADMIN") && !userRoles.includes("LECTURER");
-
-      // Students can only borrow for themselves
-      if (isStudent) {
-        body.borrowerUserId = issuedBy;
+      let finalDueAt = toMysqlDt(body.dueAt);
+      if (!finalDueAt) {
+        finalDueAt = body.usageType === "OUTSIDE_LAB"
+          ? toMysqlDt(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())
+          : toMysqlDt(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString());
       }
 
-      // MySQL needs 'YYYY-MM-DD HH:MM:SS', not ISO 8601 'YYYY-MM-DDTHH:MM:SS.mmmZ'
-      const toMysqlDt = (iso: string | null | undefined): string | null => {
-        if (!iso) return null;
-        try { return new Date(iso).toISOString().replace("T", " ").substring(0, 19); } catch { return null; }
-      };
-
-      const finalDueAt = toMysqlDt(body.dueAt) || toMysqlDt(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString());
-
-      // create transaction
+      // Record technician as issued_by_user_id!
       const [txRes] = await conn.query(
         `
         INSERT INTO borrow_transactions
-        (lab_id, borrower_type, borrower_user_id, borrower_group_code, issued_by_user_id, purpose, due_at, status)
-        VALUES (:labId, :borrowerType, :borrowerUserId, :borrowerGroupCode, :issuedBy, :purpose, :dueAt, 'BORROWED')
+        (lab_id, borrower_type, borrower_user_id, borrower_group_code, issued_by_user_id, purpose, usage_type, due_at, status)
+        VALUES (:labId, :borrowerType, :borrowerUserId, :borrowerGroupCode, :issuedBy, :purpose, :usageType, :dueAt, 'BORROWED')
         `,
         {
           labId: body.labId,
           borrowerType: body.borrowerType,
-          borrowerUserId: body.borrowerType === "STUDENT" ? (body.borrowerUserId ?? null) : null,
-          borrowerGroupCode: body.borrowerType === "GROUP" ? (body.borrowerGroupCode ?? null) : null,
-          issuedBy,
+          borrowerUserId: body.borrowerUserId ?? null,
+          borrowerGroupCode: body.borrowerGroupCode ?? null,
+          issuedBy: operatorUserId,
           purpose: body.purpose ?? null,
+          usageType: body.usageType,
           dueAt: finalDueAt,
         }
       );
       const transactionId = (txRes as any).insertId;
 
-      // add items and update status
       for (const it of list) {
         await conn.query(
           `INSERT INTO borrow_transaction_items (transaction_id, item_id, condition_out) VALUES (:tx, :item, :condOut)`,
-          { tx: transactionId, item: it.id, condOut: body.conditionOut ?? null }
+          { tx: transactionId, item: it.id, condOut: body.conditionOut ?? "Good" }
         );
 
         await conn.query(`UPDATE inventory_items SET status='BORROWED' WHERE id=:id`, { id: it.id });
@@ -260,18 +518,17 @@ router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async
         await conn.query(
           `INSERT INTO barcode_events (event_type, lab_id, item_id, elabs_tag, actor_user_id, meta)
            VALUES ('BORROW_SCAN', :labId, :itemId, :tag, :actor, JSON_OBJECT('transactionId', :tx))`,
-          { labId: body.labId, itemId: it.id, tag: it.elabs_tag, actor: issuedBy, tx: transactionId }
+          { labId: body.labId, itemId: it.id, tag: it.elabs_tag, actor: operatorUserId, tx: transactionId }
         );
       }
 
       await conn.query(
         `INSERT INTO audit_logs (actor_user_id, action, entity, entity_id, meta)
-         VALUES (:actor,'BORROW_CREATE','borrow_transaction',:tx, JSON_OBJECT('count', :count))`,
-        { actor: issuedBy, tx: String(transactionId), count: list.length }
+         VALUES (:actor, 'BORROW_CREATE', 'borrow_transaction', :tx, JSON_OBJECT('count', :count, 'issuedByStaff', :actor))`,
+        { actor: operatorUserId, tx: String(transactionId), count: list.length }
       );
 
       await conn.commit();
-      // Return transaction ID + item details for immediate UI confirmation
       res.json({
         transactionId,
         borrowedItems: list.map((it: any) => ({
@@ -288,11 +545,112 @@ router.post("/borrow", requireAuth, requirePermission("inventory:borrow"), async
       conn.release();
     }
   } catch (_e: any) {
-    console.error("Borrow validation error:", _e?.issues ?? _e?.message ?? _e);
     return res.status(400).json({ error: "Invalid request body", detail: _e?.issues?.[0]?.message ?? _e?.message });
   }
 });
 
+// ── 10. Student Views Personal Borrow History ────────────────────────────────
+router.get("/my-borrows", requireAuth, async (req: any, res) => {
+  const userId = req.user.id;
+  const [rows] = await pool.query(
+    `
+    SELECT t.id, t.lab_id as labId, ANY_VALUE(l.name) as labName,
+           t.purpose, t.usage_type as usageType, t.rejection_reason as rejectionReason,
+           t.due_at as dueAt, t.returned_at as returnedAt,
+           t.status, t.created_at as createdAt,
+           ANY_VALUE(u_issuer.full_name) as issuedByName,
+           JSON_ARRAYAGG(
+             JSON_OBJECT(
+               'itemId',    i.id,
+               'elabsTag',  i.elabs_tag,
+               'name',      i.name,
+               'category',  i.category,
+               'model',     i.model,
+               'condOut',   bti.condition_out,
+               'condIn',    bti.condition_in
+             )
+           ) as items
+    FROM borrow_transactions t
+    JOIN labs l ON l.id = t.lab_id
+    LEFT JOIN users u_issuer ON u_issuer.id = t.issued_by_user_id
+    JOIN borrow_transaction_items bti ON bti.transaction_id = t.id
+    JOIN inventory_items i ON i.id = bti.item_id
+    WHERE (
+      t.borrower_user_id = :userId
+      OR (t.borrower_group_code IS NOT NULL AND t.borrower_group_code IN (
+        SELECT group_code FROM student_profiles WHERE user_id = :userId
+      ))
+    )
+    GROUP BY t.id, t.lab_id, t.purpose, t.usage_type, t.rejection_reason, t.due_at, t.returned_at, t.status, t.created_at
+    ORDER BY t.created_at DESC
+    LIMIT 100
+    `,
+    { userId }
+  );
+  const borrowsList = (rows as any[]).map((r) => ({
+    ...r,
+    items: typeof r.items === "string" ? JSON.parse(r.items) : (r.items ?? []),
+  }));
+  res.json({ borrows: borrowsList });
+});
+
+// ── 11. All Borrow Transactions (Staff Overview) ──────────────────────────────
+router.get("/transactions", requireAuth, async (req: any, res) => {
+  const labId = req.query.labId ? Number(req.query.labId) : null;
+  const status = req.query.status ? String(req.query.status) : null;
+
+  const [rows] = await pool.query(
+    `
+    SELECT t.id, t.lab_id as labId, l.name as labName, t.borrower_type as borrowerType,
+           t.borrower_user_id as borrowerUserId, t.borrower_group_code as borrowerGroupCode,
+           u_borrower.full_name as borrowerName,
+           COALESCE(sp.reg_number, u_borrower.index_no) as borrowerIndexNo,
+           u_borrower.email as borrowerEmail,
+           sp.group_code as borrowerGroup,
+           u_issuer.full_name as issuedBy,
+           t.purpose,
+           t.usage_type as usageType,
+           t.rejection_reason as rejectionReason,
+           t.due_at as dueAt,
+           t.returned_at as returnedAt,
+           t.status,
+           t.created_at as createdAt,
+           JSON_ARRAYAGG(
+             JSON_OBJECT(
+               'itemId', i.id,
+               'elabsTag', i.elabs_tag,
+               'name', i.name,
+               'category', i.category,
+               'model', i.model
+             )
+           ) as items
+    FROM borrow_transactions t
+    JOIN labs l ON l.id = t.lab_id
+    LEFT JOIN users u_borrower ON u_borrower.id = t.borrower_user_id
+    LEFT JOIN student_profiles sp ON sp.user_id = t.borrower_user_id
+    LEFT JOIN users u_issuer ON u_issuer.id = t.issued_by_user_id
+    LEFT JOIN borrow_transaction_items bti ON bti.transaction_id = t.id
+    LEFT JOIN inventory_items i ON i.id = bti.item_id
+    WHERE (:labId IS NULL OR t.lab_id = :labId)
+      AND (:status IS NULL OR t.status = :status)
+    GROUP BY t.id, t.lab_id, l.name, t.borrower_type, t.borrower_user_id, t.borrower_group_code,
+             u_borrower.full_name, sp.reg_number, u_borrower.index_no, u_borrower.email, sp.group_code,
+             u_issuer.full_name, t.purpose, t.usage_type, t.rejection_reason, t.due_at, t.returned_at, t.status, t.created_at
+    ORDER BY t.created_at DESC
+    LIMIT 200
+    `,
+    { labId, status }
+  );
+
+  const transactions = (rows as any[]).map((r) => ({
+    ...r,
+    items: typeof r.items === "string" ? JSON.parse(r.items) : (r.items ?? []),
+  }));
+
+  res.json({ transactions });
+});
+
+// ── 12. Return Equipment ──────────────────────────────────────────────────────
 router.post("/return", requireAuth, requirePermission("inventory:borrow"), async (req: any, res) => {
   try {
     const body = z.object({
@@ -323,20 +681,19 @@ router.post("/return", requireAuth, requirePermission("inventory:borrow"), async
         { tx: body.transactionId }
       );
 
-      const issuedBy = req.user.id;
+      const returnedBy = req.user.id;
 
-      // update items to available + condition_in
       for (const it of items as any[]) {
         await conn.query(
           `UPDATE borrow_transaction_items SET condition_in=:condIn WHERE transaction_id=:tx AND item_id=:itemId`,
-          { condIn: body.conditionIn ?? null, tx: body.transactionId, itemId: it.itemId }
+          { condIn: body.conditionIn ?? "Good", tx: body.transactionId, itemId: it.itemId }
         );
         await conn.query(`UPDATE inventory_items SET status='AVAILABLE' WHERE id=:id`, { id: it.itemId });
 
         await conn.query(
           `INSERT INTO barcode_events (event_type, lab_id, item_id, elabs_tag, actor_user_id, meta)
            VALUES ('RETURN_SCAN', :labId, :itemId, :tag, :actor, JSON_OBJECT('transactionId', :tx))`,
-          { labId: tx.lab_id, itemId: it.itemId, tag: it.elabsTag, actor: issuedBy, tx: body.transactionId }
+          { labId: tx.lab_id, itemId: it.itemId, tag: it.elabsTag, actor: returnedBy, tx: body.transactionId }
         );
       }
 
@@ -348,7 +705,7 @@ router.post("/return", requireAuth, requirePermission("inventory:borrow"), async
       await conn.query(
         `INSERT INTO audit_logs (actor_user_id, action, entity, entity_id)
          VALUES (:actor,'BORROW_RETURN','borrow_transaction',:tx)`,
-        { actor: issuedBy, tx: String(body.transactionId) }
+        { actor: returnedBy, tx: String(body.transactionId) }
       );
 
       await conn.commit();
@@ -362,6 +719,28 @@ router.post("/return", requireAuth, requirePermission("inventory:borrow"), async
   } catch (_e) {
     return res.status(400).json({ error: "Invalid request body" });
   }
+});
+
+// ── 13. Barcode Events ────────────────────────────────────────────────────────
+router.get("/barcode-events", requireAuth, requirePermission("inventory:borrow"), async (req, res) => {
+  const labId = req.query.labId ? Number(req.query.labId) : null;
+
+  const [rows] = await pool.query(
+    `
+    SELECT e.id, e.event_type as eventType, e.lab_id as labId, l.name as labName,
+           e.elabs_tag as elabsTag, e.created_at as createdAt,
+           u.full_name as actorName
+    FROM barcode_events e
+    JOIN labs l ON l.id = e.lab_id
+    LEFT JOIN users u ON u.id = e.actor_user_id
+    WHERE (:labId IS NULL OR e.lab_id = :labId)
+    ORDER BY e.created_at DESC
+    LIMIT 200
+    `,
+    { labId }
+  );
+
+  res.json({ events: rows });
 });
 
 export default router;
