@@ -36,17 +36,16 @@ export async function sendMessage(
   if (targetType === "ALL") {
     const [rows] = await pool.query(
       `SELECT u.id FROM users u
-       JOIN user_roles ur ON ur.user_id = u.id
-       JOIN roles r ON r.id = ur.role_id
-       WHERE r.name = 'STUDENT' AND u.is_active = 1`
+       WHERE u.is_active = 1 AND u.id != :sid`,
+      { sid: senderId }
     );
     recipientIds = (rows as any[]).map((r) => r.id);
   } else if (targetType === "GROUP" && targetGroup) {
     const [rows] = await pool.query(
       `SELECT u.id FROM users u
        JOIN student_profiles sp ON sp.user_id = u.id
-       WHERE sp.group_code = :group AND u.is_active = 1`,
-      { group: targetGroup }
+       WHERE sp.group_code = :group AND u.is_active = 1 AND u.id != :sid`,
+      { group: targetGroup, sid: senderId }
     );
     recipientIds = (rows as any[]).map((r) => r.id);
   } else if (targetType === "USER" && targetUser) {

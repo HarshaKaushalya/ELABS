@@ -6,24 +6,21 @@ import { sendMessage } from "./messages.service";
 
 const router = Router();
 
-/** Helper: check if user has a permission */
-async function hasPermission(userId: number, code: string): Promise<boolean> {
+/** Helper: get user role names */
+async function getUserRoles(userId: number): Promise<string[]> {
   const [rows] = await pool.query(
-    `SELECT 1 FROM users u
-     JOIN user_roles ur ON ur.user_id = u.id
-     JOIN roles r ON r.id = ur.role_id
-     JOIN role_permissions rp ON rp.role_id = r.id
-     JOIN permissions p ON p.id = rp.permission_id
-     WHERE u.id = :userId AND p.code = :code LIMIT 1`,
-    { userId, code }
+    `SELECT r.name FROM roles r
+     JOIN user_roles ur ON ur.role_id = r.id
+     WHERE ur.user_id = :userId`,
+    { userId }
   );
-  return (rows as any[]).length > 0;
+  return (rows as any[]).map(r => r.name);
 }
 
 /**
  * POST /messages/send
- * - Admin/Staff: can send to ALL, GROUP, or USER
- * - Students: can only send direct (USER) messages
+ * - Admin/Staff (Admin, Coordinator, Lecturer): can send to ALL, GROUP, or USER
+ * - Students/Others: can send direct (USER) messages
  */
 router.post("/send", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
@@ -35,13 +32,14 @@ router.post("/send", requireAuth, async (req: AuthedRequest, res, next) => {
       targetUser:  z.coerce.number().optional(),
     }).parse(req.body);
 
-    const isAdmin = await hasPermission(req.user!.id, "admin:manage");
+    const roles = await getUserRoles(req.user!.id);
+    const canBroadcast = roles.some(r => ["SYSTEM_ADMIN", "MODULE_COORDINATOR", "LECTURER"].includes(r));
 
-    // Students can only send direct messages
-    if (!isAdmin && body.targetType !== "USER") {
+    // Non-staff can only send direct messages
+    if (!canBroadcast && body.targetType !== "USER") {
       return res.status(403).json({ error: "Students can only send direct messages" });
     }
-    if (!isAdmin && body.targetType === "USER" && !body.targetUser) {
+    if (body.targetType === "USER" && !body.targetUser) {
       return res.status(400).json({ error: "Recipient is required" });
     }
 
@@ -148,13 +146,14 @@ router.get("/contacts", requireAuth, async (req: AuthedRequest, res, next) => {
        LEFT JOIN student_profiles sp ON sp.user_id = u.id
        WHERE u.is_active = 1
          AND u.id != :uid
-         AND r.name IN ('SYSTEM_ADMIN','MODULE_COORDINATOR','LECTURER','STUDENT')
+         AND r.name IN ('SYSTEM_ADMIN','MODULE_COORDINATOR','LECTURER','TECHNICIAN','STUDENT')
        ORDER BY
          CASE r.name
            WHEN 'SYSTEM_ADMIN'        THEN 1
            WHEN 'MODULE_COORDINATOR'  THEN 2
            WHEN 'LECTURER'            THEN 3
-           ELSE 4
+           WHEN 'TECHNICIAN'          THEN 4
+           ELSE 5
          END, u.full_name
        LIMIT 300`,
       { uid }
@@ -163,11 +162,12 @@ router.get("/contacts", requireAuth, async (req: AuthedRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-/** GET /messages/groups — lab groups (admin only) */
+/** GET /messages/groups — lab groups (staff only) */
 router.get("/groups", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
-    const isAdmin = await hasPermission(req.user!.id, "admin:manage");
-    if (!isAdmin) return res.status(403).json({ error: "Forbidden" });
+    const roles = await getUserRoles(req.user!.id);
+    const canView = roles.some(r => ["SYSTEM_ADMIN", "MODULE_COORDINATOR", "LECTURER", "TECHNICIAN"].includes(r));
+    if (!canView) return res.status(403).json({ error: "Forbidden" });
     const [rows] = await pool.query(
       `SELECT DISTINCT group_code FROM student_profiles ORDER BY group_code`
     );
@@ -175,11 +175,12 @@ router.get("/groups", requireAuth, async (req: AuthedRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
-/** GET /messages/students — student list (admin only) */
+/** GET /messages/students — student list (staff only) */
 router.get("/students", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
-    const isAdmin = await hasPermission(req.user!.id, "admin:manage");
-    if (!isAdmin) return res.status(403).json({ error: "Forbidden" });
+    const roles = await getUserRoles(req.user!.id);
+    const canView = roles.some(r => ["SYSTEM_ADMIN", "MODULE_COORDINATOR", "LECTURER", "TECHNICIAN"].includes(r));
+    if (!canView) return res.status(403).json({ error: "Forbidden" });
     const [rows] = await pool.query(
       `SELECT u.id, u.full_name AS fullName, u.email,
               sp.reg_number AS regNumber, sp.group_code AS groupCode
