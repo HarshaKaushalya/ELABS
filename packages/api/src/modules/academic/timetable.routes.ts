@@ -32,11 +32,14 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
               m.name AS moduleName, m.id AS moduleId
        FROM timetable_slots ts
        LEFT JOIN modules m ON m.code = ts.module_code
-       WHERE ts.group_code = :group
-          OR (ts.group_code = 'ALL' AND ts.semester_id = :semester)
-          OR (:semester IS NOT NULL AND ts.semester_id = :semester AND (ts.group_code = :group OR ts.group_code = 'ALL'))
+       WHERE (
+            ts.group_code = :group
+         OR ts.group_code = CONCAT('EE', LPAD(REPLACE(:group, 'EE', ''), 2, '0'))
+         OR :group = CONCAT('EE', LPAD(REPLACE(ts.group_code, 'EE', ''), 2, '0'))
+         OR ts.group_code = 'ALL'
+       )
        ORDER BY ts.session_date, ts.time_slot`,
-      { group: profile.group_code, semester: profile.semester }
+      { group: profile.group_code }
     );
     slots = rows;
   } else {

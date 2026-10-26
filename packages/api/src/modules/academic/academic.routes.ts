@@ -421,25 +421,47 @@ router.put("/semesters/:semesterId/timetable", requireAuth, async (req: AuthedRe
       await conn.commit();
       conn.release();
 
-      // Dispatch notifications to students if requested
+      // Dispatch notifications to students strictly for their corresponding group
       if (body.notifyStudents && body.slots.length > 0) {
         try {
-          const [students] = await pool.query(`
-            SELECT DISTINCT u.id 
-            FROM users u
-            JOIN student_profiles sp ON sp.user_id = u.id
-            WHERE sp.semester = :semesterId 
-               OR u.id IN (SELECT user_id FROM user_semester_groups WHERE semester_id = :semesterId)
-          `, { semesterId });
+          const groupSlotsMap = new Map<string, any[]>();
+          for (const slot of body.slots) {
+            const g = slot.groupCode || "ALL";
+            if (!groupSlotsMap.has(g)) groupSlotsMap.set(g, []);
+            groupSlotsMap.get(g)!.push(slot);
+          }
 
-          for (const st of students as any[]) {
-            await createNotification(
-              st.id,
-              "LAB_REMINDER",
-              "Laboratory Timetable Updated",
-              `The master laboratory timetable for your semester has been updated with ${body.slots.length} practical sessions. Check your lab schedule and academic calendar.`,
-              { semesterId, url: `/dashboard` }
-            );
+          for (const [groupCode, groupSlots] of groupSlotsMap.entries()) {
+            const [students] = await pool.query(`
+              SELECT DISTINCT u.id 
+              FROM users u
+              JOIN student_profiles sp ON sp.user_id = u.id
+              WHERE sp.semester = :semesterId 
+                AND (
+                  :groupCode = 'ALL'
+                  OR sp.group_code = :groupCode
+                  OR sp.group_code = CONCAT('EE', LPAD(REPLACE(:groupCode, 'EE', ''), 2, '0'))
+                  OR :groupCode = CONCAT('EE', LPAD(REPLACE(sp.group_code, 'EE', ''), 2, '0'))
+                )
+            `, { semesterId, groupCode });
+
+            const firstSlot = groupSlots[0];
+            const title = groupCode === "ALL" 
+              ? "Master Timetable Updated" 
+              : `Lab Schedule Updated (Group ${groupCode})`;
+            const bodyText = groupCode === "ALL"
+              ? `General timetable updated with ${groupSlots.length} sessions.`
+              : `Your lab schedule has been updated with ${groupSlots.length} sessions for Group ${groupCode}. Upcoming: ${firstSlot.practicalName || firstSlot.moduleCode} on ${firstSlot.sessionDate} (${firstSlot.timeSlot}) in ${firstSlot.labName}.`;
+
+            for (const st of students as any[]) {
+              await createNotification(
+                st.id,
+                "LAB_REMINDER",
+                title,
+                bodyText,
+                { semesterId, groupCode, url: `/dashboard` }
+              );
+            }
           }
         } catch (notifErr) {
           console.error("Failed to notify students of timetable update:", notifErr);
@@ -750,10 +772,175 @@ router.patch("/lab-sessions/:id/complete", requireAuth, requirePermission("admin
 // STUDENT SEMESTER GROUP MEMBERSHIP
 // ============================================================
 
-// GET /academic/my-semester — get current user's semester group
+// GET /academic/semesters/:semesterId/practicals — complete catalog/matrix of practicals for all modules in a semester
+router.get("/semesters/:semesterId/practicals", requireAuth, async (req, res) => {
+  const semesterId = Number(req.params.semesterId);
+  if (!Number.isFinite(semesterId) || semesterId <= 0) return res.status(400).json({ error: "Invalid semester id" });
+
+  try {
+    const [rows] = await pool.query(`
+      SELECT mp.id, mp.module_code AS moduleCode, mp.lab_number AS labNumber, mp.lab_title AS labTitle,
+             mp.equip_status AS equipStatus, mp.num_sessions AS numSessions, mp.notes,
+             mp.completion_requirements AS completionRequirements,
+             mp.safety_guidelines AS safetyGuidelines,
+             m.id AS moduleId, m.name AS moduleName, m.coordinator_name AS coordinatorName,
+             (SELECT COUNT(*) FROM practical_documents pd WHERE pd.practical_id = mp.id) AS documentCount,
+             COALESCE(
+               (SELECT COALESCE(ts.lab_name, ts.lab_label) FROM timetable_slots ts WHERE ts.module_code = mp.module_code AND ts.practical_name = mp.lab_title LIMIT 1),
+               'Engineering Laboratory'
+             ) AS labVenue
+      FROM module_practicals mp
+      JOIN modules m ON m.code = mp.module_code
+      WHERE m.semester_id = :semesterId
+      ORDER BY m.code ASC, mp.sort_order ASC, mp.lab_number ASC
+    `, { semesterId });
+
+    res.json({ practicals: rows });
+  } catch (err) {
+    console.error("Failed to fetch semester practicals matrix:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /academic/semesters/:semesterId/students — list students enrolled in a semester with their group
+router.get("/semesters/:semesterId/students", requireAuth, async (req: AuthedRequest, res) => {
+  const semesterId = Number(req.params.semesterId);
+  if (!Number.isFinite(semesterId) || semesterId <= 0) return res.status(400).json({ error: "Invalid semester id" });
+
+  try {
+    const [students] = await pool.query(`
+      SELECT sp.user_id AS userId, u.full_name AS fullName, u.email,
+             sp.reg_number AS regNumber, sp.group_code AS groupCode,
+             sp.department, sp.semester
+      FROM student_profiles sp
+      JOIN users u ON u.id = sp.user_id
+      WHERE sp.semester = :semesterId
+         OR u.id IN (SELECT user_id FROM user_semester_groups WHERE semester_id = :semesterId)
+      ORDER BY sp.group_code ASC, sp.reg_number ASC, u.full_name ASC
+    `, { semesterId });
+
+    const [groups] = await pool.query(`
+      SELECT DISTINCT group_code AS groupCode
+      FROM student_profiles
+      WHERE (semester = :semesterId OR :semesterId = 6) AND group_code IS NOT NULL
+      ORDER BY group_code ASC
+    `, { semesterId });
+
+    res.json({
+      students,
+      groups: (groups as any[]).map((g: any) => g.groupCode),
+      totalCount: (students as any[]).length
+    });
+  } catch (err) {
+    console.error("Failed to fetch semester students:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /academic/semesters/:semesterId/students/groups — staff updates group assignments
+router.put("/semesters/:semesterId/students/groups", requireAuth, async (req: AuthedRequest, res) => {
+  const staff = await isStaff(req.user!.id);
+  if (!staff) return res.status(403).json({ error: "Staff only." });
+
+  try {
+    const body = z.object({
+      assignments: z.array(z.object({
+        userId: z.number(),
+        groupCode: z.string().min(1).max(20)
+      }))
+    }).parse(req.body);
+
+    for (const item of body.assignments) {
+      await pool.query(`
+        UPDATE student_profiles
+        SET group_code = :groupCode
+        WHERE user_id = :userId
+      `, item);
+    }
+
+    res.json({ ok: true, updatedCount: body.assignments.length });
+  } catch (err: any) {
+    res.status(400).json({ error: "Failed to update groups", detail: err?.message });
+  }
+});
+
+// POST /academic/semesters/:semesterId/students/auto-group — staff auto-distributes students into groups of N (default 7)
+router.post("/semesters/:semesterId/students/auto-group", requireAuth, async (req: AuthedRequest, res) => {
+  const semesterId = Number(req.params.semesterId);
+  const staff = await isStaff(req.user!.id);
+  if (!staff) return res.status(403).json({ error: "Staff only." });
+
+  try {
+    const { groupSize = 7, prefix = "EE" } = z.object({
+      groupSize: z.number().int().min(1).max(50).optional().default(7),
+      prefix: z.string().min(1).max(10).optional().default("EE")
+    }).parse(req.body);
+
+    const [students] = await pool.query(`
+      SELECT sp.user_id, sp.reg_number
+      FROM student_profiles sp
+      WHERE sp.semester = :semesterId
+      ORDER BY sp.reg_number ASC, sp.user_id ASC
+    `, { semesterId });
+
+    const studentList = students as any[];
+    if (studentList.length === 0) {
+      return res.status(400).json({ error: "No students found in this semester to group." });
+    }
+
+    let groupNum = 1;
+    let inCurrentGroup = 0;
+    const assignments: { userId: number; groupCode: string }[] = [];
+
+    for (let i = 0; i < studentList.length; i++) {
+      const gCode = `${prefix}${groupNum}`;
+      assignments.push({ userId: studentList[i].user_id, groupCode: gCode });
+      inCurrentGroup++;
+      if (inCurrentGroup >= groupSize && i < studentList.length - 1) {
+        groupNum++;
+        inCurrentGroup = 0;
+      }
+    }
+
+    for (const a of assignments) {
+      await pool.query(`
+        UPDATE student_profiles SET group_code = :groupCode WHERE user_id = :userId
+      `, a);
+    }
+
+    res.json({
+      ok: true,
+      totalStudents: studentList.length,
+      groupCount: groupNum,
+      groupSize,
+      prefix,
+      message: `Successfully divided ${studentList.length} students into ${groupNum} groups of up to ${groupSize} students.`
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: "Auto-group failed", detail: err?.message });
+  }
+});
+
+// GET /academic/my-semester — get current user's semester group and assigned student group
 router.get("/my-semester", requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.user!.id;
   try {
+    const [profRows] = await pool.query(`
+      SELECT sp.semester, sp.group_code AS groupCode, sp.department, s.name AS semesterName, s.id AS semesterId, s.level
+      FROM student_profiles sp
+      LEFT JOIN semesters s ON s.id = sp.semester
+      WHERE sp.user_id = :userId
+      LIMIT 1
+    `, { userId });
+    const prof = (profRows as any[])[0];
+    if (prof && prof.semester) {
+      return res.json({
+        semester: { id: prof.semesterId || prof.semester, name: prof.semesterName || `Semester ${prof.semester}`, level: prof.level || prof.semester },
+        groupCode: prof.groupCode,
+        department: prof.department
+      });
+    }
+
     const [rows] = await pool.query(`
       SELECT s.id, s.name, s.level
       FROM user_semester_groups usg
@@ -761,7 +948,7 @@ router.get("/my-semester", requireAuth, async (req: AuthedRequest, res) => {
       WHERE usg.user_id = :userId
       LIMIT 1
     `, { userId });
-    res.json({ semester: (rows as any[])[0] ?? null });
+    res.json({ semester: (rows as any[])[0] ?? null, groupCode: null });
   } catch (err) {
     res.status(500).json({ error: "Internal server error" });
   }

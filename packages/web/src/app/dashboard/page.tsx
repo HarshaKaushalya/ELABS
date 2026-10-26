@@ -17,10 +17,66 @@ import {
   XCircle,
   FlaskConical,
   ClipboardList,
+  FileSpreadsheet,
+  Layers,
+  Search,
+  Filter,
+  Download,
+  BookOpen,
+  ShieldAlert,
+  Eye,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
+import { PracticalDetailsModal } from "@/components/academic/PracticalDetailsModal";
 
 /* ─── Types ────────────────────────────────────────────────────── */
+type StudentProfile = {
+  group_code?: string;
+  groupCode?: string;
+  reg_number?: string;
+  regNumber?: string;
+  semester?: number;
+  department?: string;
+};
+
+type MasterSlot = {
+  id?: number;
+  sessionDate: string;
+  dayOfWeek?: string | null;
+  timeSlot: string;
+  moduleCode: string;
+  moduleName?: string;
+  moduleId?: number;
+  labName: string;
+  practicalName?: string | null;
+  groupCode: string;
+  academicYear?: string;
+  instructorName?: string | null;
+  notes?: string | null;
+  status: "UPCOMING" | "ONGOING" | "COMPLETED" | "CANCELLED";
+};
+
+type SemesterPractical = {
+  id: number;
+  moduleCode: string;
+  labNumber: string;
+  labTitle?: string;
+  equipStatus: "Working" | "Not Working" | "Under Maintenance";
+  numSessions?: number;
+  notes?: string;
+  completionRequirements?: string | null;
+  safetyGuidelines?: string | null;
+  moduleId: number;
+  moduleName?: string;
+  coordinatorName?: string | null;
+  documentCount?: number;
+  labVenue?: string;
+};
 type TimetableSlot = {
   id: number;
   date: string;
@@ -220,15 +276,32 @@ export default function DashboardPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [timeRange, setTimeRange] = useState<7 | 30>(30);
 
+  // Semester 6 master hub states
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [masterSlots, setMasterSlots] = useState<MasterSlot[]>([]);
+  const [semesterModules, setSemesterModules] = useState<{ id: number; code: string; name: string }[]>([]);
+  const [semesterGroups, setSemesterGroups] = useState<string[]>([]);
+  const [semesterPracticals, setSemesterPracticals] = useState<SemesterPractical[]>([]);
+  const [hubTab, setHubTab] = useState<"TIMETABLE" | "PRACTICALS">("TIMETABLE");
+  const [ttModuleFilter, setTtModuleFilter] = useState<string>("ALL");
+  const [ttGroupFilter, setTtGroupFilter] = useState<string>("ALL");
+  const [ttSearch, setTtSearch] = useState<string>("");
+  const [pracModuleFilter, setPracModuleFilter] = useState<string>("ALL");
+  const [pracSearch, setPracSearch] = useState<string>("");
+  const [activePracticalId, setActivePracticalId] = useState<number | null>(null);
+  const [activeCell, setActiveCell] = useState<{ row: number; col: string; val: string } | null>(null);
+
   useEffect(() => {
     async function loadAll() {
       try {
-        const [ttRes, summRes, overdueRes, myBRes, asgnRes] = await Promise.all([
+        const [ttRes, summRes, overdueRes, myBRes, asgnRes, semTtRes, semPracRes] = await Promise.all([
           apiFetch("/timetable"),
           apiFetch("/dashboard/summary"),
           apiFetch("/dashboard/overdue"),
           apiFetch("/dashboard/my-borrows"),
           apiFetch("/academic/assignments").catch(() => ({ ok: false } as any)),
+          apiFetch("/academic/semesters/6/timetable").catch(() => ({ ok: false } as any)),
+          apiFetch("/academic/semesters/6/practicals").catch(() => ({ ok: false } as any)),
         ]);
 
         let loadedAssignments: AssignmentItem[] = [];
@@ -237,12 +310,23 @@ export default function DashboardPage() {
         if (ttRes.ok) {
           const d = await ttRes.json();
           setSlots(d.slots ?? []);
+          setProfile(d.profile ?? null);
           if (Array.isArray(d.assignments)) {
             loadedAssignments = d.assignments;
           }
           if (Array.isArray(d.quizzes)) {
             loadedQuizzes = d.quizzes;
           }
+        }
+        if (semTtRes && "ok" in semTtRes && semTtRes.ok) {
+          const semData = await (semTtRes as any).json();
+          setMasterSlots(semData.slots ?? []);
+          setSemesterModules(semData.modules ?? []);
+          setSemesterGroups(semData.groups ?? []);
+        }
+        if (semPracRes && "ok" in semPracRes && semPracRes.ok) {
+          const pracData = await (semPracRes as any).json();
+          setSemesterPracticals(pracData.practicals ?? []);
         }
         if (summRes.ok) {
           const d = await summRes.json();
@@ -432,6 +516,91 @@ export default function DashboardPage() {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   const prevMonth = () =>
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+
+  /* ── Master Semester Hub Helpers ───────────────────────────── */
+  const filteredMasterSlots = masterSlots.filter((s) => {
+    if (ttModuleFilter !== "ALL" && s.moduleCode !== ttModuleFilter) return false;
+    if (ttGroupFilter === "MY_GROUP") {
+      const myG = profile?.group_code;
+      if (!myG) return true;
+      const isMyGroup =
+        s.groupCode === myG ||
+        s.groupCode === "ALL" ||
+        s.groupCode === `EE${parseInt(myG.replace("EE", ""), 10)}` ||
+        `EE${parseInt(s.groupCode.replace("EE", ""), 10)}` === myG;
+      if (!isMyGroup) return false;
+    } else if (ttGroupFilter !== "ALL" && s.groupCode !== ttGroupFilter) {
+      return false;
+    }
+    if (!ttSearch.trim()) return true;
+    const q = ttSearch.toLowerCase();
+    return (
+      s.sessionDate.toLowerCase().includes(q) ||
+      (s.dayOfWeek && s.dayOfWeek.toLowerCase().includes(q)) ||
+      s.moduleCode.toLowerCase().includes(q) ||
+      (s.moduleName && s.moduleName.toLowerCase().includes(q)) ||
+      (s.practicalName && s.practicalName.toLowerCase().includes(q)) ||
+      s.labName.toLowerCase().includes(q) ||
+      s.groupCode.toLowerCase().includes(q) ||
+      (s.instructorName && s.instructorName.toLowerCase().includes(q))
+    );
+  });
+
+  const filteredSemesterPracticals = semesterPracticals.filter((p) => {
+    if (pracModuleFilter !== "ALL" && p.moduleCode !== pracModuleFilter) return false;
+    if (!pracSearch.trim()) return true;
+    const q = pracSearch.toLowerCase();
+    return (
+      p.moduleCode.toLowerCase().includes(q) ||
+      (p.moduleName && p.moduleName.toLowerCase().includes(q)) ||
+      p.labNumber.toLowerCase().includes(q) ||
+      (p.labTitle && p.labTitle.toLowerCase().includes(q)) ||
+      (p.labVenue && p.labVenue.toLowerCase().includes(q)) ||
+      (p.completionRequirements && p.completionRequirements.toLowerCase().includes(q)) ||
+      (p.safetyGuidelines && p.safetyGuidelines.toLowerCase().includes(q))
+    );
+  });
+
+  const practicalsByModule = filteredSemesterPracticals.reduce((acc, p) => {
+    const key = p.moduleCode;
+    if (!acc[key]) {
+      acc[key] = {
+        moduleCode: p.moduleCode,
+        moduleName: p.moduleName || p.moduleCode,
+        coordinator: p.coordinatorName,
+        items: [],
+      };
+    }
+    acc[key].items.push(p);
+    return acc;
+  }, {} as Record<string, { moduleCode: string; moduleName: string; coordinator?: string | null; items: SemesterPractical[] }>);
+
+  const exportMasterCsv = () => {
+    if (filteredMasterSlots.length === 0) return;
+    const headers = ["Row", "Date", "Day", "Time Slot", "Module Code", "Module Name", "Practical Experiment", "Venue", "Group", "Instructor", "Status", "Notes"];
+    const rows = filteredMasterSlots.map((s, idx) => [
+      idx + 1,
+      s.sessionDate,
+      s.dayOfWeek || "",
+      `"${s.timeSlot}"`,
+      s.moduleCode,
+      `"${s.moduleName || ""}"`,
+      `"${s.practicalName || ""}"`,
+      `"${s.labName}"`,
+      s.groupCode,
+      `"${s.instructorName || ""}"`,
+      s.status,
+      `"${s.notes || ""}"`,
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Semester_6_Master_Lab_Timetable.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   /* ── Shared card style */
   const cardStyle: React.CSSProperties = {
@@ -1090,6 +1259,622 @@ export default function DashboardPage() {
             </div>
           </div>
         </section>
+
+        {/* ── SEMESTER 6 LABORATORY & CURRICULUM HUB ────────────────── */}
+        <section style={{ ...cardStyle, marginTop: 14 }}>
+          {/* Header with Google Sheets / Excel styling */}
+          <div
+            style={{
+              padding: "18px 24px",
+              background: "linear-gradient(135deg, #107c41, #0b5a2f)",
+              color: "#fff",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 14,
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                <FileSpreadsheet size={22} color="#fff" />
+                <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#fff" }}>
+                  Semester 6 Academic & Laboratory Curriculum Hub
+                </h2>
+                <span
+                  style={{
+                    background: "rgba(255, 255, 255, 0.2)",
+                    padding: "2px 10px",
+                    borderRadius: 14,
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  Department of EIE
+                </span>
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "rgba(255, 255, 255, 0.85)" }}>
+                Master rotational schedules across all groups & modules, plus the complete semester practicals catalog
+              </div>
+            </div>
+
+            {/* Student group pill */}
+            {profile?.group_code && (
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.15)",
+                  backdropFilter: "blur(4px)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  borderRadius: 10,
+                  padding: "6px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Users size={16} color="#fff" />
+                <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                  Your Assigned Group: <strong style={{ color: "#a7f3d0" }}>{profile.group_code}</strong>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Excel Workbook Sheet Tabs */}
+          <div
+            style={{
+              display: "flex",
+              background: "var(--bg-elev)",
+              borderBottom: "1px solid var(--line)",
+              padding: "0 20px",
+              gap: 6,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setHubTab("TIMETABLE")}
+              style={{
+                padding: "12px 20px",
+                border: "none",
+                borderBottom: hubTab === "TIMETABLE" ? "3px solid #107c41" : "3px solid transparent",
+                background: hubTab === "TIMETABLE" ? "var(--panel)" : "transparent",
+                color: hubTab === "TIMETABLE" ? "#107c41" : "var(--muted)",
+                fontWeight: 700,
+                fontSize: "0.88rem",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <FileSpreadsheet size={16} />
+              <span>Sheet 1: Master Timetable (Spreadsheet View)</span>
+              <span style={{ fontSize: "0.72rem", padding: "1px 7px", borderRadius: 10, background: hubTab === "TIMETABLE" ? "#107c41" : "var(--line)", color: hubTab === "TIMETABLE" ? "#fff" : "var(--muted)" }}>
+                {masterSlots.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setHubTab("PRACTICALS")}
+              style={{
+                padding: "12px 20px",
+                border: "none",
+                borderBottom: hubTab === "PRACTICALS" ? "3px solid #3d83f6" : "3px solid transparent",
+                background: hubTab === "PRACTICALS" ? "var(--panel)" : "transparent",
+                color: hubTab === "PRACTICALS" ? "#3d83f6" : "var(--muted)",
+                fontWeight: 700,
+                fontSize: "0.88rem",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Layers size={16} />
+              <span>Sheet 2: Practicals Matrix (All Modules Catalog)</span>
+              <span style={{ fontSize: "0.72rem", padding: "1px 7px", borderRadius: 10, background: hubTab === "PRACTICALS" ? "#3d83f6" : "var(--line)", color: hubTab === "PRACTICALS" ? "#fff" : "var(--muted)" }}>
+                {semesterPracticals.length}
+              </span>
+            </button>
+          </div>
+
+          {/* ── SHEET 1: MASTER LAB TIMETABLE (EXCEL GRID VIEW) ────────── */}
+          {hubTab === "TIMETABLE" && (
+            <div>
+              {/* Excel Formula & Coordinates Bar */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  background: "var(--panel-2)",
+                  borderBottom: "1px solid var(--line)",
+                  padding: "6px 14px",
+                  gap: 10,
+                  fontSize: "0.82rem",
+                  fontFamily: "monospace",
+                }}
+              >
+                <div
+                  style={{
+                    background: "var(--panel)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 4,
+                    padding: "3px 10px",
+                    fontWeight: 700,
+                    color: "#107c41",
+                    minWidth: 46,
+                    textAlign: "center",
+                  }}
+                >
+                  {activeCell ? `${activeCell.col}${activeCell.row + 1}` : "A1"}
+                </div>
+                <div style={{ color: "var(--muted)", fontWeight: 700 }}>fx</div>
+                <div
+                  style={{
+                    flex: 1,
+                    background: "var(--panel)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 4,
+                    padding: "3px 12px",
+                    color: "var(--text)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {activeCell ? activeCell.val : masterSlots.length > 0 ? `${masterSlots[0].moduleCode}: ${masterSlots[0].practicalName || masterSlots[0].labName}` : "Ready"}
+                </div>
+              </div>
+
+              {/* Toolbar: Filters & Search */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  background: "var(--panel)",
+                  borderBottom: "1px solid var(--line)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  {/* Module Filter */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted)" }}>MODULE:</span>
+                    <select
+                      value={ttModuleFilter}
+                      onChange={(e) => setTtModuleFilter(e.target.value)}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid var(--line)",
+                        background: "var(--panel-2)",
+                        color: "var(--text)",
+                        fontSize: "0.8rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="ALL">All Modules ({semesterModules.length})</option>
+                      {semesterModules.map((m) => (
+                        <option key={m.id} value={m.code}>
+                          {m.code} — {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Group Filter */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted)" }}>GROUP:</span>
+                    <select
+                      value={ttGroupFilter}
+                      onChange={(e) => setTtGroupFilter(e.target.value)}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: ttGroupFilter === "MY_GROUP" ? "1px solid #10b981" : "1px solid var(--line)",
+                        background: ttGroupFilter === "MY_GROUP" ? "rgba(16, 185, 129, 0.12)" : "var(--panel-2)",
+                        color: ttGroupFilter === "MY_GROUP" ? "#10b981" : "var(--text)",
+                        fontWeight: ttGroupFilter === "MY_GROUP" ? 700 : 500,
+                        fontSize: "0.8rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="ALL">All Groups (Master Rotation)</option>
+                      {profile?.group_code && (
+                        <option value="MY_GROUP">★ My Group ({profile.group_code}) Only</option>
+                      )}
+                      {semesterGroups.map((g) => (
+                        <option key={g} value={g}>
+                          Group {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Search box */}
+                  <div style={{ position: "relative", minWidth: 220 }}>
+                    <Search size={14} color="var(--muted)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+                    <input
+                      type="text"
+                      value={ttSearch}
+                      onChange={(e) => setTtSearch(e.target.value)}
+                      placeholder="Search dates, practicals, venues…"
+                      style={{
+                        padding: "6px 10px 6px 30px",
+                        borderRadius: 6,
+                        border: "1px solid var(--line)",
+                        background: "var(--panel-2)",
+                        color: "var(--text)",
+                        fontSize: "0.8rem",
+                        width: "100%",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* CSV Export */}
+                <button
+                  type="button"
+                  onClick={exportMasterCsv}
+                  disabled={filteredMasterSlots.length === 0}
+                  style={{
+                    padding: "7px 16px",
+                    background: "linear-gradient(135deg, #107c41, #0b5a2f)",
+                    border: "none",
+                    borderRadius: 6,
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.78rem",
+                    cursor: filteredMasterSlots.length > 0 ? "pointer" : "not-allowed",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    boxShadow: "0 2px 6px rgba(16, 124, 65, 0.25)",
+                  }}
+                >
+                  <Download size={14} />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+
+              {/* Excel Table Grid */}
+              <div style={{ overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.82rem" }}>
+                  <thead style={{ position: "sticky", top: 0, zIndex: 5, background: "var(--bg-elev)" }}>
+                    <tr style={{ borderBottom: "1px solid var(--line)" }}>
+                      <th style={{ padding: "8px 12px", borderRight: "1px solid var(--line)", color: "var(--muted)", width: 44, textAlign: "center", fontSize: "0.72rem" }}>#</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>DATE & DAY (A)</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>TIME (B)</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>MODULE (C)</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>PRACTICAL EXPERIMENT (D)</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>LABORATORY VENUE (E)</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>GROUP (F)</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>INSTRUCTOR (G)</th>
+                      <th style={{ padding: "8px 14px", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>STATUS (H)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMasterSlots.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
+                          No timetable slots match the selected filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredMasterSlots.map((s, idx) => {
+                        const myG = profile?.group_code;
+                        const isMyGroup =
+                          myG &&
+                          (s.groupCode === myG ||
+                            s.groupCode === `EE${parseInt(myG.replace("EE", ""), 10)}` ||
+                            `EE${parseInt(s.groupCode.replace("EE", ""), 10)}` === myG);
+
+                        return (
+                          <tr
+                            key={s.id ?? idx}
+                            style={{
+                              borderBottom: "1px solid var(--line)",
+                              background: isMyGroup ? "rgba(16, 185, 129, 0.08)" : idx % 2 === 0 ? "var(--panel)" : "var(--panel-2)",
+                              borderLeft: isMyGroup ? "4px solid #10b981" : "4px solid transparent",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "A", val: s.sessionDate })}
+                              style={{ padding: "8px 12px", borderRight: "1px solid var(--line)", textAlign: "center", color: "var(--muted)", fontSize: "0.74rem" }}
+                            >
+                              {idx + 1}
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "A", val: `${s.sessionDate} (${s.dayOfWeek || ""})` })}
+                              style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", fontWeight: 600, color: "var(--text)" }}
+                            >
+                              {new Date(s.sessionDate).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "B", val: s.timeSlot })}
+                              style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", fontFamily: "monospace", color: "var(--muted)" }}
+                            >
+                              {s.timeSlot}
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "C", val: `${s.moduleCode} ${s.moduleName || ""}` })}
+                              style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", fontWeight: 700, color: "#3d83f6" }}
+                            >
+                              {s.moduleCode}
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "D", val: s.practicalName || "Lab Session" })}
+                              style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--text)", fontWeight: isMyGroup ? 700 : 500 }}
+                            >
+                              {s.practicalName || "Laboratory Practical Session"}
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "E", val: s.labName })}
+                              style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--text)" }}
+                            >
+                              {s.labName}
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "F", val: s.groupCode })}
+                              style={{ padding: "8px 14px", borderRight: "1px solid var(--line)" }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontWeight: 700, color: isMyGroup ? "#10b981" : "var(--text)" }}>
+                                  {s.groupCode}
+                                </span>
+                                {isMyGroup && (
+                                  <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 6px", borderRadius: 10, background: "#10b98120", color: "#10b981" }}>
+                                    Your Group
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "G", val: s.instructorName || "" })}
+                              style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontSize: "0.78rem" }}
+                            >
+                              {s.instructorName || "—"}
+                            </td>
+                            <td
+                              onClick={() => setActiveCell({ row: idx, col: "H", val: s.status })}
+                              style={{ padding: "8px 14px" }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  padding: "2px 8px",
+                                  borderRadius: 12,
+                                  background: s.status === "COMPLETED" ? "#10b98118" : s.status === "CANCELLED" ? "#ef444418" : "#3d83f618",
+                                  color: s.status === "COMPLETED" ? "#10b981" : s.status === "CANCELLED" ? "#ef4444" : "#3d83f6",
+                                }}
+                              >
+                                {s.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── SHEET 2: SEMESTER PRACTICALS MATRIX (ALL MODULES CATALOG) ── */}
+          {hubTab === "PRACTICALS" && (
+            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Matrix Toolbar */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 12,
+                  paddingBottom: 14,
+                  borderBottom: "1px solid var(--line)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted)" }}>MODULE:</span>
+                    <select
+                      value={pracModuleFilter}
+                      onChange={(e) => setPracModuleFilter(e.target.value)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        border: "1px solid var(--line)",
+                        background: "var(--panel-2)",
+                        color: "var(--text)",
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="ALL">All Modules ({Object.keys(practicalsByModule).length})</option>
+                      {semesterModules.map((m) => (
+                        <option key={m.id} value={m.code}>
+                          {m.code} — {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ position: "relative", minWidth: 260 }}>
+                    <Search size={14} color="var(--muted)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+                    <input
+                      type="text"
+                      value={pracSearch}
+                      onChange={(e) => setPracSearch(e.target.value)}
+                      placeholder="Search practical titles, requirements, safety rules…"
+                      style={{
+                        padding: "6px 10px 6px 30px",
+                        borderRadius: 6,
+                        border: "1px solid var(--line)",
+                        background: "var(--panel-2)",
+                        color: "var(--text)",
+                        fontSize: "0.82rem",
+                        width: "100%",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+                  Showing <strong>{filteredSemesterPracticals.length}</strong> practical experiments across 6th Semester
+                </div>
+              </div>
+
+              {/* Practicals Grouped by Module */}
+              {Object.keys(practicalsByModule).length === 0 ? (
+                <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
+                  No practicals match your search filter.
+                </div>
+              ) : (
+                Object.values(practicalsByModule).map((group) => (
+                  <div
+                    key={group.moduleCode}
+                    style={{
+                      background: "var(--panel-2)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {/* Module Header Bar */}
+                    <div
+                      style={{
+                        padding: "12px 18px",
+                        background: "var(--bg-elev)",
+                        borderBottom: "1px solid var(--line)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontWeight: 700, fontSize: "0.88rem", padding: "3px 10px", borderRadius: 6, background: "#3d83f620", color: "#3d83f6" }}>
+                          {group.moduleCode}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>
+                          {group.moduleName}
+                        </span>
+                        {group.coordinator && (
+                          <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+                            • Coordinator: {group.coordinator}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: "0.76rem", color: "var(--muted)", fontWeight: 600 }}>
+                        {group.items.length} Practicals Required
+                      </span>
+                    </div>
+
+                    {/* Practicals List */}
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      {group.items.map((p, idx) => (
+                        <div
+                          key={p.id}
+                          style={{
+                            padding: "14px 18px",
+                            borderBottom: idx === group.items.length - 1 ? "none" : "1px solid var(--line)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: 16,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div style={{ flex: "1 1 500px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                              <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "var(--panel)", border: "1px solid var(--line)", color: "var(--text)" }}>
+                                {p.labNumber}
+                              </span>
+                              <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>
+                                {p.labTitle || "Practical Experiment"}
+                              </span>
+                              <span style={{ fontSize: "0.72rem", color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                • 📍 {p.labVenue || "Laboratory"}
+                              </span>
+                            </div>
+
+                            {/* Requirements summary */}
+                            {p.completionRequirements && (
+                              <div style={{ fontSize: "0.8rem", color: "var(--muted)", lineHeight: 1.5, marginBottom: 6 }}>
+                                <strong style={{ color: "#3d83f6" }}>Requirements: </strong>
+                                {p.completionRequirements.slice(0, 160)}…
+                              </div>
+                            )}
+
+                            {/* Safety badge */}
+                            {p.safetyGuidelines && (
+                              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.74rem", color: "#ef4444", background: "rgba(239, 68, 68, 0.08)", padding: "2px 8px", borderRadius: 6 }}>
+                                <ShieldAlert size={12} />
+                                <span>Safety regulations & PPE protocols defined</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Right Action Button */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                            <div style={{ textAlign: "right", marginRight: 6 }}>
+                              <div style={{ fontSize: "0.74rem", color: "#10b981", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                                <BookOpen size={12} />
+                                <span>{p.documentCount || 0} Documents</span>
+                              </div>
+                              <div style={{ fontSize: "0.68rem", color: "var(--muted)" }}>Manual & Guidelines</div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setActivePracticalId(p.id)}
+                              style={{
+                                padding: "8px 16px",
+                                background: "linear-gradient(135deg, #3d83f6, #2563eb)",
+                                border: "none",
+                                borderRadius: 8,
+                                color: "#fff",
+                                fontWeight: 700,
+                                fontSize: "0.8rem",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                boxShadow: "0 2px 6px rgba(61, 131, 246, 0.25)",
+                              }}
+                            >
+                              <Eye size={13} />
+                              <span>View Details & Manual</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Modal for Practical Details & Documents */}
+        {activePracticalId && (
+          <PracticalDetailsModal
+            practicalId={activePracticalId}
+            onClose={() => setActivePracticalId(null)}
+          />
+        )}
 
       </div>
     </AppShell>

@@ -122,7 +122,10 @@ export async function runNotificationsJob(): Promise<void> {
         `SELECT u.id, u.full_name
          FROM users u
          JOIN student_profiles sp ON sp.user_id = u.id
-         WHERE sp.group_code = :group OR :group = 'ALL'`,
+         WHERE :group = 'ALL'
+            OR sp.group_code = :group
+            OR sp.group_code = CONCAT('EE', LPAD(REPLACE(:group, 'EE', ''), 2, '0'))
+            OR :group = CONCAT('EE', LPAD(REPLACE(sp.group_code, 'EE', ''), 2, '0'))`,
         { group: slot.group_code }
       );
 
@@ -143,13 +146,16 @@ export async function runNotificationsJob(): Promise<void> {
             month: "short"
           });
 
+          const groupLabel = slot.group_code === "ALL" ? "" : ` (Group ${slot.group_code})`;
+
           await createNotification(
             st.id,
             "LAB_REMINDER",
-            `Upcoming Practical: ${slot.module_code}`,
-            `You have ${slot.practical_name} scheduled on ${dateStr} (${slot.time_slot}) in ${slot.lab_name}. Please review the lab manual and safety guidelines before attending.`,
+            `Upcoming Practical${groupLabel}: ${slot.module_code}`,
+            `You have ${slot.practical_name} scheduled for ${slot.group_code === "ALL" ? "your cohort" : `Group ${slot.group_code}`} on ${dateStr} (${slot.time_slot}) in ${slot.lab_name}. Please review the lab manual and safety guidelines before attending.`,
             {
               slotId: slot.id,
+              groupCode: slot.group_code,
               moduleId: slot.module_id,
               url: slot.module_id ? `/labs/module/${slot.module_id}?tab=schedule` : "/dashboard"
             }
