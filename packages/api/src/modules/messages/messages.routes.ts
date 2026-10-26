@@ -91,9 +91,13 @@ router.get("/sent", requireAuth, async (req: AuthedRequest, res, next) => {
          bm.id, bm.subject, bm.body, bm.target_type AS targetType,
          bm.target_group AS targetGroup, bm.target_user AS targetUser,
          bm.created_at AS createdAt,
+         u_sender.full_name AS senderName,
+         u_recipient.full_name AS recipientName,
          COUNT(mr.user_id) AS recipientCount,
          COALESCE(SUM(mr.is_read), 0) AS readCount
        FROM broadcast_messages bm
+       JOIN users u_sender ON u_sender.id = bm.sender_id
+       LEFT JOIN users u_recipient ON u_recipient.id = bm.target_user
        LEFT JOIN message_recipients mr ON mr.message_id = bm.id
        WHERE bm.sender_id = :uid
        GROUP BY bm.id

@@ -29,8 +29,10 @@ interface Message {
   body: string;
   senderName: string;
   senderId?: number;
+  recipientName?: string;
   targetType: "ALL" | "GROUP" | "USER";
   targetGroup?: string;
+  targetUser?: number;
   recipientCount?: number;
   readCount?: number;
   createdAt: string;
@@ -796,7 +798,7 @@ export default function MessagesPage() {
 
   const { on } = useSocket(token);
 
-  // Load inbox
+  // Load inbox (stable callback with empty dependencies)
   const loadInbox = useCallback(async () => {
     setLoading(true);
     try {
@@ -807,29 +809,23 @@ export default function MessagesPage() {
         if (msgs.length > 0) {
           setInbox(msgs);
           setUnread(data.unreadCount ?? 0);
-          if (!activeMsg) setActiveMsg(msgs[0]);
         } else {
-          // Provide standard department messages if server has 0 messages
           setInbox(DEFAULT_DEPARTMENT_MESSAGES);
           setUnread(2);
-          if (!activeMsg) setActiveMsg(DEFAULT_DEPARTMENT_MESSAGES[0]);
         }
       } else {
-        // Fallback for demo / offline
         setInbox(DEFAULT_DEPARTMENT_MESSAGES);
         setUnread(2);
-        if (!activeMsg) setActiveMsg(DEFAULT_DEPARTMENT_MESSAGES[0]);
       }
     } catch {
       setInbox(DEFAULT_DEPARTMENT_MESSAGES);
       setUnread(2);
-      if (!activeMsg) setActiveMsg(DEFAULT_DEPARTMENT_MESSAGES[0]);
     } finally {
       setLoading(false);
     }
-  }, [activeMsg]);
+  }, []);
 
-  // Load sent messages
+  // Load sent messages (stable callback with empty dependencies)
   const loadSent = useCallback(async () => {
     setLoading(true);
     try {
@@ -854,9 +850,9 @@ export default function MessagesPage() {
     setMounted(true);
   }, []);
 
+  // Contacts and groups initial load
   useEffect(() => {
     if (!mounted) return;
-    loadInbox();
 
     // Fetch contacts
     apiFetch("/messages/contacts")
@@ -865,7 +861,6 @@ export default function MessagesPage() {
         if (d?.contacts?.length > 0) {
           setContacts(d.contacts);
         } else {
-          // Fallback contacts for messaging staff
           setContacts([
             { id: 1, fullName: "Faculty Administrator", email: "admin@elabs.eng.ruh.ac.lk", role: "SYSTEM_ADMIN" },
             { id: 2, fullName: "Dr. EIE Lecturer", email: "lecturer@elabs.eng.ruh.ac.lk", role: "LECTURER" },
@@ -886,18 +881,25 @@ export default function MessagesPage() {
         }
       })
       .catch(() => {});
-  }, [mounted, loadInbox]);
+  }, [mounted]);
 
-  // Tab change
+  // Tab change & data fetching
   useEffect(() => {
     if (!mounted) return;
     if (tab === "sent") {
       loadSent();
-      setActiveMsg(null);
     } else {
       loadInbox();
     }
-  }, [tab, mounted, loadSent, loadInbox]);
+  }, [tab, mounted, loadInbox, loadSent]);
+
+  // Auto-select first message when list changes and no message is selected
+  useEffect(() => {
+    const currentList = tab === "sent" ? sent : inbox;
+    if (currentList.length > 0 && !activeMsg) {
+      setActiveMsg(currentList[0]);
+    }
+  }, [tab, inbox, sent, activeMsg]);
 
   // Real-time socket listener
   useEffect(() => {
@@ -911,13 +913,21 @@ export default function MessagesPage() {
     };
   }, [on]);
 
-  const markRead = async (msg: Message) => {
+  const handleSelectMessage = (msg: Message) => {
     setActiveMsg(msg);
-    if (!msg.isRead && msg.id < 9000) {
-      apiFetch(`/messages/${msg.id}/read`, { method: "PATCH" }).catch(() => {});
+    if (tab === "inbox" && !msg.isRead) {
+      if (msg.id < 9000) {
+        apiFetch(`/messages/${msg.id}/read`, { method: "PATCH" }).catch(() => {});
+      }
+      setInbox((prev) => prev.map((m) => (m.id === msg.id ? { ...m, isRead: true } : m)));
+      setUnread((prev) => Math.max(0, prev - 1));
     }
-    setInbox((prev) => prev.map((m) => (m.id === msg.id ? { ...m, isRead: true } : m)));
-    setUnread((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleTabChange = (newTab: "inbox" | "sent") => {
+    if (tab === newTab) return;
+    setTab(newTab);
+    setActiveMsg(null);
   };
 
   const markAllRead = async () => {
@@ -1039,7 +1049,7 @@ export default function MessagesPage() {
             return (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => handleTabChange(t)}
                 style={{
                   padding: "8px 18px",
                   borderRadius: 8,
@@ -1195,7 +1205,7 @@ export default function MessagesPage() {
                 return (
                   <div
                     key={msg.id}
-                    onClick={() => (tab === "inbox" ? markRead(msg) : setActiveMsg(msg))}
+                    onClick={() => handleSelectMessage(msg)}
                     style={{
                       padding: "14px 18px",
                       cursor: "pointer",
@@ -1258,8 +1268,8 @@ export default function MessagesPage() {
                             msg.targetType === "ALL"
                               ? "All Department"
                               : msg.targetType === "GROUP"
-                              ? msg.targetGroup
-                              : "Individual Recipient"
+                              ? `Group: ${msg.targetGroup}`
+                              : msg.recipientName ? msg.recipientName : "Individual Recipient"
                           }`}
                     </div>
 
@@ -1398,8 +1408,8 @@ export default function MessagesPage() {
                         {activeMsg.targetType === "ALL"
                           ? "All Department"
                           : activeMsg.targetType === "GROUP"
-                          ? activeMsg.targetGroup
-                          : "Direct Message"}
+                          ? `Group ${activeMsg.targetGroup}`
+                          : activeMsg.recipientName ? activeMsg.recipientName : "Direct Message"}
                       </span>
                     </span>
 
