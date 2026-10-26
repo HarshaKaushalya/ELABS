@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../auth/auth.middleware";
 import { requirePermission } from "../../rbac/requirePermission";
 import { pool } from "../../db/mysql";
+import { createNotification, notifyUsersByRole } from "../notifications/notifications.service";
 
 const router = Router();
 
@@ -211,6 +212,33 @@ router.post("/request-borrow", requireAuth, async (req: any, res) => {
       );
 
       await conn.commit();
+
+      // Notify all Admins and Lab Technicians about the pending request
+      try {
+        const [studentRows] = await pool.query(
+          `SELECT u.full_name, COALESCE(sp.reg_number, u.index_no) as index_no 
+           FROM users u LEFT JOIN student_profiles sp ON sp.user_id = u.id WHERE u.id = :uid`,
+          { uid: studentUserId }
+        );
+        const student = (studentRows as any[])[0];
+        const [labRows] = await pool.query(`SELECT name FROM labs WHERE id = :id`, { id: body.labId });
+        const labName = (labRows as any[])[0]?.name || "Laboratory";
+        const itemNames = list.map((i: any) => `${i.elabs_tag} (${i.name})`).join(", ");
+        const usageLabel = body.usageType === "OUTSIDE_LAB" ? "Take Outside Lab" : "In-Lab Session";
+
+        const notifBody = `${student?.full_name || "A student"} (${student?.index_no || "Student"}) requested ${list.length} item(s) [${itemNames}] in ${labName}. Loan Type: ${usageLabel}.`;
+
+        await notifyUsersByRole(
+          ["SYSTEM_ADMIN", "TECHNICIAN"],
+          "BORROW_REQUESTED",
+          "New Equipment Borrow Request",
+          notifBody,
+          { transactionId, labId: body.labId, usageType: body.usageType, url: "/inventory" }
+        );
+      } catch (notifErr) {
+        console.error("Failed to dispatch borrow request notification:", notifErr);
+      }
+
       res.json({
         ok: true,
         transactionId,
@@ -356,6 +384,36 @@ router.patch("/requests/:id/approve", requireAuth, async (req: any, res) => {
     );
 
     await conn.commit();
+
+    // Notify the student that their borrow request was approved and equipment is issued
+    try {
+      const [techRows] = await pool.query(`SELECT full_name FROM users WHERE id = :uid`, { uid: technicianId });
+      const techName = (techRows as any[])[0]?.full_name || "Lab Staff";
+      const [txDetails] = await pool.query(
+        `SELECT t.due_at, t.borrower_user_id, l.name as lab_name 
+         FROM borrow_transactions t JOIN labs l ON l.id = t.lab_id WHERE t.id = :id`,
+        { id: tx.id }
+      );
+      const txInfo = (txDetails as any[])[0];
+      const dueFormatted = txInfo?.due_at
+        ? new Date(txInfo.due_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+        : "End of lab session";
+      const lab = txInfo?.lab_name || "Laboratory";
+      const itemTags = list.map((i: any) => i.elabs_tag).join(", ");
+
+      if (tx.borrower_user_id) {
+        await createNotification(
+          tx.borrower_user_id,
+          "BORROW_APPROVED",
+          "Borrow Request Approved & Handed Over",
+          `Your equipment request #${tx.id} for [${itemTags}] in ${lab} has been authorized and issued by ${techName}. Return due: ${dueFormatted}.`,
+          { transactionId: tx.id, labId: tx.lab_id, url: "/inventory" }
+        );
+      }
+    } catch (notifErr) {
+      console.error("Failed to dispatch approval notification:", notifErr);
+    }
+
     res.json({ ok: true, transactionId: tx.id, message: "Equipment issued successfully." });
   } catch (err: any) {
     await conn.rollback();
@@ -382,7 +440,7 @@ router.patch("/requests/:id/reject", requireAuth, async (req: any, res) => {
 
   try {
     const [txRows] = await conn.query(
-      `SELECT id, status FROM borrow_transactions WHERE id = :id FOR UPDATE`,
+      `SELECT id, status, borrower_user_id, lab_id FROM borrow_transactions WHERE id = :id FOR UPDATE`,
       { id: reqId }
     );
     const tx = (txRows as any[])[0];
@@ -411,6 +469,30 @@ router.patch("/requests/:id/reject", requireAuth, async (req: any, res) => {
     );
 
     await conn.commit();
+
+    // Notify the student that their borrow request was declined
+    try {
+      const [techRows] = await pool.query(`SELECT full_name FROM users WHERE id = :uid`, { uid: technicianId });
+      const techName = (techRows as any[])[0]?.full_name || "Lab Staff";
+      const [txDetails] = await pool.query(
+        `SELECT l.name as lab_name FROM borrow_transactions t JOIN labs l ON l.id = t.lab_id WHERE t.id = :id`,
+        { id: tx.id }
+      );
+      const lab = (txDetails as any[])[0]?.lab_name || "Laboratory";
+
+      if (tx.borrower_user_id) {
+        await createNotification(
+          tx.borrower_user_id,
+          "BORROW_REJECTED",
+          "Borrow Request Declined",
+          `Your equipment borrow request #${tx.id} for ${lab} was declined by ${techName}. Reason: "${reason}".`,
+          { transactionId: tx.id, reason, url: "/inventory" }
+        );
+      }
+    } catch (notifErr) {
+      console.error("Failed to dispatch rejection notification:", notifErr);
+    }
+
     res.json({ ok: true, message: "Request rejected." });
   } catch (err: any) {
     await conn.rollback();
@@ -529,6 +611,27 @@ router.post("/borrow", requireAuth, async (req: any, res) => {
       );
 
       await conn.commit();
+
+      if (body.borrowerUserId) {
+        try {
+          const [staffRows] = await pool.query(`SELECT full_name FROM users WHERE id = :uid`, { uid: operatorUserId });
+          const staffName = (staffRows as any[])[0]?.full_name || "Lab Technician";
+          const [labRows] = await pool.query(`SELECT name FROM labs WHERE id = :id`, { id: body.labId });
+          const labName = (labRows as any[])[0]?.name || "Laboratory";
+          const tags = list.map((i: any) => i.elabs_tag).join(", ");
+
+          await createNotification(
+            body.borrowerUserId,
+            "BORROW_APPROVED",
+            "Laboratory Equipment Issued",
+            `${list.length} item(s) [${tags}] have been issued to you by ${staffName} at ${labName}. Due: ${finalDueAt || "scheduled session"}.`,
+            { transactionId, labId: body.labId, url: "/inventory" }
+          );
+        } catch (notifErr) {
+          console.error("Failed to dispatch walk-in notification:", notifErr);
+        }
+      }
+
       res.json({
         transactionId,
         borrowedItems: list.map((it: any) => ({
@@ -709,6 +812,31 @@ router.post("/return", requireAuth, requirePermission("inventory:borrow"), async
       );
 
       await conn.commit();
+
+      // Notify the student that their equipment return was inspected and accepted
+      try {
+        const [txInfo] = await pool.query(
+          `SELECT t.borrower_user_id, l.name as lab_name, u.full_name as inspector_name
+           FROM borrow_transactions t
+           JOIN labs l ON l.id = t.lab_id
+           LEFT JOIN users u ON u.id = :inspectorId
+           WHERE t.id = :id`,
+          { id: body.transactionId, inspectorId: returnedBy }
+        );
+        const info = (txInfo as any[])[0];
+        if (info?.borrower_user_id) {
+          await createNotification(
+            info.borrower_user_id,
+            "BORROW_RETURNED",
+            "Equipment Return Confirmed",
+            `Your returned equipment for transaction #${body.transactionId} (${info.lab_name}) has been verified and returned to inventory by ${info.inspector_name || "Lab Staff"}.`,
+            { transactionId: body.transactionId, url: "/inventory" }
+          );
+        }
+      } catch (notifErr) {
+        console.error("Failed to dispatch return notification:", notifErr);
+      }
+
       res.json({ ok: true });
     } catch (_e) {
       await conn.rollback();

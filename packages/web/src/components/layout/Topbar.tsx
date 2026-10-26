@@ -19,7 +19,11 @@ import {
   Settings,
   CheckCheck,
   ChevronRight,
-  Inbox
+  Inbox,
+  ClipboardList,
+  XCircle,
+  BookOpen,
+  Award
 } from "lucide-react";
 
 type TopbarProps = {
@@ -40,13 +44,17 @@ interface NotificationItem {
 }
 
 const NOTIF_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-  BORROW_APPROVED:  { icon: <CheckCircle2 size={15} />, color: "#18d18f", bg: "rgba(24, 209, 143, 0.15)" },
-  BORROW_OVERDUE:   { icon: <AlertTriangle size={15} />, color: "#f3ae2a", bg: "rgba(243, 174, 42, 0.15)" },
-  BORROW_RETURNED:  { icon: <Package size={15} />, color: "#3d83f6", bg: "rgba(61, 131, 246, 0.15)" },
-  LAB_REMINDER:     { icon: <Calendar size={15} />, color: "#1dd5e6", bg: "rgba(29, 213, 230, 0.15)" },
-  FIRE_ALERT:       { icon: <Flame size={15} />, color: "#ff4d57", bg: "rgba(255, 77, 87, 0.15)" },
-  BROADCAST:        { icon: <Megaphone size={15} />, color: "#a78bfa", bg: "rgba(167, 139, 250, 0.15)" },
-  SYSTEM:           { icon: <Settings size={15} />, color: "#7ea5d6", bg: "rgba(126, 165, 214, 0.15)" },
+  BORROW_REQUESTED:     { icon: <ClipboardList size={15} />, color: "#f59e0b", bg: "rgba(245, 158, 11, 0.15)" },
+  BORROW_APPROVED:      { icon: <CheckCircle2 size={15} />, color: "#18d18f", bg: "rgba(24, 209, 143, 0.15)" },
+  BORROW_REJECTED:      { icon: <XCircle size={15} />, color: "#ef4444", bg: "rgba(239, 68, 68, 0.15)" },
+  BORROW_OVERDUE:       { icon: <AlertTriangle size={15} />, color: "#f3ae2a", bg: "rgba(243, 174, 42, 0.15)" },
+  BORROW_RETURNED:      { icon: <Package size={15} />, color: "#3d83f6", bg: "rgba(61, 131, 246, 0.15)" },
+  LAB_REMINDER:         { icon: <Calendar size={15} />, color: "#1dd5e6", bg: "rgba(29, 213, 230, 0.15)" },
+  FIRE_ALERT:           { icon: <Flame size={15} />, color: "#ff4d57", bg: "rgba(255, 77, 87, 0.15)" },
+  ASSIGNMENT_PUBLISHED: { icon: <BookOpen size={15} />, color: "#6366f1", bg: "rgba(99, 102, 241, 0.15)" },
+  ASSIGNMENT_GRADED:    { icon: <Award size={15} />, color: "#10b981", bg: "rgba(16, 185, 129, 0.15)" },
+  BROADCAST:            { icon: <Megaphone size={15} />, color: "#a78bfa", bg: "rgba(167, 139, 250, 0.15)" },
+  SYSTEM:               { icon: <Settings size={15} />, color: "#7ea5d6", bg: "rgba(126, 165, 214, 0.15)" },
 };
 
 function formatTimeAgo(isoString: string): string {
@@ -106,7 +114,7 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
   useEffect(() => {
     if (me) {
       fetchNotifications();
-      const interval = setInterval(fetchNotifications, 30000);
+      const interval = setInterval(fetchNotifications, 15000);
       return () => clearInterval(interval);
     }
   }, [me, fetchNotifications]);
@@ -163,6 +171,8 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
       router.push(notif.meta.url);
     } else if (notif.type.startsWith("BORROW_")) {
       router.push("/inventory");
+    } else if (notif.type.startsWith("ASSIGNMENT_")) {
+      router.push("/courses");
     } else if (notif.type === "LAB_REMINDER") {
       router.push("/academic-calendar");
     } else if (notif.type === "BROADCAST") {
@@ -250,7 +260,12 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
               <button
                 type="button"
                 className={`topbar-icon-button ${showNotifications ? "active" : ""}`}
-                onClick={() => setShowNotifications((s) => !s)}
+                onClick={() => {
+                  setShowNotifications((s) => {
+                    if (!s) fetchNotifications();
+                    return !s;
+                  });
+                }}
                 aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
                 title="Notifications"
               >

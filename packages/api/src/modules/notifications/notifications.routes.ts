@@ -12,7 +12,7 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
             meta, created_at AS createdAt
      FROM notifications
      WHERE user_id = :uid
-     ORDER BY is_read ASC, created_at DESC
+     ORDER BY is_read ASC, created_at DESC, id DESC
      LIMIT 50`,
     { uid }
   );

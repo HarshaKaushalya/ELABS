@@ -10,6 +10,7 @@ import fs from "fs";
 import { AuthedRequest, requireAuth } from "../auth/auth.middleware";
 import { requirePermission } from "../../rbac/requirePermission";
 import { pool } from "../../db/mysql";
+import { createNotification } from "../notifications/notifications.service";
 
 const router = Router();
 
@@ -256,6 +257,31 @@ router.patch("/submissions/:id/grade", requireAuth, async (req: AuthedRequest, r
       SET score = :score, feedback = :feedback, graded_by = :gradedBy, graded_at = NOW()
       WHERE id = :id
     `, { id, score: body.score, feedback: body.feedback ?? null, gradedBy: req.user!.id });
+
+    // Notify student about the grade
+    try {
+      const [subRows] = await pool.query(
+        `SELECT s.student_id, a.title as assignment_title, m.code as module_code
+         FROM assignment_submissions s
+         JOIN assignments a ON a.id = s.assignment_id
+         JOIN modules m ON m.id = a.module_id
+         WHERE s.id = :id`,
+        { id }
+      );
+      const sub = (subRows as any[])[0];
+      if (sub?.student_id) {
+        await createNotification(
+          sub.student_id,
+          "ASSIGNMENT_GRADED",
+          `Assignment Graded: ${sub.assignment_title}`,
+          `Your submission for ${sub.module_code} ("${sub.assignment_title}") has been graded. Score: ${body.score}/100.${body.feedback ? ` Feedback: "${body.feedback}"` : ""}`,
+          { submissionId: id, score: body.score, url: "/courses" }
+        );
+      }
+    } catch (notifErr) {
+      console.error("Failed to notify student on grading:", notifErr);
+    }
+
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: "Invalid request" });
