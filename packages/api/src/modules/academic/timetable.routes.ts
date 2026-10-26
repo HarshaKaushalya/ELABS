@@ -19,24 +19,36 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
 
   let slots;
   if (profile) {
-    // Student: own group only
+    // Student: own group or entire semester
     const [rows] = await pool.query(
-      `SELECT ts.id, ts.session_date AS date, ts.time_slot AS time,
-              ts.module_code AS moduleCode, ts.lab_label AS lab,
+      `SELECT ts.id, ts.session_date AS date, ts.day_of_week AS dayOfWeek, ts.time_slot AS time,
+              ts.module_code AS moduleCode,
+              COALESCE(ts.lab_name, ts.lab_label) AS lab,
+              COALESCE(ts.lab_name, ts.lab_label) AS labName,
+              ts.practical_name AS practicalName,
+              ts.instructor_name AS instructorName,
+              ts.notes, ts.status,
               ts.group_code AS groupCode, ts.academic_year AS academicYear,
               m.name AS moduleName, m.id AS moduleId
        FROM timetable_slots ts
        LEFT JOIN modules m ON m.code = ts.module_code
        WHERE ts.group_code = :group
+          OR (ts.group_code = 'ALL' AND ts.semester_id = :semester)
+          OR (:semester IS NOT NULL AND ts.semester_id = :semester AND (ts.group_code = :group OR ts.group_code = 'ALL'))
        ORDER BY ts.session_date, ts.time_slot`,
-      { group: profile.group_code }
+      { group: profile.group_code, semester: profile.semester }
     );
     slots = rows;
   } else {
     // Admin/lecturer: all groups
     const [rows] = await pool.query(
-      `SELECT ts.id, ts.session_date AS date, ts.time_slot AS time,
-              ts.module_code AS moduleCode, ts.lab_label AS lab,
+      `SELECT ts.id, ts.session_date AS date, ts.day_of_week AS dayOfWeek, ts.time_slot AS time,
+              ts.module_code AS moduleCode,
+              COALESCE(ts.lab_name, ts.lab_label) AS lab,
+              COALESCE(ts.lab_name, ts.lab_label) AS labName,
+              ts.practical_name AS practicalName,
+              ts.instructor_name AS instructorName,
+              ts.notes, ts.status,
               ts.group_code AS groupCode, ts.academic_year AS academicYear,
               m.name AS moduleName, m.id AS moduleId
        FROM timetable_slots ts

@@ -1,10 +1,54 @@
 import { Router } from "express";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
+import multer from "multer";
 import { AuthedRequest, requireAuth } from "../auth/auth.middleware";
 import { requirePermission } from "../../rbac/requirePermission";
 import { pool } from "../../db/mysql";
+import { createNotification } from "../notifications/notifications.service";
 
 const router = Router();
+
+// Staff verification helper (Admin, Technician, Lecturer)
+async function isStaff(userId: number): Promise<boolean> {
+  const [rows] = await pool.query(
+    `SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = :userId`,
+    { userId }
+  );
+  const roles = (rows as any[]).map(r => r.name);
+  return roles.some(r => ["SYSTEM_ADMIN", "TECHNICIAN", "LECTURER"].includes(r));
+}
+
+// Multer storage for lab manuals, safety guidelines & documents
+const practicalsUploadDir = path.join(process.cwd(), "uploads", "practicals");
+try {
+  if (!fs.existsSync(practicalsUploadDir)) {
+    fs.mkdirSync(practicalsUploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn("Could not create practicals upload directory:", e);
+}
+
+const practicalStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, practicalsUploadDir),
+  filename: (_req, file, cb) => {
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const cleanName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    cb(null, `${unique}-${cleanName}`);
+  },
+});
+
+const practicalUpload = multer({
+  storage: practicalStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip", ".png", ".jpg", ".jpeg", ".txt"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error(`File type ${ext} not allowed`));
+  },
+});
 
 // ============================================================
 // SEMESTER GROUPS
@@ -143,24 +187,35 @@ router.get("/modules/:id", requireAuth, async (req: AuthedRequest, res) => {
     const mod = (modRows as any[])[0];
     if (!mod) return res.status(404).json({ error: "Module not found" });
 
-    // Practicals list
+    // Practicals list with completion requirements & document counts
     const [practicals] = await pool.query(`
-      SELECT id, lab_number AS labNumber, lab_title AS labTitle,
-             equip_status AS equipStatus, num_sessions AS numSessions, notes, sort_order AS sortOrder
-      FROM module_practicals
-      WHERE module_code = :code
-      ORDER BY sort_order ASC, lab_number ASC
+      SELECT mp.id, mp.lab_number AS labNumber, mp.lab_title AS labTitle,
+             mp.equip_status AS equipStatus, mp.num_sessions AS numSessions, mp.notes, mp.sort_order AS sortOrder,
+             mp.completion_requirements AS completionRequirements,
+             mp.safety_guidelines AS safetyGuidelines,
+             COUNT(pd.id) AS documentCount
+      FROM module_practicals mp
+      LEFT JOIN practical_documents pd ON pd.practical_id = mp.id
+      WHERE mp.module_code = :code
+      GROUP BY mp.id
+      ORDER BY mp.sort_order ASC, mp.lab_number ASC
     `, { code: mod.code });
 
-    // Timetable slots for this module
+    // Semester-wide timetable slots (master schedule for all modules in this semester)
     const [schedule] = await pool.query(`
-      SELECT id, session_date AS sessionDate, time_slot AS timeSlot,
-             lab_label AS labLabel, group_code AS groupCode, academic_year AS academicYear,
-             status
-      FROM timetable_slots
-      WHERE module_code = :code
-      ORDER BY session_date ASC, time_slot ASC, group_code ASC
-    `, { code: mod.code });
+      SELECT ts.id, ts.session_date AS sessionDate, ts.day_of_week AS dayOfWeek, ts.time_slot AS timeSlot,
+             ts.module_code AS moduleCode, m.name AS moduleName, m.id AS moduleId,
+             COALESCE(ts.lab_name, ts.lab_label) AS labLabel,
+             COALESCE(ts.lab_name, ts.lab_label) AS labName,
+             ts.practical_name AS practicalName,
+             ts.group_code AS groupCode, ts.academic_year AS academicYear,
+             ts.instructor_name AS instructorName, ts.notes, ts.status,
+             COALESCE(ts.semester_id, m.semester_id) AS semesterId
+      FROM timetable_slots ts
+      LEFT JOIN modules m ON m.code = ts.module_code
+      WHERE ts.semester_id = :semId OR ts.module_code = :code OR m.semester_id = :semId
+      ORDER BY ts.session_date ASC, ts.time_slot ASC, ts.group_code ASC
+    `, { code: mod.code, semId: mod.semesterId });
 
     // Lab sessions with completion status
     const userId = req.user!.id;
@@ -256,6 +311,340 @@ router.patch("/timetable/:id/status", requireAuth, requirePermission("admin:mana
     
     res.json({ ok: true });
   } catch (err) { res.status(400).json({ error: "Invalid request" }); }
+});
+
+// ============================================================
+// SEMESTER MASTER TIMETABLE (SPREADSHEET / EXCEL FORMAT)
+// ============================================================
+
+// GET /academic/semesters/:semesterId/timetable — master timetable for entire semester
+router.get("/semesters/:semesterId/timetable", requireAuth, async (req, res) => {
+  const semesterId = Number(req.params.semesterId);
+  if (!Number.isFinite(semesterId) || semesterId <= 0) return res.status(400).json({ error: "Invalid semester id" });
+
+  try {
+    const [slots] = await pool.query(`
+      SELECT ts.id, ts.session_date AS sessionDate, ts.day_of_week AS dayOfWeek, ts.time_slot AS timeSlot,
+             ts.module_code AS moduleCode, m.name AS moduleName, m.id AS moduleId,
+             COALESCE(ts.lab_name, ts.lab_label) AS labName,
+             ts.practical_name AS practicalName,
+             ts.group_code AS groupCode, ts.academic_year AS academicYear,
+             ts.instructor_name AS instructorName, ts.notes, ts.status,
+             COALESCE(ts.semester_id, m.semester_id) AS semesterId
+      FROM timetable_slots ts
+      LEFT JOIN modules m ON m.code = ts.module_code
+      WHERE ts.semester_id = :semesterId OR m.semester_id = :semesterId
+      ORDER BY ts.session_date ASC, ts.time_slot ASC, ts.group_code ASC
+    `, { semesterId });
+
+    const [modules] = await pool.query(`
+      SELECT id, code, name FROM modules WHERE semester_id = :semesterId ORDER BY code ASC
+    `, { semesterId });
+
+    const [groups] = await pool.query(`
+      SELECT DISTINCT group_code AS groupCode FROM student_profiles WHERE semester = :semesterId OR :semesterId = 6
+      ORDER BY group_code ASC
+    `, { semesterId });
+
+    res.json({ slots, modules, groups: (groups as any[]).map((g: any) => g.groupCode) });
+  } catch (err) {
+    console.error("Failed to fetch semester timetable:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /academic/semesters/:semesterId/timetable — staff edits & saves master timetable
+router.put("/semesters/:semesterId/timetable", requireAuth, async (req: AuthedRequest, res) => {
+  const semesterId = Number(req.params.semesterId);
+  const staff = await isStaff(req.user!.id);
+  if (!staff) return res.status(403).json({ error: "Staff only." });
+
+  try {
+    const body = z.object({
+      slots: z.array(z.object({
+        id: z.number().optional(),
+        sessionDate: z.string(),
+        dayOfWeek: z.string().optional().nullable(),
+        timeSlot: z.string(),
+        moduleCode: z.string(),
+        labName: z.string(),
+        practicalName: z.string().optional().nullable(),
+        groupCode: z.string(),
+        academicYear: z.string().optional().default("2026/2027"),
+        status: z.enum(["UPCOMING", "ONGOING", "COMPLETED", "CANCELLED"]).optional().default("UPCOMING"),
+        instructorName: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+      })),
+      notifyStudents: z.boolean().optional().default(true),
+    }).parse(req.body);
+
+    const conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    try {
+      // Delete existing slots for this semester
+      await conn.query(`
+        DELETE FROM timetable_slots 
+        WHERE semester_id = :semesterId 
+           OR module_code IN (SELECT code FROM modules WHERE semester_id = :semesterId)
+      `, { semesterId });
+
+      // Insert new slots
+      for (const s of body.slots) {
+        let day = s.dayOfWeek;
+        if (!day && s.sessionDate) {
+          const d = new Date(s.sessionDate);
+          day = d.toLocaleDateString("en-US", { weekday: "long" });
+        }
+
+        await conn.query(`
+          INSERT INTO timetable_slots
+          (session_date, day_of_week, time_slot, module_code, lab_label, lab_name, practical_name, group_code, academic_year, status, semester_id, instructor_name, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          s.sessionDate,
+          day || "Monday",
+          s.timeSlot,
+          s.moduleCode,
+          s.moduleCode,
+          s.labName,
+          s.practicalName || null,
+          s.groupCode,
+          s.academicYear || "2026/2027",
+          s.status || "UPCOMING",
+          semesterId,
+          s.instructorName || null,
+          s.notes || null,
+        ]);
+      }
+
+      await conn.commit();
+      conn.release();
+
+      // Dispatch notifications to students if requested
+      if (body.notifyStudents && body.slots.length > 0) {
+        try {
+          const [students] = await pool.query(`
+            SELECT DISTINCT u.id 
+            FROM users u
+            JOIN student_profiles sp ON sp.user_id = u.id
+            WHERE sp.semester = :semesterId 
+               OR u.id IN (SELECT user_id FROM user_semester_groups WHERE semester_id = :semesterId)
+          `, { semesterId });
+
+          for (const st of students as any[]) {
+            await createNotification(
+              st.id,
+              "LAB_REMINDER",
+              "Laboratory Timetable Updated",
+              `The master laboratory timetable for your semester has been updated with ${body.slots.length} practical sessions. Check your lab schedule and academic calendar.`,
+              { semesterId, url: `/dashboard` }
+            );
+          }
+        } catch (notifErr) {
+          console.error("Failed to notify students of timetable update:", notifErr);
+        }
+      }
+
+      res.json({ ok: true, count: body.slots.length });
+    } catch (e) {
+      await conn.rollback();
+      conn.release();
+      throw e;
+    }
+  } catch (err: any) {
+    console.error("Save timetable error:", err);
+    res.status(400).json({ error: "Failed to save timetable", detail: err?.message });
+  }
+});
+
+// DELETE /academic/timetable/:id — delete slot
+router.delete("/timetable/:id", requireAuth, async (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  const staff = await isStaff(req.user!.id);
+  if (!staff) return res.status(403).json({ error: "Staff only." });
+
+  try {
+    await pool.query(`DELETE FROM timetable_slots WHERE id = :id`, { id });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to delete slot" });
+  }
+});
+
+// ============================================================
+// PRACTICAL DETAILS & DOCUMENT MANAGEMENT
+// ============================================================
+
+// GET /academic/practicals/:id — get practical details + documents
+router.get("/practicals/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const [pracRows] = await pool.query(`
+      SELECT mp.id, mp.module_code AS moduleCode, mp.lab_number AS labNumber,
+             mp.lab_title AS labTitle, mp.equip_status AS equipStatus,
+             mp.num_sessions AS numSessions, mp.notes, mp.sort_order AS sortOrder,
+             mp.completion_requirements AS completionRequirements,
+             mp.safety_guidelines AS safetyGuidelines,
+             m.name AS moduleName, m.id AS moduleId, m.semester_id AS semesterId
+      FROM module_practicals mp
+      LEFT JOIN modules m ON m.code = mp.module_code
+      WHERE mp.id = :id
+    `, { id });
+
+    const practical = (pracRows as any[])[0];
+    if (!practical) return res.status(404).json({ error: "Practical not found" });
+
+    const [docs] = await pool.query(`
+      SELECT pd.id, pd.doc_type AS docType, pd.title, pd.file_name AS fileName,
+             pd.file_url AS fileUrl, pd.file_size AS fileSize, pd.created_at AS createdAt,
+             u.full_name AS uploadedByName
+      FROM practical_documents pd
+      LEFT JOIN users u ON u.id = pd.uploaded_by_user_id
+      WHERE pd.practical_id = :id
+      ORDER BY pd.created_at DESC
+    `, { id });
+
+    res.json({ practical, documents: docs });
+  } catch (err) {
+    console.error("Get practical error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /academic/practicals/:id — staff updates requirements & safety guidelines
+router.patch("/practicals/:id", requireAuth, async (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  const staff = await isStaff(req.user!.id);
+  if (!staff) return res.status(403).json({ error: "Staff only." });
+
+  try {
+    const body = z.object({
+      labTitle: z.string().max(255).optional(),
+      equipStatus: z.enum(["Working", "Not Working", "Under Maintenance"]).optional(),
+      numSessions: z.number().int().optional(),
+      notes: z.string().nullable().optional(),
+      completionRequirements: z.string().nullable().optional(),
+      safetyGuidelines: z.string().nullable().optional(),
+    }).parse(req.body);
+
+    await pool.query(`
+      UPDATE module_practicals SET
+        lab_title = COALESCE(:labTitle, lab_title),
+        equip_status = COALESCE(:equipStatus, equip_status),
+        num_sessions = COALESCE(:numSessions, num_sessions),
+        notes = CASE WHEN :notes IS NOT NULL THEN :notes ELSE notes END,
+        completion_requirements = CASE WHEN :completionRequirements IS NOT NULL THEN :completionRequirements ELSE completion_requirements END,
+        safety_guidelines = CASE WHEN :safetyGuidelines IS NOT NULL THEN :safetyGuidelines ELSE safety_guidelines END
+      WHERE id = :id
+    `, {
+      id,
+      labTitle: body.labTitle ?? null,
+      equipStatus: body.equipStatus ?? null,
+      numSessions: body.numSessions ?? null,
+      notes: body.notes !== undefined ? body.notes : null,
+      completionRequirements: body.completionRequirements !== undefined ? body.completionRequirements : null,
+      safetyGuidelines: body.safetyGuidelines !== undefined ? body.safetyGuidelines : null,
+    });
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: "Invalid request", detail: err?.message });
+  }
+});
+
+// POST /academic/practicals/:id/documents — staff uploads lab manual, safety doc or guideline
+router.post("/practicals/:id/documents", requireAuth, (req: AuthedRequest, res: any, next: any) => {
+  practicalUpload.single("file")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req: AuthedRequest, res) => {
+  const practicalId = Number(req.params.id);
+  const staff = await isStaff(req.user!.id);
+  if (!staff) return res.status(403).json({ error: "Staff only." });
+
+  try {
+    const title = req.body.title || (req.file ? req.file.originalname : "Document");
+    const docType = req.body.docType || "MANUAL";
+    let fileUrl = req.body.fileUrl;
+    let fileName = req.body.fileName || title;
+    let fileSize = req.file ? req.file.size : null;
+
+    if (req.file) {
+      fileName = req.file.originalname;
+      fileUrl = `/uploads/practicals/${req.file.filename}`;
+    }
+
+    if (!fileUrl) {
+      return res.status(400).json({ error: "Either a file or document URL must be provided." });
+    }
+
+    const [result] = await pool.query(`
+      INSERT INTO practical_documents 
+      (practical_id, doc_type, title, file_name, file_url, file_size, uploaded_by_user_id)
+      VALUES (:practicalId, :docType, :title, :fileName, :fileUrl, :fileSize, :uploadedBy)
+    `, {
+      practicalId,
+      docType,
+      title,
+      fileName,
+      fileUrl,
+      fileSize,
+      uploadedBy: req.user!.id,
+    });
+
+    res.json({
+      ok: true,
+      document: {
+        id: (result as any).insertId,
+        practicalId,
+        docType,
+        title,
+        fileName,
+        fileUrl,
+        fileSize,
+        createdAt: new Date().toISOString(),
+      }
+    });
+  } catch (err: any) {
+    console.error("Document upload error:", err);
+    res.status(500).json({ error: "Failed to upload document", detail: err?.message });
+  }
+});
+
+// DELETE /academic/practicals/:practicalId/documents/:docId — staff deletes document
+router.delete("/practicals/:practicalId/documents/:docId", requireAuth, async (req: AuthedRequest, res) => {
+  const practicalId = Number(req.params.practicalId);
+  const docId = Number(req.params.docId);
+  const staff = await isStaff(req.user!.id);
+  if (!staff) return res.status(403).json({ error: "Staff only." });
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT file_url FROM practical_documents WHERE id = :docId AND practical_id = :practicalId`,
+      { docId, practicalId }
+    );
+    const doc = (rows as any[])[0];
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    // Remove file if local
+    if (doc.file_url && doc.file_url.startsWith("/uploads/practicals/")) {
+      const diskPath = path.join(process.cwd(), doc.file_url);
+      if (fs.existsSync(diskPath)) {
+        try { fs.unlinkSync(diskPath); } catch {}
+      }
+    }
+
+    await pool.query(
+      `DELETE FROM practical_documents WHERE id = :docId AND practical_id = :practicalId`,
+      { docId, practicalId }
+    );
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to delete document", detail: err?.message });
+  }
 });
 
 // ============================================================

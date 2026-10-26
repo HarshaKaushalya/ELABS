@@ -26,6 +26,10 @@ type TimetableSlot = {
   date: string;
   time: string;
   lab: string;
+  labName?: string;
+  practicalName?: string;
+  instructorName?: string;
+  notes?: string;
   moduleCode: string;
   moduleName: string;
   moduleId: number;
@@ -287,19 +291,21 @@ export default function DashboardPage() {
     // 1. Timetable sessions
     slots.forEach((slot) => {
       const sessionDate = new Date(slot.date);
+      const practicalLabel = slot.practicalName ? slot.practicalName : `Laboratory Session`;
+      const roomLabel = slot.labName || slot.lab || "Laboratory";
 
       events.push({
         id: `lab-${slot.id}`,
         date: sessionDate,
-        title: `Laboratory Session — ${slot.lab}`,
-        shortTitle: `${slot.lab} (${slot.moduleCode})`,
-        subtitle: `${slot.moduleCode} ${slot.moduleName} • ${slot.time}`,
+        title: `${practicalLabel} — ${roomLabel}`,
+        shortTitle: `${slot.practicalName ? slot.practicalName : roomLabel} (${slot.moduleCode})`,
+        subtitle: `${slot.moduleCode} ${slot.moduleName}${slot.instructorName ? ` • ${slot.instructorName}` : ""} • ${slot.time}`,
         type: "LAB_SESSION",
         color: "#f59e0b",
         moduleId: slot.moduleId,
         linkUrl: `/labs/module/${slot.moduleId}?tab=schedule`,
         time: slot.time,
-        badge: "Lab Session",
+        badge: slot.status === "COMPLETED" ? "Completed" : "Lab Session",
       });
     });
 

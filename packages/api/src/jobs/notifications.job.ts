@@ -102,6 +102,61 @@ export async function runNotificationsJob(): Promise<void> {
         );
       }
     }
+
+    // 3. Remind students of scheduled lab practicals happening in the next 48 hours
+    const [upcomingLabSlots] = await pool.query(
+      `
+      SELECT ts.id, ts.session_date, ts.day_of_week, ts.time_slot, ts.module_code, ts.group_code,
+             COALESCE(ts.lab_name, ts.lab_label) AS lab_name,
+             COALESCE(ts.practical_name, 'Lab Practical') AS practical_name,
+             ts.instructor_name, m.name AS module_name, m.id AS module_id
+      FROM timetable_slots ts
+      LEFT JOIN modules m ON m.code = ts.module_code
+      WHERE ts.status = 'UPCOMING'
+        AND ts.session_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 2 DAY)
+      `
+    );
+
+    for (const slot of upcomingLabSlots as any[]) {
+      const [students] = await pool.query(
+        `SELECT u.id, u.full_name
+         FROM users u
+         JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE sp.group_code = :group OR :group = 'ALL'`,
+        { group: slot.group_code }
+      );
+
+      for (const st of students as any[]) {
+        const [existing] = await pool.query(
+          `SELECT id FROM notifications
+           WHERE user_id = :uid
+             AND type = 'LAB_REMINDER'
+             AND JSON_EXTRACT(meta, '$.slotId') = :slotId
+           LIMIT 1`,
+          { uid: st.id, slotId: slot.id }
+        );
+
+        if ((existing as any[]).length === 0) {
+          const dateStr = new Date(slot.session_date).toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            month: "short"
+          });
+
+          await createNotification(
+            st.id,
+            "LAB_REMINDER",
+            `Upcoming Practical: ${slot.module_code}`,
+            `You have ${slot.practical_name} scheduled on ${dateStr} (${slot.time_slot}) in ${slot.lab_name}. Please review the lab manual and safety guidelines before attending.`,
+            {
+              slotId: slot.id,
+              moduleId: slot.module_id,
+              url: slot.module_id ? `/labs/module/${slot.module_id}?tab=schedule` : "/dashboard"
+            }
+          );
+        }
+      }
+    }
   } catch (err) {
     console.error("[jobs] notifications error:", err);
   }
