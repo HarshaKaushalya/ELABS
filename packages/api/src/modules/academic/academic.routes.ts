@@ -317,34 +317,70 @@ router.patch("/timetable/:id/status", requireAuth, requirePermission("admin:mana
 // SEMESTER MASTER TIMETABLE (SPREADSHEET / EXCEL FORMAT)
 // ============================================================
 
-// GET /academic/semesters/:semesterId/timetable — master timetable for entire semester
+// GET /academic/semesters/:semesterId/timetable — master timetable for entire semester or all semesters ('all')
 router.get("/semesters/:semesterId/timetable", requireAuth, async (req, res) => {
-  const semesterId = Number(req.params.semesterId);
-  if (!Number.isFinite(semesterId) || semesterId <= 0) return res.status(400).json({ error: "Invalid semester id" });
+  const param = req.params.semesterId;
+  const isAll = param === "all" || param === "0";
+  const semesterId = Number(param);
+  if (!isAll && (!Number.isFinite(semesterId) || semesterId <= 0)) {
+    return res.status(400).json({ error: "Invalid semester id" });
+  }
 
   try {
-    const [slots] = await pool.query(`
-      SELECT ts.id, ts.session_date AS sessionDate, ts.day_of_week AS dayOfWeek, ts.time_slot AS timeSlot,
-             ts.module_code AS moduleCode, m.name AS moduleName, m.id AS moduleId,
-             COALESCE(ts.lab_name, ts.lab_label) AS labName,
-             ts.practical_name AS practicalName,
-             ts.group_code AS groupCode, ts.academic_year AS academicYear,
-             ts.instructor_name AS instructorName, ts.notes, ts.status,
-             COALESCE(ts.semester_id, m.semester_id) AS semesterId
-      FROM timetable_slots ts
-      LEFT JOIN modules m ON m.code = ts.module_code
-      WHERE ts.semester_id = :semesterId OR m.semester_id = :semesterId
-      ORDER BY ts.session_date ASC, ts.time_slot ASC, ts.group_code ASC
-    `, { semesterId });
+    const slotsQuery = isAll
+      ? `
+        SELECT ts.id, ts.session_date AS sessionDate, ts.day_of_week AS dayOfWeek, ts.time_slot AS timeSlot,
+               ts.module_code AS moduleCode, m.name AS moduleName, m.id AS moduleId,
+               COALESCE(ts.lab_name, ts.lab_label) AS labName,
+               ts.practical_name AS practicalName,
+               ts.group_code AS groupCode, ts.academic_year AS academicYear,
+               ts.instructor_name AS instructorName, ts.notes, ts.status,
+               COALESCE(ts.semester_id, m.semester_id) AS semesterId,
+               s.name AS semesterName, s.level AS semesterLevel
+        FROM timetable_slots ts
+        LEFT JOIN modules m ON m.code = ts.module_code
+        LEFT JOIN semesters s ON s.id = COALESCE(ts.semester_id, m.semester_id)
+        ORDER BY ts.session_date ASC, ts.time_slot ASC, ts.group_code ASC
+      `
+      : `
+        SELECT ts.id, ts.session_date AS sessionDate, ts.day_of_week AS dayOfWeek, ts.time_slot AS timeSlot,
+               ts.module_code AS moduleCode, m.name AS moduleName, m.id AS moduleId,
+               COALESCE(ts.lab_name, ts.lab_label) AS labName,
+               ts.practical_name AS practicalName,
+               ts.group_code AS groupCode, ts.academic_year AS academicYear,
+               ts.instructor_name AS instructorName, ts.notes, ts.status,
+               COALESCE(ts.semester_id, m.semester_id) AS semesterId,
+               s.name AS semesterName, s.level AS semesterLevel
+        FROM timetable_slots ts
+        LEFT JOIN modules m ON m.code = ts.module_code
+        LEFT JOIN semesters s ON s.id = COALESCE(ts.semester_id, m.semester_id)
+        WHERE ts.semester_id = :semesterId OR m.semester_id = :semesterId
+        ORDER BY ts.session_date ASC, ts.time_slot ASC, ts.group_code ASC
+      `;
 
-    const [modules] = await pool.query(`
-      SELECT id, code, name FROM modules WHERE semester_id = :semesterId ORDER BY code ASC
-    `, { semesterId });
+    const modulesQuery = isAll
+      ? `SELECT m.id, m.code, m.name, m.semester_id AS semesterId, s.name AS semesterName 
+         FROM modules m 
+         LEFT JOIN semesters s ON s.id = m.semester_id 
+         ORDER BY m.semester_id ASC, m.code ASC`
+      : `SELECT m.id, m.code, m.name, m.semester_id AS semesterId 
+         FROM modules m 
+         WHERE m.semester_id = :semesterId 
+         ORDER BY m.code ASC`;
 
-    const [groups] = await pool.query(`
-      SELECT DISTINCT group_code AS groupCode FROM student_profiles WHERE semester = :semesterId OR :semesterId = 6
-      ORDER BY group_code ASC
-    `, { semesterId });
+    const groupsQuery = isAll
+      ? `SELECT DISTINCT group_code AS groupCode FROM student_profiles WHERE group_code IS NOT NULL
+         UNION
+         SELECT DISTINCT group_code AS groupCode FROM timetable_slots WHERE group_code IS NOT NULL
+         ORDER BY groupCode ASC`
+      : `SELECT DISTINCT group_code AS groupCode FROM student_profiles WHERE (semester = :semesterId OR :semesterId = 6) AND group_code IS NOT NULL
+         UNION
+         SELECT DISTINCT group_code AS groupCode FROM timetable_slots WHERE (semester_id = :semesterId OR :semesterId = 6) AND group_code IS NOT NULL
+         ORDER BY groupCode ASC`;
+
+    const [slots] = await pool.query(slotsQuery, isAll ? {} : { semesterId });
+    const [modules] = await pool.query(modulesQuery, isAll ? {} : { semesterId });
+    const [groups] = await pool.query(groupsQuery, isAll ? {} : { semesterId });
 
     res.json({ slots, modules, groups: (groups as any[]).map((g: any) => g.groupCode) });
   } catch (err) {
@@ -772,18 +808,24 @@ router.patch("/lab-sessions/:id/complete", requireAuth, requirePermission("admin
 // STUDENT SEMESTER GROUP MEMBERSHIP
 // ============================================================
 
-// GET /academic/semesters/:semesterId/practicals — complete catalog/matrix of practicals for all modules in a semester
+// GET /academic/semesters/:semesterId/practicals — complete catalog/matrix of practicals for all modules in a semester or all semesters ('all')
 router.get("/semesters/:semesterId/practicals", requireAuth, async (req, res) => {
-  const semesterId = Number(req.params.semesterId);
-  if (!Number.isFinite(semesterId) || semesterId <= 0) return res.status(400).json({ error: "Invalid semester id" });
+  const param = req.params.semesterId;
+  const isAll = param === "all" || param === "0";
+  const semesterId = Number(param);
+  if (!isAll && (!Number.isFinite(semesterId) || semesterId <= 0)) {
+    return res.status(400).json({ error: "Invalid semester id" });
+  }
 
   try {
+    const whereClause = isAll ? "" : "WHERE m.semester_id = :semesterId";
     const [rows] = await pool.query(`
       SELECT mp.id, mp.module_code AS moduleCode, mp.lab_number AS labNumber, mp.lab_title AS labTitle,
              mp.equip_status AS equipStatus, mp.num_sessions AS numSessions, mp.notes,
              mp.completion_requirements AS completionRequirements,
              mp.safety_guidelines AS safetyGuidelines,
              m.id AS moduleId, m.name AS moduleName, m.coordinator_name AS coordinatorName,
+             m.semester_id AS semesterId, s.name AS semesterName,
              (SELECT COUNT(*) FROM practical_documents pd WHERE pd.practical_id = mp.id) AS documentCount,
              COALESCE(
                (SELECT COALESCE(ts.lab_name, ts.lab_label) FROM timetable_slots ts WHERE ts.module_code = mp.module_code AND ts.practical_name = mp.lab_title LIMIT 1),
@@ -791,9 +833,10 @@ router.get("/semesters/:semesterId/practicals", requireAuth, async (req, res) =>
              ) AS labVenue
       FROM module_practicals mp
       JOIN modules m ON m.code = mp.module_code
-      WHERE m.semester_id = :semesterId
-      ORDER BY m.code ASC, mp.sort_order ASC, mp.lab_number ASC
-    `, { semesterId });
+      LEFT JOIN semesters s ON s.id = m.semester_id
+      ${whereClause}
+      ORDER BY m.semester_id ASC, m.code ASC, mp.sort_order ASC, mp.lab_number ASC
+    `, isAll ? {} : { semesterId });
 
     res.json({ practicals: rows });
   } catch (err) {

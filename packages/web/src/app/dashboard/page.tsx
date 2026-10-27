@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -30,6 +31,7 @@ import {
   AlertCircle,
   ExternalLink,
   ChevronDown,
+  GraduationCap,
 } from "lucide-react";
 import Link from "next/link";
 import { PracticalDetailsModal } from "@/components/academic/PracticalDetailsModal";
@@ -42,6 +44,13 @@ type StudentProfile = {
   regNumber?: string;
   semester?: number;
   department?: string;
+};
+
+type SemesterItem = {
+  id: number;
+  name: string;
+  level: number;
+  moduleCount?: number;
 };
 
 type MasterSlot = {
@@ -59,6 +68,8 @@ type MasterSlot = {
   instructorName?: string | null;
   notes?: string | null;
   status: "UPCOMING" | "ONGOING" | "COMPLETED" | "CANCELLED";
+  semesterId?: number;
+  semesterName?: string;
 };
 
 type SemesterPractical = {
@@ -76,6 +87,8 @@ type SemesterPractical = {
   coordinatorName?: string | null;
   documentCount?: number;
   labVenue?: string;
+  semesterId?: number;
+  semesterName?: string;
 };
 type TimetableSlot = {
   id: number;
@@ -266,6 +279,9 @@ function SectionHeader({
 
 /* ─── Page ──────────────────────────────────────────────────────── */
 export default function DashboardPage() {
+  const { me, hasRole } = useAuth();
+  const isAdminOrStaff = hasRole("SYSTEM_ADMIN") || hasRole("ADMIN") || hasRole("LAB_TECHNICIAN") || hasRole("LECTURER") || hasRole("SUPER_ADMIN");
+
   const [slots, setSlots] = useState<TimetableSlot[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
@@ -276,7 +292,11 @@ export default function DashboardPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [timeRange, setTimeRange] = useState<7 | 30>(30);
 
-  // Semester 6 master hub states
+  // Master Curriculum Hub States
+  const [semestersList, setSemestersList] = useState<SemesterItem[]>([]);
+  const [selectedSemesterId, setSelectedSemesterId] = useState<string>("ALL");
+  const [loadingSemesterData, setLoadingSemesterData] = useState<boolean>(false);
+  const [userSelectedManualSem, setUserSelectedManualSem] = useState(false);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [masterSlots, setMasterSlots] = useState<MasterSlot[]>([]);
   const [semesterModules, setSemesterModules] = useState<{ id: number; code: string; name: string }[]>([]);
@@ -291,25 +311,56 @@ export default function DashboardPage() {
   const [activePracticalId, setActivePracticalId] = useState<number | null>(null);
   const [activeCell, setActiveCell] = useState<{ row: number; col: string; val: string } | null>(null);
 
+  const handleSemesterChange = async (newSemId: string) => {
+    setUserSelectedManualSem(true);
+    setSelectedSemesterId(newSemId);
+    setLoadingSemesterData(true);
+    try {
+      const [semTtRes, semPracRes] = await Promise.all([
+        apiFetch(`/academic/semesters/${newSemId}/timetable`),
+        apiFetch(`/academic/semesters/${newSemId}/practicals`),
+      ]);
+      if (semTtRes.ok) {
+        const semData = await semTtRes.json();
+        setMasterSlots(semData.slots ?? []);
+        setSemesterModules(semData.modules ?? []);
+        setSemesterGroups(semData.groups ?? []);
+      }
+      if (semPracRes.ok) {
+        const pracData = await semPracRes.json();
+        setSemesterPracticals(pracData.practicals ?? []);
+      }
+      setTtModuleFilter("ALL");
+      setTtGroupFilter("ALL");
+      setPracModuleFilter("ALL");
+      setActiveCell(null);
+    } catch (err) {
+      console.error("Failed to load semester data:", err);
+    } finally {
+      setLoadingSemesterData(false);
+    }
+  };
+
   useEffect(() => {
     async function loadAll() {
       try {
-        const [ttRes, summRes, overdueRes, myBRes, asgnRes, semTtRes, semPracRes] = await Promise.all([
+        const [ttRes, summRes, overdueRes, myBRes, asgnRes, semsRes] = await Promise.all([
           apiFetch("/timetable"),
           apiFetch("/dashboard/summary"),
           apiFetch("/dashboard/overdue"),
           apiFetch("/dashboard/my-borrows"),
           apiFetch("/academic/assignments").catch(() => ({ ok: false } as any)),
-          apiFetch("/academic/semesters/6/timetable").catch(() => ({ ok: false } as any)),
-          apiFetch("/academic/semesters/6/practicals").catch(() => ({ ok: false } as any)),
+          apiFetch("/academic/semesters").catch(() => ({ ok: false } as any)),
         ]);
 
         let loadedAssignments: AssignmentItem[] = [];
         let loadedQuizzes: QuizItem[] = [];
+        let userProfile: StudentProfile | null = null;
 
         if (ttRes.ok) {
           const d = await ttRes.json();
           setSlots(d.slots ?? []);
+          userProfile = d.profile ?? null;
           setProfile(d.profile ?? null);
           if (Array.isArray(d.assignments)) {
             loadedAssignments = d.assignments;
@@ -318,6 +369,28 @@ export default function DashboardPage() {
             loadedQuizzes = d.quizzes;
           }
         }
+
+        if (semsRes && "ok" in semsRes && semsRes.ok) {
+          const semsData = await (semsRes as any).json();
+          setSemestersList(semsData.semesters ?? []);
+        }
+
+        // Determine initial semester:
+        // If student (has profile.semester): default to their semester (e.g. 6)
+        // If system admin or staff: default to "ALL" so all laboratory timetables appear
+        let initialSem = "ALL";
+        if (userProfile && userProfile.semester && !isAdminOrStaff) {
+          initialSem = String(userProfile.semester);
+        } else if (!isAdminOrStaff && !userProfile) {
+          initialSem = "6";
+        }
+        setSelectedSemesterId(initialSem);
+
+        const [semTtRes, semPracRes] = await Promise.all([
+          apiFetch(`/academic/semesters/${initialSem}/timetable`).catch(() => ({ ok: false } as any)),
+          apiFetch(`/academic/semesters/${initialSem}/practicals`).catch(() => ({ ok: false } as any)),
+        ]);
+
         if (semTtRes && "ok" in semTtRes && semTtRes.ok) {
           const semData = await (semTtRes as any).json();
           setMasterSlots(semData.slots ?? []);
@@ -366,7 +439,7 @@ export default function DashboardPage() {
       }
     }
     loadAll();
-  }, []);
+  }, [isAdminOrStaff]);
 
   /* Timeline events */
   const generateTimelineEvents = (): TimelineEvent[] => {
@@ -561,6 +634,8 @@ export default function DashboardPage() {
     );
   });
 
+  const selectedSemesterObj = semestersList.find((s) => String(s.id) === selectedSemesterId);
+
   const practicalsByModule = filteredSemesterPracticals.reduce((acc, p) => {
     const key = p.moduleCode;
     if (!acc[key]) {
@@ -568,35 +643,50 @@ export default function DashboardPage() {
         moduleCode: p.moduleCode,
         moduleName: p.moduleName || p.moduleCode,
         coordinator: p.coordinatorName,
+        semesterName: p.semesterName || (p.semesterId ? `Semester ${p.semesterId}` : undefined),
         items: [],
       };
     }
     acc[key].items.push(p);
     return acc;
-  }, {} as Record<string, { moduleCode: string; moduleName: string; coordinator?: string | null; items: SemesterPractical[] }>);
+  }, {} as Record<string, { moduleCode: string; moduleName: string; coordinator?: string | null; semesterName?: string; items: SemesterPractical[] }>);
 
   const exportMasterCsv = () => {
     if (filteredMasterSlots.length === 0) return;
-    const headers = ["Row", "Date", "Day", "Time Slot", "Module Code", "Module Name", "Practical Experiment", "Venue", "Group", "Instructor", "Status", "Notes"];
-    const rows = filteredMasterSlots.map((s, idx) => [
-      idx + 1,
-      s.sessionDate,
-      s.dayOfWeek || "",
-      `"${s.timeSlot}"`,
-      s.moduleCode,
-      `"${s.moduleName || ""}"`,
-      `"${s.practicalName || ""}"`,
-      `"${s.labName}"`,
-      s.groupCode,
-      `"${s.instructorName || ""}"`,
-      s.status,
-      `"${s.notes || ""}"`,
-    ]);
+    const isAll = selectedSemesterId === "ALL";
+    const headers = isAll
+      ? ["Row", "Date", "Day", "Time Slot", "Semester", "Module Code", "Module Name", "Practical Experiment", "Venue", "Group", "Instructor", "Status", "Notes"]
+      : ["Row", "Date", "Day", "Time Slot", "Module Code", "Module Name", "Practical Experiment", "Venue", "Group", "Instructor", "Status", "Notes"];
+
+    const rows = filteredMasterSlots.map((s, idx) => {
+      const row = [
+        idx + 1,
+        s.sessionDate,
+        s.dayOfWeek || "",
+        `"${s.timeSlot}"`,
+      ];
+      if (isAll) {
+        row.push(`"${s.semesterName || (s.semesterId ? `Semester ${s.semesterId}` : "")}"`);
+      }
+      row.push(
+        s.moduleCode,
+        `"${s.moduleName || ""}"`,
+        `"${s.practicalName || ""}"`,
+        `"${s.labName}"`,
+        s.groupCode,
+        `"${s.instructorName || ""}"`,
+        s.status,
+        `"${s.notes || ""}"`
+      );
+      return row;
+    });
+
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Semester_6_Master_Lab_Timetable.csv`);
+    const fileSemName = isAll ? "All_Semesters" : (selectedSemesterObj?.name?.replace(/\s+/g, "_") || `Semester_${selectedSemesterId}`);
+    link.setAttribute("download", `${fileSemName}_Master_Lab_Timetable.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1260,7 +1350,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* ── SEMESTER 6 LABORATORY & CURRICULUM HUB ────────────────── */}
+        {/* ── ACADEMIC & LABORATORY CURRICULUM HUB ────────────────── */}
         <section style={{ ...cardStyle, marginTop: 14 }}>
           {/* Header with Google Sheets / Excel styling */}
           <div
@@ -1276,10 +1366,12 @@ export default function DashboardPage() {
             }}
           >
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
                 <FileSpreadsheet size={22} color="#fff" />
                 <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#fff" }}>
-                  Semester 6 Academic & Laboratory Curriculum Hub
+                  {selectedSemesterId === "ALL"
+                    ? "Faculty Master Academic & Laboratory Curriculum Hub"
+                    : `${selectedSemesterObj?.name || `Semester ${selectedSemesterId}`} Academic & Laboratory Curriculum Hub`}
                 </h2>
                 <span
                   style={{
@@ -1292,34 +1384,56 @@ export default function DashboardPage() {
                     letterSpacing: "0.05em",
                   }}
                 >
-                  Department of EIE
+                  {selectedSemesterId === "ALL" ? "All Semesters • Faculty View" : "Department of EIE"}
                 </span>
               </div>
               <div style={{ fontSize: "0.8rem", color: "rgba(255, 255, 255, 0.85)" }}>
-                Master rotational schedules across all groups & modules, plus the complete semester practicals catalog
+                {selectedSemesterId === "ALL"
+                  ? "Master rotational laboratory schedules across all semesters, modules & groups, plus full practicals catalog"
+                  : `Master rotational schedules across all groups & modules, plus the complete ${selectedSemesterObj?.name || `Semester ${selectedSemesterId}`} practicals catalog`}
               </div>
             </div>
 
-            {/* Student group pill */}
-            {profile?.group_code && (
-              <div
-                style={{
-                  background: "rgba(255, 255, 255, 0.15)",
-                  backdropFilter: "blur(4px)",
-                  border: "1px solid rgba(255, 255, 255, 0.3)",
-                  borderRadius: 10,
-                  padding: "6px 14px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Users size={16} color="#fff" />
-                <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
-                  Your Assigned Group: <strong style={{ color: "#a7f3d0" }}>{profile.group_code}</strong>
-                </span>
-              </div>
-            )}
+            {/* User / Group Badge */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              {profile?.group_code ? (
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.15)",
+                    backdropFilter: "blur(4px)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    borderRadius: 10,
+                    padding: "6px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Users size={16} color="#fff" />
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                    Your Assigned Group: <strong style={{ color: "#a7f3d0" }}>{profile.group_code}</strong>
+                  </span>
+                </div>
+              ) : isAdminOrStaff ? (
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.15)",
+                    backdropFilter: "blur(4px)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    borderRadius: 10,
+                    padding: "6px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <GraduationCap size={16} color="#fff" />
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                    Admin Mode: <strong style={{ color: "#a7f3d0" }}>All Semesters View</strong>
+                  </span>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* Excel Workbook Sheet Tabs */}
@@ -1443,6 +1557,33 @@ export default function DashboardPage() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  {/* Semester Filter */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted)" }}>SEMESTER:</span>
+                    <select
+                      value={selectedSemesterId}
+                      onChange={(e) => handleSemesterChange(e.target.value)}
+                      disabled={loadingSemesterData}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        border: "1px solid #107c41",
+                        background: "var(--panel-2)",
+                        color: "var(--text)",
+                        fontWeight: 700,
+                        fontSize: "0.8rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="ALL">All Semesters (Faculty-wide)</option>
+                      {semestersList.map((sem) => (
+                        <option key={sem.id} value={String(sem.id)}>
+                          {sem.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Module Filter */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted)" }}>MODULE:</span>
@@ -1551,18 +1692,21 @@ export default function DashboardPage() {
                       <th style={{ padding: "8px 12px", borderRight: "1px solid var(--line)", color: "var(--muted)", width: 44, textAlign: "center", fontSize: "0.72rem" }}>#</th>
                       <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>DATE & DAY (A)</th>
                       <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>TIME (B)</th>
-                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>MODULE (C)</th>
-                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>PRACTICAL EXPERIMENT (D)</th>
-                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>LABORATORY VENUE (E)</th>
-                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>GROUP (F)</th>
-                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>INSTRUCTOR (G)</th>
-                      <th style={{ padding: "8px 14px", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>STATUS (H)</th>
+                      {selectedSemesterId === "ALL" && (
+                        <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>SEMESTER (C)</th>
+                      )}
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>MODULE ({selectedSemesterId === "ALL" ? "D" : "C"})</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>PRACTICAL EXPERIMENT ({selectedSemesterId === "ALL" ? "E" : "D"})</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>LABORATORY VENUE ({selectedSemesterId === "ALL" ? "F" : "E"})</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>GROUP ({selectedSemesterId === "ALL" ? "G" : "F"})</th>
+                      <th style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>INSTRUCTOR ({selectedSemesterId === "ALL" ? "H" : "G"})</th>
+                      <th style={{ padding: "8px 14px", color: "var(--muted)", fontWeight: 700, fontSize: "0.72rem" }}>STATUS ({selectedSemesterId === "ALL" ? "I" : "H"})</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredMasterSlots.length === 0 ? (
                       <tr>
-                        <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
+                        <td colSpan={selectedSemesterId === "ALL" ? 10 : 9} style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
                           No timetable slots match the selected filters.
                         </td>
                       </tr>
@@ -1603,26 +1747,36 @@ export default function DashboardPage() {
                             >
                               {s.timeSlot}
                             </td>
+                            {selectedSemesterId === "ALL" && (
+                              <td
+                                onClick={() => setActiveCell({ row: idx, col: "C", val: s.semesterName || (s.semesterId ? `Semester ${s.semesterId}` : "Faculty") })}
+                                style={{ padding: "8px 14px", borderRight: "1px solid var(--line)" }}
+                              >
+                                <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: "rgba(16, 124, 65, 0.12)", color: "#107c41" }}>
+                                  {s.semesterName || (s.semesterId ? `Semester ${s.semesterId}` : "Faculty")}
+                                </span>
+                              </td>
+                            )}
                             <td
-                              onClick={() => setActiveCell({ row: idx, col: "C", val: `${s.moduleCode} ${s.moduleName || ""}` })}
+                              onClick={() => setActiveCell({ row: idx, col: selectedSemesterId === "ALL" ? "D" : "C", val: `${s.moduleCode} ${s.moduleName || ""}` })}
                               style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", fontWeight: 700, color: "#3d83f6" }}
                             >
                               {s.moduleCode}
                             </td>
                             <td
-                              onClick={() => setActiveCell({ row: idx, col: "D", val: s.practicalName || "Lab Session" })}
+                              onClick={() => setActiveCell({ row: idx, col: selectedSemesterId === "ALL" ? "E" : "D", val: s.practicalName || "Lab Session" })}
                               style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--text)", fontWeight: isMyGroup ? 700 : 500 }}
                             >
                               {s.practicalName || "Laboratory Practical Session"}
                             </td>
                             <td
-                              onClick={() => setActiveCell({ row: idx, col: "E", val: s.labName })}
+                              onClick={() => setActiveCell({ row: idx, col: selectedSemesterId === "ALL" ? "F" : "E", val: s.labName })}
                               style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--text)" }}
                             >
                               {s.labName}
                             </td>
                             <td
-                              onClick={() => setActiveCell({ row: idx, col: "F", val: s.groupCode })}
+                              onClick={() => setActiveCell({ row: idx, col: selectedSemesterId === "ALL" ? "G" : "F", val: s.groupCode })}
                               style={{ padding: "8px 14px", borderRight: "1px solid var(--line)" }}
                             >
                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1637,13 +1791,13 @@ export default function DashboardPage() {
                               </div>
                             </td>
                             <td
-                              onClick={() => setActiveCell({ row: idx, col: "G", val: s.instructorName || "" })}
+                              onClick={() => setActiveCell({ row: idx, col: selectedSemesterId === "ALL" ? "H" : "G", val: s.instructorName || "" })}
                               style={{ padding: "8px 14px", borderRight: "1px solid var(--line)", color: "var(--muted)", fontSize: "0.78rem" }}
                             >
                               {s.instructorName || "—"}
                             </td>
                             <td
-                              onClick={() => setActiveCell({ row: idx, col: "H", val: s.status })}
+                              onClick={() => setActiveCell({ row: idx, col: selectedSemesterId === "ALL" ? "I" : "H", val: s.status })}
                               style={{ padding: "8px 14px" }}
                             >
                               <span
@@ -1685,6 +1839,33 @@ export default function DashboardPage() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  {/* Semester Filter */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted)" }}>SEMESTER:</span>
+                    <select
+                      value={selectedSemesterId}
+                      onChange={(e) => handleSemesterChange(e.target.value)}
+                      disabled={loadingSemesterData}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 6,
+                        border: "1px solid #3d83f6",
+                        background: "var(--panel-2)",
+                        color: "var(--text)",
+                        fontWeight: 700,
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="ALL">All Semesters (Faculty-wide)</option>
+                      {semestersList.map((sem) => (
+                        <option key={sem.id} value={String(sem.id)}>
+                          {sem.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--muted)" }}>MODULE:</span>
                     <select
@@ -1730,7 +1911,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-                  Showing <strong>{filteredSemesterPracticals.length}</strong> practical experiments across 6th Semester
+                  Showing <strong>{filteredSemesterPracticals.length}</strong> practical experiments across {selectedSemesterId === "ALL" ? "All Semesters (Faculty-wide)" : selectedSemesterObj?.name || `Semester ${selectedSemesterId}`}
                 </div>
               </div>
 
@@ -1763,10 +1944,15 @@ export default function DashboardPage() {
                         gap: 10,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                         <span style={{ fontWeight: 700, fontSize: "0.88rem", padding: "3px 10px", borderRadius: 6, background: "#3d83f620", color: "#3d83f6" }}>
                           {group.moduleCode}
                         </span>
+                        {group.semesterName && (
+                          <span style={{ fontWeight: 700, fontSize: "0.72rem", padding: "2px 8px", borderRadius: 10, background: "rgba(16, 124, 65, 0.12)", color: "#107c41" }}>
+                            {group.semesterName}
+                          </span>
+                        )}
                         <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>
                           {group.moduleName}
                         </span>
