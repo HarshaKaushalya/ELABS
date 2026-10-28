@@ -35,3 +35,12 @@
 * **Backend (Priyan):** Engineered atomic inventory transaction engine (multi-item check-outs, returns, state transitions) with real-time Socket.IO alerts; implemented full `audit_logs`; deployed production cloud MySQL on TiDB Cloud Serverless with TLS/SSL encryption and containerized API gateway.
 * **Vision & Hardware (Pamudu):** Built optical equipment verification station: automated scanning of equipment barcode tags (`elabs_tag`), optical check of returned instrument presence, and laboratory benchtop equipment tracking.
 * **AI Engine (Imal):** Delivered natural language inventory assistant with dynamic student context injection (active borrows, due dates, course practicals); built hybrid RAG engine retrieving equipment operating specs and calibration procedures from manuals with SSE token streaming.
+
+---
+
+### Sprint 5: Technician-Supervised Workflows, Group Scheduling, Master Timetable & Safety Hub
+* **Frontend (Harsha):** Delivered interactive Excel-style Master Timetable workbook (`fx` formula bar, cell coordinates, CSV export); built 6th-semester EE student group management console (`EE1`-`EE11`); implemented strict group-isolated timetable and notifications; engineered practicals catalog with prerequisite checklists, PDF lab manual viewer, and staff document upload modal; redesigned barcode camera scanner with high-precision reticle viewfinder; integrated authentic department laboratory photography.
+* **Backend (Priyan):** Engineered strict 2-step equipment borrowing pipeline (student borrow request -> technician verification & approval) with outside-lab loan authorization; developed 6th-semester student auto-partitioning engine (75 students into 11 balanced groups); implemented multi-party real-time notification engine with automated due-date reminders; created multi-semester schedule matrix (`/academic/semesters/all/timetable`) for administrators.
+* **Vision & Hardware (Pamudu):** Enhanced optical tag acquisition algorithms with adaptive lighting contrast filtering; tested high-speed camera scanning accuracy across diverse equipment surfaces and curved cables; calibrated barcode viewfinder alignment for mobile and webcam sensors.
+* **AI Engine (Imal):** Updated deterministic inventory SQL generator to support request states (`PENDING_APPROVAL`, `APPROVED`, `REJECTED`) and outside-lab loan queries; indexed 6th-semester lab manual safety procedures and prerequisite requirements into ChromaDB RAG vector store for instant student safety queries.
+
