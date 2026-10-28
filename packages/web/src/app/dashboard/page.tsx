@@ -1370,8 +1370,8 @@ export default function DashboardPage() {
                 <FileSpreadsheet size={22} color="#fff" />
                 <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#fff" }}>
                   {selectedSemesterId === "ALL"
-                    ? "Faculty Master Academic & Laboratory Curriculum Hub"
-                    : `${selectedSemesterObj?.name || `Semester ${selectedSemesterId}`} Academic & Laboratory Curriculum Hub`}
+                    ? "Academic Timetable & Practicals"
+                    : `${selectedSemesterObj?.name || `Semester ${selectedSemesterId}`} Timetable & Practicals`}
                 </h2>
                 <span
                   style={{
@@ -1384,13 +1384,13 @@ export default function DashboardPage() {
                     letterSpacing: "0.05em",
                   }}
                 >
-                  {selectedSemesterId === "ALL" ? "All Semesters • Faculty View" : "Department of EIE"}
+                  {selectedSemesterId === "ALL" ? "All Semesters" : "EIE"}
                 </span>
               </div>
               <div style={{ fontSize: "0.8rem", color: "rgba(255, 255, 255, 0.85)" }}>
                 {selectedSemesterId === "ALL"
-                  ? "Master rotational laboratory schedules across all semesters, modules & groups, plus full practicals catalog"
-                  : `Master rotational schedules across all groups & modules, plus the complete ${selectedSemesterObj?.name || `Semester ${selectedSemesterId}`} practicals catalog`}
+                  ? "Lab schedules, student groups, and practical sessions"
+                  : `Lab schedules, student groups, and practical sessions for this semester`}
               </div>
             </div>
 
@@ -1411,7 +1411,7 @@ export default function DashboardPage() {
                 >
                   <Users size={16} color="#fff" />
                   <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
-                    Your Assigned Group: <strong style={{ color: "#a7f3d0" }}>{profile.group_code}</strong>
+                    Group: <strong style={{ color: "#a7f3d0" }}>{profile.group_code}</strong>
                   </span>
                 </div>
               ) : isAdminOrStaff ? (
@@ -1429,7 +1429,7 @@ export default function DashboardPage() {
                 >
                   <GraduationCap size={16} color="#fff" />
                   <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
-                    Admin Mode: <strong style={{ color: "#a7f3d0" }}>All Semesters View</strong>
+                    <strong style={{ color: "#a7f3d0" }}>All Semesters View</strong>
                   </span>
                 </div>
               ) : null}
@@ -1464,7 +1464,7 @@ export default function DashboardPage() {
               }}
             >
               <FileSpreadsheet size={16} />
-              <span>Sheet 1: Master Timetable (Spreadsheet View)</span>
+              <span>Lab Timetable</span>
               <span style={{ fontSize: "0.72rem", padding: "1px 7px", borderRadius: 10, background: hubTab === "TIMETABLE" ? "#107c41" : "var(--line)", color: hubTab === "TIMETABLE" ? "#fff" : "var(--muted)" }}>
                 {masterSlots.length}
               </span>
@@ -1488,7 +1488,7 @@ export default function DashboardPage() {
               }}
             >
               <Layers size={16} />
-              <span>Sheet 2: Practicals Matrix (All Modules Catalog)</span>
+              <span>Practicals Catalog</span>
               <span style={{ fontSize: "0.72rem", padding: "1px 7px", borderRadius: 10, background: hubTab === "PRACTICALS" ? "#3d83f6" : "var(--line)", color: hubTab === "PRACTICALS" ? "#fff" : "var(--muted)" }}>
                 {semesterPracticals.length}
               </span>
