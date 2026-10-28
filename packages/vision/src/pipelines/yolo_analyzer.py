@@ -93,32 +93,33 @@ _pose_model:   YOLO | None = None
 _fire_model:   YOLO | None = None
 
 
+def _model_path(filename: str) -> str:
+    pkg_dir = Path(__file__).resolve().parents[2]
+    cand = pkg_dir / filename
+    if cand.exists():
+        return str(cand)
+    return filename
+
+
 def _load_models() -> None:
     global _people_model, _pose_model, _fire_model
 
     if _people_model is None:
         logger.info("Loading YOLOv8n detection model …")
-        _people_model = YOLO("yolov8n.pt")
+        _people_model = YOLO(_model_path("yolov8n.pt"))
 
     if _pose_model is None:
         logger.info("Loading YOLOv8n-pose model …")
-        _pose_model = YOLO("yolov8n-pose.pt")
+        _pose_model = YOLO(_model_path("yolov8n-pose.pt"))
 
     if _fire_model is None:
         logger.info("Loading fire/smoke detection model …")
         try:
-            _fire_model = YOLO("yolov8n.pt")   # fallback: same detection model
-            # Try to load the fine-tuned fire model from HuggingFace hub
-            # This will only succeed if the container has internet access
             from ultralytics.hub import HUBTrainingSession  # noqa: F401
             _fire_model = YOLO("keremberke/yolov8n-fire-detection")
             logger.info("Loaded keremberke/yolov8n-fire-detection successfully")
-        except Exception as exc:
-            logger.warning(
-                "Could not load dedicated fire model (%s). "
-                "Falling back to HSV colour heuristic for fire/smoke detection.",
-                exc,
-            )
+        except Exception:
+            logger.info("Using HSV colour heuristic for fire/smoke detection.")
             _fire_model = None   # signal: use HSV fallback
 
 

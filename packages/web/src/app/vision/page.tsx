@@ -224,8 +224,14 @@ export default function VisionMonitoringPage() {
     }
   }, []);
 
-  // ── Video source for the <video> element (blob URL)
+  // ── Video source for the <video> element (blob URL or stream)
   const [videoSrcUrl, setVideoSrcUrl] = useState<string>("");
+  const [sampleVideo, setSampleVideo] = useState<{ path: string; filename: string; url: string } | null>(null);
+  const [isSampleLoading, setIsSampleLoading] = useState(false);
+
+  // WebRTC webcam references
+  const webcamStreamRef = useRef<MediaStream | null>(null);
+  const captureTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // ── Analytics state
   const [lastFrame, setLastFrame]   = useState<FrameData | null>(null);
@@ -238,6 +244,15 @@ export default function VisionMonitoringPage() {
   // Debounce repeated alerts (same type within 3s)
   const lastAlertAt = useRef<Record<string, number>>({});
   const lastSyncedCountRef = useRef<number>(-1);
+
+  // Clean up streaming on unmount
+  useEffect(() => {
+    return () => {
+      if (captureTimerRef.current) clearInterval(captureTimerRef.current);
+      if (webcamStreamRef.current) webcamStreamRef.current.getTracks().forEach(t => t.stop());
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, []);
 
   const isLive = phase === "live";
 
@@ -374,6 +389,28 @@ export default function VisionMonitoringPage() {
     }
   }, []);
 
+  // ── Load sample video from vision backend ───────────────────────────────────
+  const loadSampleVideo = async () => {
+    try {
+      setIsSampleLoading(true);
+      setError("");
+      const res = await fetch(`${VISION_URL}/vision/live/sample`);
+      if (!res.ok) throw new Error("Could not load sample video from vision server.");
+      const data = await res.json();
+      setSampleVideo({
+        path: data.path,
+        filename: data.filename,
+        url: `${VISION_URL}${data.url}`
+      });
+      setFile(null);
+      setVideoSrcUrl(`${VISION_URL}${data.url}`);
+    } catch (e: any) {
+      setError(e.message || "Failed to load sample lab video");
+    } finally {
+      setIsSampleLoading(false);
+    }
+  };
+
   // ── Start analysis ────────────────────────────────────────────────────────
   const startLive = useCallback(async () => {
     setError("");
@@ -388,41 +425,62 @@ export default function VisionMonitoringPage() {
     let videoPath = "";
     let sessionId = `session_${Date.now()}`;
 
-    if (sourceTab === "upload" && file) {
-      setPhase("uploading");
-      setUploadPct(0);
+    if (sourceTab === "upload") {
+      if (file) {
+        setPhase("uploading");
+        setUploadPct(0);
 
-      const blobUrl = URL.createObjectURL(file);
-      setVideoSrcUrl(blobUrl);
+        const blobUrl = URL.createObjectURL(file);
+        setVideoSrcUrl(blobUrl);
 
-      const form = new FormData();
-      form.append("file", file);
+        const form = new FormData();
+        form.append("file", file);
 
-      videoPath = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${VISION_URL}/vision/live/upload`);
-        xhr.upload.onprogress = e => {
-          if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload = () => {
-          try {
-            const r = JSON.parse(xhr.responseText);
-            sessionId = r.session_id;
-            resolve(r.path);
-          } catch { reject(new Error("Upload failed")); }
-        };
-        xhr.onerror = () => reject(new Error("Network Error: Could not connect to the Vision Service. Please ensure the Vision backend is running on port 8002."));
-        xhr.send(form);
-      });
+        videoPath = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", `${VISION_URL}/vision/live/upload`);
+          xhr.upload.onprogress = e => {
+            if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
+          };
+          xhr.onload = () => {
+            try {
+              const r = JSON.parse(xhr.responseText);
+              sessionId = r.session_id;
+              if (r.url) setVideoSrcUrl(`${VISION_URL}${r.url}`);
+              resolve(r.path);
+            } catch { reject(new Error("Upload failed")); }
+          };
+          xhr.onerror = () => reject(new Error("Network Error: Could not connect to the Vision Service. Please ensure the Vision backend is running on port 8002."));
+          xhr.send(form);
+        });
+      } else if (sampleVideo) {
+        videoPath = sampleVideo.path;
+        setVideoSrcUrl(sampleVideo.url);
+      } else {
+        setError("Please select a video file or load the sample lab footage.");
+        return;
+      }
 
     } else if (sourceTab === "cctv" && cctvUrl) {
       videoPath = cctvUrl;
       sessionId = `cctv_${Date.now()}`;
     } else if (sourceTab === "webcam") {
-      videoPath = "0";
       sessionId = `webcam_${Date.now()}`;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }
+        });
+        webcamStreamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(console.error);
+        }
+      } catch (err: any) {
+        setError(`Webcam access error: ${err?.message || "Please check camera permissions"}`);
+        return;
+      }
     } else {
-      setError("Please select a video file or configure a CCTV stream.");
+      setError("Please select a video source.");
       return;
     }
 
@@ -432,9 +490,33 @@ export default function VisionMonitoringPage() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ path: videoPath, fps: 12 }));
-      if (videoRef.current && sourceTab === "upload") {
-        videoRef.current.play().catch(() => {});
+      if (sourceTab === "webcam") {
+        ws.send(JSON.stringify({ mode: "client_stream", fps: 10 }));
+
+        const offscreenCanvas = document.createElement("canvas");
+        offscreenCanvas.width = 640;
+        offscreenCanvas.height = 480;
+        const offCtx = offscreenCanvas.getContext("2d");
+
+        if (captureTimerRef.current) clearInterval(captureTimerRef.current);
+        captureTimerRef.current = setInterval(() => {
+          if (!videoRef.current || ws.readyState !== WebSocket.OPEN) return;
+          if (videoRef.current.readyState < 2) return;
+
+          if (offCtx) {
+            offscreenCanvas.width = videoRef.current.videoWidth || 640;
+            offscreenCanvas.height = videoRef.current.videoHeight || 480;
+            offCtx.drawImage(videoRef.current, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+            const frameB64 = offscreenCanvas.toDataURL("image/jpeg", 0.65);
+            ws.send(JSON.stringify({ frame_b64: frameB64, time_sec: performance.now() / 1000 }));
+          }
+        }, 110);
+
+      } else {
+        ws.send(JSON.stringify({ path: videoPath, fps: 12 }));
+        if (videoRef.current && sourceTab === "upload") {
+          videoRef.current.play().catch(() => {});
+        }
       }
     };
 
@@ -445,13 +527,25 @@ export default function VisionMonitoringPage() {
     ws.onerror  = () => { setError("WebSocket connection failed — is the vision service running on port 8002?"); setPhase("error"); };
     ws.onclose  = () => { setPhase(p => p === "live" ? "done" : p); };
 
-  }, [sourceTab, file, cctvUrl, handleFrameData]);
+  }, [sourceTab, file, sampleVideo, cctvUrl, handleFrameData]);
 
   const stopStream = useCallback(() => {
+    if (captureTimerRef.current) {
+      clearInterval(captureTimerRef.current);
+      captureTimerRef.current = null;
+    }
+    if (webcamStreamRef.current) {
+      webcamStreamRef.current.getTracks().forEach(track => track.stop());
+      webcamStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
+
     wsRef.current?.send(JSON.stringify({ stop: true }));
     wsRef.current?.close();
     wsRef.current = null;
-    videoRef.current?.pause();
     setPhase("idle");
     const ctx = canvasRef.current?.getContext("2d");
     if (ctx && canvasRef.current) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -465,6 +559,7 @@ export default function VisionMonitoringPage() {
   const reset = useCallback(() => {
     stopStream();
     setFile(null);
+    setSampleVideo(null);
     setLastFrame(null);
     setError("");
     setUploadPct(0);
@@ -729,22 +824,64 @@ export default function VisionMonitoringPage() {
             <div className="panel" style={{ padding: 0 }}>
               <div onDrop={onDrop} onDragOver={e => e.preventDefault()}
                 onClick={() => !isLive && document.getElementById("visionFileInput")?.click()}
-                style={{ minHeight: 220, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
-                  cursor: "pointer", border: `2px dashed ${file ? "#3d83f6" : "var(--border-color)"}`, borderRadius: 14, padding: 32,
-                  background: file ? "#3d83f608" : "transparent", transition: "all 0.2s" }}>
-                <input id="visionFileInput" type="file" accept="video/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && setFile(e.target.files[0])} />
-                <div style={{ color: "var(--text-muted)" }}><FileVideo size={48} /></div>
+                style={{ minHeight: 220, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14,
+                  cursor: "pointer", border: `2px dashed ${file || sampleVideo ? "#3d83f6" : "var(--border-color)"}`, borderRadius: 14, padding: 28,
+                  background: file || sampleVideo ? "#3d83f608" : "transparent", transition: "all 0.2s" }}>
+                <input id="visionFileInput" type="file" accept="video/*" style={{ display: "none" }} onChange={e => {
+                  if (e.target.files?.[0]) {
+                    setFile(e.target.files[0]);
+                    setSampleVideo(null);
+                  }
+                }} />
+                <div style={{ color: "var(--text-muted)" }}><FileVideo size={44} /></div>
+                
                 {file ? (
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#3d83f6", fontWeight: 700 }}>{file.name}</div>
+                    <div style={{ color: "#3d83f6", fontWeight: 700, fontSize: "0.95rem" }}>{file.name}</div>
                     <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>{(file.size / 1e6).toFixed(1)} MB — ready to analyse</div>
+                  </div>
+                ) : sampleVideo ? (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#18d18f", fontWeight: 700, fontSize: "0.95rem" }}>Sample Lab Footage Selected</div>
+                    <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>{sampleVideo.filename} — ready to analyse</div>
                   </div>
                 ) : (
                   <div style={{ textAlign: "center" }}>
                     <div style={{ color: "var(--text-main)", fontWeight: 600 }}>Drop a video or click to browse</div>
-                    <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginTop: 4 }}>MP4, MOV, AVI</div>
+                    <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginTop: 4 }}>MP4, MOV, AVI lab recordings</div>
                   </div>
                 )}
+
+                {/* Instant Sample Video Button */}
+                {!file && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      loadSampleVideo();
+                    }}
+                    disabled={isSampleLoading}
+                    style={{
+                      marginTop: 4,
+                      padding: "8px 18px",
+                      background: "rgba(61, 131, 246, 0.12)",
+                      border: "1px solid rgba(61, 131, 246, 0.4)",
+                      borderRadius: 8,
+                      color: "#3d83f6",
+                      fontWeight: 600,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    <PlayCircle size={15} />
+                    {isSampleLoading ? "Loading Sample Footage..." : sampleVideo ? "Reload Sample Lab Video" : "Load Sample Lab Video (Instant Test)"}
+                  </button>
+                )}
+
                 {phase === "uploading" && (
                   <div style={{ width: "100%", maxWidth: 300 }}>
                     <div style={{ background: "var(--border-color)", borderRadius: 20, height: 8, overflow: "hidden" }}>
@@ -759,38 +896,66 @@ export default function VisionMonitoringPage() {
 
           {/* Idle CCTV/webcam placeholder */}
           {phase === "idle" && sourceTab !== "upload" && (
-            <div className="panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 220, gap: 12 }}>
-              <div style={{ color: "var(--text-muted)" }}><VideoOff size={48} /></div>
-              <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", textAlign: "center" }}>
+            <div className="panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 220, gap: 14, padding: 32 }}>
+              <div style={{ color: "var(--text-muted)" }}>
+                {sourceTab === "cctv" ? <VideoOff size={44} /> : <Webcam size={44} />}
+              </div>
+              <div style={{ color: "var(--text-main)", fontSize: "0.95rem", fontWeight: 600, textAlign: "center" }}>
+                {sourceTab === "cctv" ? "CCTV Camera Stream" : "Live Device Webcam"}
+              </div>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", textAlign: "center", maxWidth: 440 }}>
                 {sourceTab === "cctv" ? (
                   cctvUrl ? `Configured Feed: ${cctvUrl}\nClick Start Analysis above to connect.` : "No feed configured. Select or add a CCTV stream in the left panel."
                 ) : (
-                  "Click Start Analysis to activate Webcam feed."
+                  "Feed live video from your laptop/desktop webcam or external camera. YOLOv8 people tracking, headcount metrics, and pose skeleton estimation run in real time."
                 )}
               </div>
+              {sourceTab === "webcam" && (
+                <button
+                  onClick={startLive}
+                  style={{
+                    padding: "9px 22px",
+                    background: "linear-gradient(135deg,#3d83f6,#1dd5e6)",
+                    border: "none",
+                    borderRadius: 8,
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8
+                  }}
+                >
+                  <Webcam size={16} /> Activate Webcam & Start
+                </button>
+              )}
             </div>
           )}
 
           {/* ── Video panels (side by side) ── */}
           {(isLive || phase === "done") && (
-            <div style={{ display: "grid", gridTemplateColumns: sourceTab === "upload" ? "1fr 1fr" : "1fr", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: (sourceTab === "upload" || sourceTab === "webcam") ? "1fr 1fr" : "1fr", gap: 14 }}>
 
-              {/* LEFT: Original video player — only for file upload */}
-              {sourceTab === "upload" && (
+              {/* LEFT: Live Video (Webcam or original file) */}
+              {(sourceTab === "upload" || sourceTab === "webcam") && (
                 <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 16px", background: "var(--border-color)", borderBottom: "1px solid #2a4060", fontSize: "0.85rem", fontWeight: 700, color: "var(--text-main)" }}>
-                    Original Video
+                  <div style={{ padding: "10px 16px", background: "var(--border-color)", borderBottom: "1px solid #2a4060", fontSize: "0.85rem", fontWeight: 700, color: "var(--text-main)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>{sourceTab === "webcam" ? "Live Webcam Feed (Device)" : "Original Video Footage"}</span>
+                    {sourceTab === "webcam" && isLive && (
+                      <span style={{ color: "#18d18f", fontSize: "0.75rem", fontWeight: 600 }}>Streaming @ 10 FPS</span>
+                    )}
                   </div>
                   <video
                     ref={videoRef}
-                    src={videoSrcUrl}
+                    src={sourceTab === "upload" ? videoSrcUrl : undefined}
                     autoPlay
-                    controls
+                    controls={sourceTab === "upload"}
                     muted
                     playsInline
                     style={{ width: "100%", display: "block", background: "#000", maxHeight: 420 }}
                     onSeeked={e => {
-                      if (wsRef.current?.readyState === WebSocket.OPEN) {
+                      if (sourceTab === "upload" && wsRef.current?.readyState === WebSocket.OPEN) {
                         wsRef.current.send(JSON.stringify({ seek: (e.target as HTMLVideoElement).currentTime }));
                       }
                     }}
@@ -801,8 +966,10 @@ export default function VisionMonitoringPage() {
               {/* RIGHT: AI Analysis canvas */}
               <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
                 <div style={{ padding: "10px 16px", background: "var(--border-color)", borderBottom: "1px solid #2a4060", fontSize: "0.85rem", fontWeight: 700, color: "#1dd5e6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>AI Analysis</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 400 }}>{lastFrame?.count ?? 0} people detected</span>
+                  <span>AI Vision Analysis (YOLOv8 + Pose)</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 600 }}>
+                    {lastFrame?.count ?? 0} {lastFrame?.count === 1 ? "person" : "people"} detected
+                  </span>
                 </div>
                 <div style={{ position: "relative", background: "#000" }}>
                   <canvas
@@ -812,7 +979,7 @@ export default function VisionMonitoringPage() {
                   <AlertToast alerts={alerts} />
                   {!lastFrame && (
                     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                      Waiting for first frame…
+                      Processing AI frame overlay…
                     </div>
                   )}
                 </div>
@@ -824,11 +991,11 @@ export default function VisionMonitoringPage() {
           {/* ── Stats row ── */}
           {(isLive || phase === "done") && (
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Stat label="PEOPLE NOW"     value={lastFrame?.count ?? 0}                       color="#1dd5e6" icon={Users} />
-              <Stat label="TOTAL ENTERED"  value={totalSeen}                                   color="#3d83f6" icon={UserPlus} />
-              <Stat label="PEAK OCCUPANCY" value={peakOcc}                                     color="#f3ae2a" icon={TrendingUp} />
-              <Stat label="FIRE"  value={lastFrame?.fire  ? "YES" : "NO"} color={lastFrame?.fire  ? "#ff4d57" : "#18d18f"} icon={Flame} />
-              <Stat label="SMOKE" value={lastFrame?.smoke ? "YES" : "NO"} color={lastFrame?.smoke ? "#94a3b8" : "#18d18f"} icon={Cloud} />
+              <Stat label="HEADCOUNT (NOW)" value={lastFrame?.count ?? 0}                       color="#1dd5e6" icon={Users} />
+              <Stat label="TOTAL ENTERED"   value={totalSeen}                                   color="#3d83f6" icon={UserPlus} />
+              <Stat label="PEAK OCCUPANCY"  value={peakOcc}                                     color="#f3ae2a" icon={TrendingUp} />
+              <Stat label="FIRE STATUS"     value={lastFrame?.fire  ? "ALERT" : "CLEAR"} color={lastFrame?.fire  ? "#ff4d57" : "#18d18f"} icon={Flame} />
+              <Stat label="SMOKE STATUS"    value={lastFrame?.smoke ? "ALERT" : "CLEAR"} color={lastFrame?.smoke ? "#94a3b8" : "#18d18f"} icon={Cloud} />
             </div>
           )}
 

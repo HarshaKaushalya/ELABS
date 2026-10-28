@@ -7,11 +7,13 @@ fire/smoke alerts and human counts on a <canvas> overlay.
 
 Supports:
   • Uploaded video file (multipart upload then WS session)
-  • CCTV / RTSP / webcam URL (send as JSON message)
+  • Client browser webcam streaming base64 frames over WS
+  • CCTV / RTSP / hardware webcam URL
 """
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import time
 import uuid
@@ -20,7 +22,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from fastapi import APIRouter, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from ..core.config import settings
 from ..pipelines import yolo_analyzer as _ya   # direct reference to module singleton
@@ -44,7 +46,7 @@ def _uploads_dir() -> Path:
     return d
 
 
-# ── Upload endpoint ───────────────────────────────────────────────────────────
+# ── Upload & Sample endpoints ────────────────────────────────────────────────
 
 @router.post("/upload", summary="Upload video and get session_id for WS stream")
 async def upload_for_live(file: UploadFile = File(...)) -> JSONResponse:
@@ -64,7 +66,38 @@ async def upload_for_live(file: UploadFile = File(...)) -> JSONResponse:
             f.write(chunk)
 
     logger.info("Uploaded %s → %s", file.filename, dst.name)
-    return JSONResponse({"session_id": session_id, "path": str(dst)})
+    return JSONResponse({
+        "session_id": session_id,
+        "path": str(dst),
+        "filename": dst.name,
+        "url": f"/vision/live/video/{dst.name}",
+    })
+
+
+@router.get("/sample", summary="Get a pre-installed sample lab video for testing")
+async def get_sample_video() -> JSONResponse:
+    d = _uploads_dir()
+    samples = [p for p in d.glob("*.mp4") if p.is_file() and p.stat().st_size > 1000]
+    if not samples:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No sample video found")
+
+    chosen = next((s for s in samples if "2d21a1ca" in s.name), samples[0])
+    session_id = uuid.uuid4().hex
+    return JSONResponse({
+        "session_id": session_id,
+        "filename": chosen.name,
+        "path": str(chosen),
+        "url": f"/vision/live/video/{chosen.name}",
+    })
+
+
+@router.api_route("/video/{filename}", methods=["GET", "HEAD"], summary="Stream video file")
+async def stream_video_file(filename: str) -> FileResponse:
+    safe_name = Path(filename).name
+    p = _uploads_dir() / safe_name
+    if not p.exists() or not p.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Video file not found")
+    return FileResponse(str(p), media_type="video/mp4")
 
 
 # ── Per-frame analysis (runs in thread-pool executor) ────────────────────────
@@ -88,6 +121,15 @@ def _analyze_frame_sync(
 
     h, w = frame.shape[:2]
 
+    # Resize high-res frames for fast CPU inference & lightweight base64 streaming
+    max_dim = 960
+    if max(h, w) > max_dim:
+        scale = max_dim / float(max(h, w))
+        new_w, new_h = int(w * scale), int(h * scale)
+        frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        h, w = new_h, new_w
+        frame_width = float(w)
+
     detections: list[dict]             = []
     curr_centroids: dict[int, tuple]   = {}
     curr_ids: set[int]                 = set()
@@ -106,12 +148,12 @@ def _analyze_frame_sync(
         )
         if det_res and det_res[0].boxes is not None:
             boxes = det_res[0].boxes
-            ids = (
-                boxes.id.cpu().numpy().astype(int).tolist()
-                if boxes.id is not None else []
-            )
-            xyxy  = boxes.xyxy.cpu().numpy()
+            xyxy = boxes.xyxy.cpu().numpy()
             confs = boxes.conf.cpu().numpy()
+            if boxes.id is not None:
+                ids = boxes.id.cpu().numpy().astype(int).tolist()
+            else:
+                ids = [i + 1 for i in range(len(xyxy))]
 
             for tid, box, conf in zip(ids, xyxy, confs):
                 x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
@@ -182,7 +224,6 @@ def _analyze_frame_sync(
     # Encode raw frame as JPEG for frontend to display
     try:
         _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
-        import base64
         image_b64 = base64.b64encode(buffer).decode('utf-8')
     except Exception:
         image_b64 = ""
@@ -205,7 +246,6 @@ def _analyze_frame_sync(
     }
 
 
-
 # ── WebSocket streaming endpoint ──────────────────────────────────────────────
 
 @router.websocket("/ws/{session_id}")
@@ -213,16 +253,13 @@ async def live_stream_ws(websocket: WebSocket, session_id: str):
     """
     WebSocket endpoint for real-time per-frame analysis.
 
-    Protocol
-    --------
-    Client → {"path": "/abs/path/video.mp4"}  or  {"rtsp": "rtsp://..."}
-    Server → stream of JSON frame objects
-    Client → {"seek": 12.5}   to scrub
-    Client → {"stop": true}   to end
+    Supports:
+    - mode="client_stream": browser client streams base64 webcam frames to server
+    - video_source: file path, RTSP url, or local hardware camera index (e.g. 0)
     """
     await websocket.accept()
 
-    # Ensure models are loaded (first call takes 10-20 s)
+    # Ensure models are loaded
     _ya._load_models()
 
     logger.info("WS connected: %s", session_id)
@@ -233,15 +270,89 @@ async def live_stream_ws(websocket: WebSocket, session_id: str):
         await websocket.close(code=1008)
         return
 
+    mode = init_msg.get("mode")
+    target_fps = float(init_msg.get("fps", 12))
+    loop = asyncio.get_event_loop()
+
+    # ── BRANCH A: Browser client webcam streaming ─────────────────────────────
+    if mode == "client_stream":
+        logger.info("Starting client_stream mode for session: %s", session_id)
+        await websocket.send_json({
+            "type": "meta",
+            "fps": target_fps,
+            "mode": "client_stream",
+        })
+
+        seen_ids: set[int] = set()
+        prev_centroids: dict[int, tuple[float, float]] = {}
+        prev_time = 0.0
+
+        try:
+            while True:
+                msg = await websocket.receive_json()
+                if msg.get("stop"):
+                    break
+
+                b64_str = msg.get("frame_b64")
+                if not b64_str:
+                    continue
+
+                if "," in b64_str:
+                    b64_str = b64_str.split(",", 1)[1]
+
+                try:
+                    img_bytes = base64.b64decode(b64_str)
+                    np_arr = np.frombuffer(img_bytes, np.uint8)
+                    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                except Exception as e:
+                    logger.warning("Failed to decode client frame: %s", e)
+                    continue
+
+                if frame is None:
+                    continue
+
+                curr_time = float(msg.get("time_sec", time.time()))
+                frame_w = float(frame.shape[1])
+
+                data = await loop.run_in_executor(
+                    None,
+                    _analyze_frame_sync,
+                    frame,
+                    dict(prev_centroids),
+                    prev_time,
+                    curr_time,
+                    seen_ids,
+                    frame_w,
+                )
+
+                prev_centroids = {
+                    int(k): tuple(v)
+                    for k, v in data.pop("curr_centroids", {}).items()
+                }
+                prev_time = curr_time
+
+                await websocket.send_json(data)
+
+        except WebSocketDisconnect:
+            logger.info("WS client stream disconnected: %s", session_id)
+        except Exception as exc:
+            logger.exception("WS client stream error: %s", exc)
+        finally:
+            logger.info("WS client stream finished: %s", session_id)
+        return
+
+    # ── BRANCH B: Server-side capture (Video file, CCTV RTSP, or device index)
     video_source = (
         init_msg.get("path")
         or init_msg.get("rtsp")
         or init_msg.get("webcam", "0")
     )
-    target_fps = float(init_msg.get("fps", 12))
 
-    # Open capture
-    src = str(video_source) if not isinstance(video_source, int) else video_source
+    if isinstance(video_source, str) and video_source.strip().isdigit():
+        src: int | str = int(video_source.strip())
+    else:
+        src = str(video_source)
+
     cap = cv2.VideoCapture(src)
     if not cap.isOpened():
         await websocket.send_json({"type": "error", "detail": f"Cannot open source: {video_source}"})
@@ -276,8 +387,6 @@ async def live_stream_ws(websocket: WebSocket, session_id: str):
         "Streaming %s @ src=%.0ffps target=%.0ffps skip=%d",
         video_source, source_fps, target_fps, skip_n,
     )
-
-    loop = asyncio.get_event_loop()
 
     try:
         while True:
@@ -315,7 +424,7 @@ async def live_stream_ws(websocket: WebSocket, session_id: str):
                 dict(prev_centroids),
                 prev_time,
                 curr_time,
-                seen_ids,          # mutated in place inside executor (safe: single thread)
+                seen_ids,
                 frame_w,
             )
 
