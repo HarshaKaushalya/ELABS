@@ -102,7 +102,9 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
         const data = await res.json();
         const list = data.notifications ?? [];
         setNotifications(list);
-        setUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : list.filter((n: any) => !n.isRead).length);
+        const count = typeof data.unreadCount === "number" ? data.unreadCount : list.filter((n: any) => !n.isRead).length;
+        setUnreadCount(count);
+        window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: count } }));
       }
     } catch (err) {
       console.warn("Failed to fetch notifications:", err);
@@ -124,10 +126,26 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
     if (!token) return;
     const unsub = on("new_notification", (notif: NotificationItem) => {
       setNotifications(prev => [notif, ...prev]);
-      setUnreadCount(prev => prev + 1);
+      setUnreadCount(prev => {
+        const next = prev + 1;
+        window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: next } }));
+        return next;
+      });
     });
     return () => { unsub(); };
   }, [on, token]);
+
+  // Listen for notification updates from other components
+  useEffect(() => {
+    const handleUpdated = (e: Event) => {
+      const custom = e as CustomEvent<{ unreadCount?: number }>;
+      if (typeof custom.detail?.unreadCount === "number") {
+        setUnreadCount(custom.detail.unreadCount);
+      }
+    };
+    window.addEventListener("elabs:notifications-updated", handleUpdated);
+    return () => window.removeEventListener("elabs:notifications-updated", handleUpdated);
+  }, []);
 
   // Click outside / escape listeners to auto close popovers
   useEffect(() => {
@@ -158,7 +176,11 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
   const handleNotificationClick = async (notif: NotificationItem) => {
     if (!notif.isRead) {
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setUnreadCount(prev => {
+        const next = Math.max(0, prev - 1);
+        window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: next } }));
+        return next;
+      });
       try {
         await apiFetch(`/notifications/${notif.id}/read`, { method: "PATCH" });
       } catch (err) {
@@ -186,6 +208,7 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
     e.stopPropagation();
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     setUnreadCount(0);
+    window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: 0 } }));
     try {
       await apiFetch("/notifications/read-all", { method: "PATCH" });
     } catch (err) {

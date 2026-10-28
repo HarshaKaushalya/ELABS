@@ -101,7 +101,9 @@ export default function NotificationsPage() {
         const data = await r.json();
         const list = data.notifications ?? [];
         setNotifications(list);
-        setUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : list.filter((n: any) => !n.isRead).length);
+        const count = typeof data.unreadCount === "number" ? data.unreadCount : list.filter((n: any) => !n.isRead).length;
+        setUnreadCount(count);
+        window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: count } }));
       }
     } catch (err) {
       console.warn("Failed to load notifications:", err);
@@ -121,14 +123,22 @@ export default function NotificationsPage() {
     if (!token) return;
     const off = on("new_notification", (notif: Notification) => {
       setNotifications(prev => [notif, ...prev]);
-      setUnreadCount(prev => prev + 1);
+      setUnreadCount(prev => {
+        const next = prev + 1;
+        window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: next } }));
+        return next;
+      });
     });
     return () => { off(); };
   }, [on, token]);
 
   const markRead = async (id: number) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    setUnreadCount(prev => {
+      const next = Math.max(0, prev - 1);
+      window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: next } }));
+      return next;
+    });
     try {
       await apiFetch(`/notifications/${id}/read`, { method: "PATCH" });
     } catch (err) {
@@ -139,6 +149,7 @@ export default function NotificationsPage() {
   const markAllRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     setUnreadCount(0);
+    window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: 0 } }));
     try {
       await apiFetch("/notifications/read-all", { method: "PATCH" });
     } catch (err) {

@@ -4,20 +4,42 @@ import { requireAuth, AuthedRequest } from "../auth/auth.middleware";
 
 const router = Router();
 
+/** GET /notifications/unread-count — lightweight count of unread notifications */
+router.get("/unread-count", requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const uid = req.user!.id;
+    const [rows] = await pool.query(
+      `SELECT COUNT(*) AS unreadCount FROM notifications WHERE user_id = :uid AND is_read = 0`,
+      { uid }
+    );
+    res.json({ unreadCount: Number((rows as any[])[0]?.unreadCount ?? 0) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** GET /notifications — unread first, last 50 */
-router.get("/", requireAuth, async (req: AuthedRequest, res) => {
-  const uid = req.user!.id;
-  const [rows] = await pool.query(
-    `SELECT id, type, title, body, is_read AS isRead, read_at AS readAt,
-            meta, created_at AS createdAt
-     FROM notifications
-     WHERE user_id = :uid
-     ORDER BY is_read ASC, created_at DESC, id DESC
-     LIMIT 50`,
-    { uid }
-  );
-  const unreadCount = (rows as any[]).filter((r) => !r.isRead).length;
-  res.json({ notifications: rows, unreadCount });
+router.get("/", requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const uid = req.user!.id;
+    const [rows] = await pool.query(
+      `SELECT id, type, title, body, is_read AS isRead, read_at AS readAt,
+              meta, created_at AS createdAt
+       FROM notifications
+       WHERE user_id = :uid
+       ORDER BY is_read ASC, created_at DESC, id DESC
+       LIMIT 50`,
+      { uid }
+    );
+    const [countRows] = await pool.query(
+      `SELECT COUNT(*) AS unreadCount FROM notifications WHERE user_id = :uid AND is_read = 0`,
+      { uid }
+    );
+    const unreadCount = Number((countRows as any[])[0]?.unreadCount ?? 0);
+    res.json({ notifications: rows, unreadCount });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /** PATCH /notifications/:id/read */

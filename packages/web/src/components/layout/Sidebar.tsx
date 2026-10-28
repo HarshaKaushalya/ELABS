@@ -1,15 +1,19 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UniversityBrand } from "./UniversityBrand";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useSocket } from "@/hooks/useSocket";
+import { getToken } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 type NavLink = {
   label: string;
   href: string;
   icon: string;
-  badge?: number;
+  badge?: number | string;
   hideFor?: string[];
 };
 
@@ -38,8 +42,8 @@ const sections: NavSection[] = [
   {
     title: "COMMUNICATION",
     links: [
-      { label: "Messages", href: "/messages", icon: "messages", badge: 3 },
-      { label: "Notifications", href: "/notifications", icon: "notifications", badge: 4 },
+      { label: "Messages", href: "/messages", icon: "messages" },
+      { label: "Notifications", href: "/notifications", icon: "notifications" },
     ],
   },
   {
@@ -106,12 +110,113 @@ type SidebarProps = {
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { me, logout } = useAuth();
+  const [token, setToken] = useState<string | null>(null);
+  const [unreadMessages, setUnreadMessages] = useState<number>(0);
+  const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
+
+  useEffect(() => {
+    setToken(getToken());
+  }, []);
+
+  const { on } = useSocket(token);
+
+  const fetchCounts = useCallback(async () => {
+    if (!me) {
+      setUnreadMessages(0);
+      setUnreadNotifications(0);
+      return;
+    }
+    try {
+      const [notifRes, msgRes] = await Promise.all([
+        apiFetch("/notifications/unread-count"),
+        apiFetch("/messages/unread-count"),
+      ]);
+      if (notifRes.ok) {
+        const notifData = await notifRes.json();
+        setUnreadNotifications(Number(notifData.unreadCount ?? 0));
+      }
+      if (msgRes.ok) {
+        const msgData = await msgRes.json();
+        setUnreadMessages(Number(msgData.unreadCount ?? 0));
+      }
+    } catch (err) {
+      console.warn("Failed to fetch unread counts in sidebar:", err);
+    }
+  }, [me]);
+
+  // Periodic polling every 15s
+  useEffect(() => {
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 15000);
+    return () => clearInterval(interval);
+  }, [fetchCounts]);
+
+  // Refetch when route changes (e.g. visiting /messages or /notifications)
+  useEffect(() => {
+    fetchCounts();
+  }, [pathname, fetchCounts]);
+
+  // Real-time WebSocket updates
+  useEffect(() => {
+    if (!token) return;
+    const unsubNotif = on("new_notification", () => {
+      setUnreadNotifications((prev) => prev + 1);
+    });
+    const unsubMsg = on("new_message", () => {
+      setUnreadMessages((prev) => prev + 1);
+    });
+    return () => {
+      unsubNotif();
+      unsubMsg();
+    };
+  }, [on, token]);
+
+  // Custom events to synchronize state instantly across components
+  useEffect(() => {
+    const handleNotifs = (e: Event) => {
+      const custom = e as CustomEvent<{ unreadCount?: number }>;
+      if (typeof custom.detail?.unreadCount === "number") {
+        setUnreadNotifications(custom.detail.unreadCount);
+      } else {
+        fetchCounts();
+      }
+    };
+    const handleMsgs = (e: Event) => {
+      const custom = e as CustomEvent<{ unreadCount?: number }>;
+      if (typeof custom.detail?.unreadCount === "number") {
+        setUnreadMessages(custom.detail.unreadCount);
+      } else {
+        fetchCounts();
+      }
+    };
+
+    window.addEventListener("elabs:notifications-updated", handleNotifs);
+    window.addEventListener("elabs:messages-updated", handleMsgs);
+    return () => {
+      window.removeEventListener("elabs:notifications-updated", handleNotifs);
+      window.removeEventListener("elabs:messages-updated", handleMsgs);
+    };
+  }, [fetchCounts]);
 
   const initials = me?.fullName
     ? me.fullName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "?";
 
   const displayRole = me?.roles?.[0] ?? "User";
+
+  const getDynamicBadge = (href: string): number | string | undefined => {
+    if (href === "/notifications") {
+      return unreadNotifications > 0
+        ? (unreadNotifications > 99 ? "99+" : unreadNotifications)
+        : undefined;
+    }
+    if (href === "/messages") {
+      return unreadMessages > 0
+        ? (unreadMessages > 99 ? "99+" : unreadMessages)
+        : undefined;
+    }
+    return undefined;
+  };
 
   return (
     <aside className={`sidebar ${isCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -131,14 +236,34 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 {!isCollapsed && <p className="sidebar-section-title">{section.title}</p>}
                 {visibleLinks.map((link) => {
                   const active = isActive(pathname, link.href);
-                  const badge = link.badge;
+                  const badge = getDynamicBadge(link.href) ?? link.badge;
                   return (
-                    <Link key={link.href + link.label} href={link.href} className={`sidebar-link ${active ? "active" : ""}`} title={isCollapsed ? link.label : undefined}>
-                      <span className="sidebar-link-icon" aria-hidden>
+                    <Link
+                      key={link.href + link.label}
+                      href={link.href}
+                      className={`sidebar-link ${active ? "active" : ""}`}
+                      title={isCollapsed ? (badge != null ? `${link.label} (${badge})` : link.label) : undefined}
+                    >
+                      <span className="sidebar-link-icon" aria-hidden style={{ position: "relative" }}>
                         <NavIcon type={link.icon} />
+                        {isCollapsed && badge != null && (
+                          <span
+                            style={{
+                              position: "absolute",
+                              top: -2,
+                              right: -2,
+                              width: 7,
+                              height: 7,
+                              borderRadius: "50%",
+                              backgroundColor: "#ff4b56",
+                            }}
+                          />
+                        )}
                       </span>
                       {!isCollapsed && <span>{link.label}</span>}
-                      {!isCollapsed && badge != null && <span className="sidebar-badge">{badge}</span>}
+                      {!isCollapsed && badge != null && (
+                        <span className="sidebar-badge">{badge}</span>
+                      )}
                     </Link>
                   );
                 })}

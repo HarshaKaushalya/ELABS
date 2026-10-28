@@ -58,6 +58,20 @@ router.post("/send", requireAuth, async (req: AuthedRequest, res, next) => {
   }
 });
 
+/** GET /messages/unread-count — lightweight count of unread messages */
+router.get("/unread-count", requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const uid = req.user!.id;
+    const [rows] = await pool.query(
+      `SELECT COUNT(*) AS unreadCount
+       FROM message_recipients
+       WHERE user_id = :uid AND is_read = 0`,
+      { uid }
+    );
+    res.json({ unreadCount: Number((rows as any[])[0]?.unreadCount ?? 0) });
+  } catch (err) { next(err); }
+});
+
 /** GET /messages/inbox — authenticated user's received messages */
 router.get("/inbox", requireAuth, async (req: AuthedRequest, res, next) => {
   try {
@@ -76,9 +90,14 @@ router.get("/inbox", requireAuth, async (req: AuthedRequest, res, next) => {
        LIMIT 100`,
       { uid }
     );
-    const msgs = rows as any[];
-    const unreadCount = msgs.filter(r => !r.isRead).length;
-    res.json({ messages: msgs, unreadCount });
+    const [countRows] = await pool.query(
+      `SELECT COUNT(*) AS unreadCount
+       FROM message_recipients
+       WHERE user_id = :uid AND is_read = 0`,
+      { uid }
+    );
+    const unreadCount = Number((countRows as any[])[0]?.unreadCount ?? 0);
+    res.json({ messages: rows, unreadCount });
   } catch (err) { next(err); }
 });
 

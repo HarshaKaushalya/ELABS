@@ -96,7 +96,7 @@ This messaging facility connects all undergraduate students, module coordinators
 
 For any urgent laboratory access issues, please contact the respective lab technician or the department office.`,
     createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    isRead: false,
+    isRead: true,
   },
   {
     id: 9002,
@@ -112,7 +112,7 @@ For any urgent laboratory access issues, please contact the respective lab techn
 
 Please review the laboratory safety manual before your scheduled practical.`,
     createdAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-    isRead: false,
+    isRead: true,
   },
   {
     id: 9003,
@@ -808,18 +808,23 @@ export default function MessagesPage() {
         const msgs: Message[] = data.messages ?? [];
         if (msgs.length > 0) {
           setInbox(msgs);
-          setUnread(data.unreadCount ?? 0);
+          const count = typeof data.unreadCount === "number" ? data.unreadCount : msgs.filter((m) => !m.isRead).length;
+          setUnread(count);
+          window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: count } }));
         } else {
           setInbox(DEFAULT_DEPARTMENT_MESSAGES);
-          setUnread(2);
+          setUnread(0);
+          window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: 0 } }));
         }
       } else {
         setInbox(DEFAULT_DEPARTMENT_MESSAGES);
-        setUnread(2);
+        setUnread(0);
+        window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: 0 } }));
       }
     } catch {
       setInbox(DEFAULT_DEPARTMENT_MESSAGES);
-      setUnread(2);
+      setUnread(0);
+      window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: 0 } }));
     } finally {
       setLoading(false);
     }
@@ -905,13 +910,29 @@ export default function MessagesPage() {
   useEffect(() => {
     const off = on("new_message", (msg: Message) => {
       setInbox((prev) => [msg, ...prev]);
-      setUnread((prev) => prev + 1);
+      setUnread((prev) => {
+        const next = prev + 1;
+        window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: next } }));
+        return next;
+      });
       showToast(`New message: ${msg.subject}`, true);
     });
     return () => {
       off();
     };
   }, [on]);
+
+  // Listen for updates from other components
+  useEffect(() => {
+    const handleUpdated = (e: Event) => {
+      const custom = e as CustomEvent<{ unreadCount?: number }>;
+      if (typeof custom.detail?.unreadCount === "number") {
+        setUnread(custom.detail.unreadCount);
+      }
+    };
+    window.addEventListener("elabs:messages-updated", handleUpdated);
+    return () => window.removeEventListener("elabs:messages-updated", handleUpdated);
+  }, []);
 
   const handleSelectMessage = (msg: Message) => {
     setActiveMsg(msg);
@@ -920,7 +941,11 @@ export default function MessagesPage() {
         apiFetch(`/messages/${msg.id}/read`, { method: "PATCH" }).catch(() => {});
       }
       setInbox((prev) => prev.map((m) => (m.id === msg.id ? { ...m, isRead: true } : m)));
-      setUnread((prev) => Math.max(0, prev - 1));
+      setUnread((prev) => {
+        const next = Math.max(0, prev - 1);
+        window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: next } }));
+        return next;
+      });
     }
   };
 
@@ -934,6 +959,7 @@ export default function MessagesPage() {
     apiFetch("/messages/mark-all-read", { method: "PATCH" }).catch(() => {});
     setInbox((prev) => prev.map((m) => ({ ...m, isRead: true })));
     setUnread(0);
+    window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: 0 } }));
   };
 
   const handleSent = () => {
