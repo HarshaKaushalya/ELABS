@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { 
   Zap, Sun, Activity, Wrench, Radio, Laptop, Network, FlaskConical,
   Users, UserPlus, TrendingUp, Flame, Cloud, Play, Square, RotateCcw,
-  FileVideo, Video, Webcam, Eye, ClipboardList, Cpu, Trash2, X, Plus,
+  FileVideo, Video, Webcam, Eye, ClipboardList, Trash2, X, Plus,
   AlertTriangle, UploadCloud, VideoOff, PlayCircle
 } from "lucide-react";
 
@@ -576,7 +576,7 @@ export default function VisionMonitoringPage() {
   const currentStreams = cctvStreams[selectedLabId] || [];
 
   return (
-    <AppShell title="Vision Monitoring" subtitle="Real-time AI-powered lab surveillance — YOLOv8 people tracking, pose estimation, fire & smoke detection">
+    <AppShell title="Vision Monitoring" subtitle="Live lab monitoring, occupancy headcount, and safety tracking">
       <style>{`
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
         .lab-btn {
@@ -963,10 +963,10 @@ export default function VisionMonitoringPage() {
                 </div>
               )}
 
-              {/* RIGHT: AI Analysis canvas */}
+              {/* RIGHT: Live Analysis canvas */}
               <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
                 <div style={{ padding: "10px 16px", background: "var(--border-color)", borderBottom: "1px solid #2a4060", fontSize: "0.85rem", fontWeight: 700, color: "#1dd5e6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>AI Vision Analysis (YOLOv8 + Pose)</span>
+                  <span>Camera Detection Feed</span>
                   <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 600 }}>
                     {lastFrame?.count ?? 0} {lastFrame?.count === 1 ? "person" : "people"} detected
                   </span>
@@ -979,7 +979,7 @@ export default function VisionMonitoringPage() {
                   <AlertToast alerts={alerts} />
                   {!lastFrame && (
                     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                      Processing AI frame overlay…
+                      Waiting for live camera feed…
                     </div>
                   )}
                 </div>
@@ -1061,28 +1061,7 @@ export default function VisionMonitoringPage() {
             </div>
           </div>
 
-          {/* AI models status */}
-          <div className="panel" style={{ padding: "14px 16px" }}>
-            <h3 style={{ margin: "0 0 10px", color: "var(--text-muted)", fontSize: "0.78rem", letterSpacing: 1, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Cpu size={14} /> AI MODELS</h3>
-            {[
-              { name: "YOLOv8n Detection", desc: "People tracking", icon: Eye },
-              { name: "YOLOv8n-Pose",      desc: "Skeleton estimation", icon: Users },
-              { name: "Fire / Smoke",      desc: "HSV + YOLO", icon: Flame },
-              { name: "ByteTrack",         desc: "Multi-object tracking", icon: Activity },
-            ].map(m => {
-              const Icon = m.icon;
-              return (
-                <div key={m.name} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ color: "var(--text-muted)" }}><Icon size={16} /></span>
-                  <div>
-                    <div style={{ color: "var(--text-main)", fontSize: "0.8rem", fontWeight: 600 }}>{m.name}</div>
-                    <div style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>{m.desc}</div>
-                  </div>
-                  <div style={{ marginLeft: "auto", width: 8, height: 8, borderRadius: "50%", background: "#18d18f" }} />
-                </div>
-              );
-            })}
-          </div>
+
 
         </div>
 
