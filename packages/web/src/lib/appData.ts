@@ -69,6 +69,10 @@ export type AdminUser = {
   id: number;
   fullName: string;
   email: string;
+  indexNo?: string | null;
+  groupCode?: string | null;
+  department?: string | null;
+  semester?: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -80,6 +84,70 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
   if (!res.ok) return [];
   const data = await res.json();
   return (data.users ?? []) as AdminUser[];
+}
+
+export type RoleDefinition = {
+  id: number;
+  name: string;
+  description: string;
+  permissions: string[];
+};
+
+export type PermissionDefinition = {
+  id: number;
+  code: string;
+  description: string;
+};
+
+export async function fetchAdminRoles(): Promise<{
+  roles: RoleDefinition[];
+  permissions: PermissionDefinition[];
+}> {
+  const res = await apiFetch("/admin/roles");
+  if (!res.ok) return { roles: [], permissions: [] };
+  const data = await res.json();
+  return {
+    roles: (data.roles ?? []) as RoleDefinition[],
+    permissions: (data.permissions ?? []) as PermissionDefinition[],
+  };
+}
+
+export async function updateUserRole(userId: number, role: string) {
+  const res = await apiFetch(`/admin/users/${userId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+  return res.json();
+}
+
+export async function updateUserStatus(userId: number, isActive: boolean) {
+  const res = await apiFetch(`/admin/users/${userId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ isActive }),
+  });
+  return res.json();
+}
+
+export async function createAdminUser(payload: {
+  fullName: string;
+  email: string;
+  password?: string;
+  role: string;
+  indexNo?: string;
+}) {
+  const res = await apiFetch("/admin/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+export async function updateRolePermissions(roleId: number, permissionCodes: string[]) {
+  const res = await apiFetch(`/admin/roles/${roleId}/permissions`, {
+    method: "PUT",
+    body: JSON.stringify({ permissionCodes }),
+  });
+  return res.json();
 }
 
 export type AuditLog = {
@@ -98,4 +166,5 @@ export async function fetchAuditLogs(): Promise<AuditLog[]> {
   const data = await res.json();
   return (data.logs ?? []) as AuditLog[];
 }
+
 
