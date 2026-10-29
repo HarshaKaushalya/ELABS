@@ -1911,7 +1911,7 @@ function EditPracticalsModal({ mod, practicals, token, onClose, onSaved }: {
             <label style={{ color: "var(--text-muted)", fontSize: "0.78rem", fontWeight: 700, display: "block", marginBottom: 10, letterSpacing: 1 }}>LIST OF PRACTICALS</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {rows.map((row, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "90px 1fr 160px 80px auto", gap: 8, alignItems: "center" }}>
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "90px 1fr 160px auto", gap: 8, alignItems: "center" }}>
                   <input value={row.labNumber} onChange={e => updateRow(i, "labNumber", e.target.value)}
                     style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-main)", padding: "7px 10px", fontSize: "0.82rem" }} />
                   <input value={row.labTitle} onChange={e => updateRow(i, "labTitle", e.target.value)}
@@ -1923,9 +1923,6 @@ function EditPracticalsModal({ mod, practicals, token, onClose, onSaved }: {
                     <option value="Not Working">Not Working</option>
                     <option value="Under Maintenance">Maintenance</option>
                   </select>
-                  <input type="number" value={row.numSessions} min={0} onChange={e => updateRow(i, "numSessions", Number(e.target.value))}
-                    placeholder="Sessions"
-                    style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 6, color: "var(--text-main)", padding: "7px 10px", fontSize: "0.82rem", textAlign: "center" }} />
                   <button onClick={() => removeRow(i)}
                     style={{ background: "#ff4d5720", border: "1px solid #ff4d5740", borderRadius: 6, color: "#ff4d57", padding: "7px 10px", cursor: "pointer", fontSize: "0.8rem" }}><Trash2 size={14} /></button>
                 </div>
@@ -1959,9 +1956,8 @@ export default function ModulePage() {
   const [mod, setMod] = useState<Module | null>(null);
   const [practicals, setPracticals] = useState<Practical[]>([]);
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"practicals" | "schedule" | "sessions" | "assignments" | "quizzes">("practicals");
+  const [tab, setTab] = useState<"practicals" | "schedule" | "assignments" | "quizzes">("practicals");
   const [isAdmin, setIsAdmin] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -1977,9 +1973,11 @@ export default function ModulePage() {
       const queryTab = sp.get("tab");
       if (
         queryTab &&
-        ["practicals", "schedule", "sessions", "assignments", "quizzes"].includes(queryTab)
+        ["practicals", "schedule", "assignments", "quizzes"].includes(queryTab)
       ) {
         setTab(queryTab as any);
+      } else if (queryTab === "sessions") {
+        setTab("practicals");
       }
     }
   }, []);
@@ -1991,9 +1989,11 @@ export default function ModulePage() {
         const queryTab = sp.get("tab");
         if (
           queryTab &&
-          ["practicals", "schedule", "sessions", "assignments", "quizzes"].includes(queryTab)
+          ["practicals", "schedule", "assignments", "quizzes"].includes(queryTab)
         ) {
           setTab(queryTab as any);
+        } else if (queryTab === "sessions") {
+          setTab("practicals");
         }
       }
     };
@@ -2030,7 +2030,6 @@ export default function ModulePage() {
         setMod(d.module);
         setPracticals(d.practicals ?? []);
         setSchedule(d.schedule ?? []);
-        setSessions(d.sessions ?? []);
         setAssignments(ad.assignments ?? []);
         setQuizzes(qd.quizzes ?? []);
       })
@@ -2046,9 +2045,6 @@ export default function ModulePage() {
     const token = readStorage("elabs_access_token") || "";
     window.open(`${apiBase}/academic/modules/${moduleId}/export-grades?token=${encodeURIComponent(token)}`, "_blank");
   };
-
-  const pending = sessions.filter((s) => !(s.attended && s.reportSubmitted));
-  const done = sessions.filter((s) => s.attended && s.reportSubmitted);
 
   const tabStyle = (t: typeof tab, color: string) => ({
     padding: "9px 22px",
@@ -2151,7 +2147,7 @@ export default function ModulePage() {
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ textAlign: "center", background: "var(--bg-app)", borderRadius: 10, padding: "10px 16px" }}>
                 <div style={{ color: "#3d83f6", fontWeight: 700, fontSize: "1.4rem" }}>{practicals.length}</div>
-                <div style={{ color: "var(--text-muted)", fontSize: "0.68rem", fontWeight: 600 }}>LABS</div>
+                <div style={{ color: "var(--text-muted)", fontSize: "0.68rem", fontWeight: 600 }}>PRACTICALS</div>
               </div>
               <div style={{ textAlign: "center", background: "var(--bg-app)", borderRadius: 10, padding: "10px 16px" }}>
                 <div style={{ color: "#18d18f", fontWeight: 700, fontSize: "1.4rem" }}>{mod.numStudents}</div>
@@ -2159,7 +2155,7 @@ export default function ModulePage() {
               </div>
               <div style={{ textAlign: "center", background: "var(--bg-app)", borderRadius: 10, padding: "10px 16px" }}>
                 <div style={{ color: "#10b981", fontWeight: 700, fontSize: "1.4rem" }}>{schedule.length}</div>
-                <div style={{ color: "var(--text-muted)", fontSize: "0.68rem", fontWeight: 600 }}>SESSIONS</div>
+                <div style={{ color: "var(--text-muted)", fontSize: "0.68rem", fontWeight: 600 }}>SCHEDULED SLOTS</div>
               </div>
             </div>
             {isAdmin && (
@@ -2199,13 +2195,6 @@ export default function ModulePage() {
             <FileSpreadsheet size={14} />
             <span>Lab Schedule</span>
             {schedule.length > 0 && <span style={{ background: "#10b98130", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem" }}>{schedule.length}</span>}
-          </span>
-        </button>
-        <button type="button" style={tabStyle("sessions", "#18d18f")} onClick={() => switchTab("sessions")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <ClipboardList size={14} />
-            <span>Sessions</span>
-            {sessions.length > 0 && <span style={{ background: "#18d18f30", borderRadius: 20, padding: "1px 8px", fontSize: "0.7rem" }}>{sessions.length}</span>}
           </span>
         </button>
         <button type="button" style={tabStyle("assignments", "#f59e0b")} onClick={() => switchTab("assignments")}>
@@ -2250,7 +2239,7 @@ export default function ModulePage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
               <thead>
                 <tr style={{ background: "var(--bg-app)" }}>
-                  {["Lab", "Lab Title & Details", "Equipment Status", "Sessions", "Manuals & Guidelines", "Action"].map((h) => (
+                  {["Lab", "Lab Title & Details", "Equipment Status", "Manuals & Guidelines", "Action"].map((h) => (
                     <th key={h} style={{ padding: "12px 18px", color: "var(--text-muted)", fontWeight: 700, fontSize: "0.74rem", letterSpacing: 0.8, textAlign: "left", borderBottom: "1px solid var(--border-color)" }}>
                       {h.toUpperCase()}
                     </th>
@@ -2291,9 +2280,6 @@ export default function ModulePage() {
                           <cfg.icon size={12} />
                           <span>{p.equipStatus}</span>
                         </span>
-                      </td>
-                      <td style={{ padding: "14px 18px", color: p.numSessions > 0 ? "var(--text-main)" : "var(--text-muted)", fontWeight: 600 }}>
-                        {p.numSessions > 0 ? `${p.numSessions} session` : "—"}
                       </td>
                       <td style={{ padding: "14px 18px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2358,67 +2344,6 @@ export default function ModulePage() {
           initialSlots={schedule}
           onSlotsUpdated={load}
         />
-      )}
-
-      {/* ─── SESSIONS TAB ─── */}
-      {tab === "sessions" && (
-        <div>
-          {sessions.length === 0 ? (
-            <div style={{ padding: 48, display: "flex", flexDirection: "column", alignItems: "center", color: "var(--text-muted)", background: "var(--bg-card)", borderRadius: 14, border: "1px dashed var(--border-color)" }}>
-              <ClipboardList size={36} style={{ marginBottom: 10 }} />
-              <div>No sessions recorded yet</div>
-            </div>
-          ) : (
-            <>
-              <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-                {[
-                  { label: "Total", val: sessions.length, color: "var(--text-muted)" },
-                  { label: "Pending", val: pending.length, color: "#f3ae2a" },
-                  { label: "Completed", val: done.length, color: "#18d18f" },
-                ].map((s) => (
-                  <div key={s.label} style={{ flex: 1, minWidth: 100, background: "var(--bg-card)", border: `1px solid ${s.color}25`, borderRadius: 10, padding: "14px 18px" }}>
-                    <div style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: 4 }}>{s.label}</div>
-                    <div style={{ color: s.color, fontWeight: 700, fontSize: "1.5rem" }}>{s.val}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {sessions.map((session, idx) => {
-                  const isDone = session.attended && session.reportSubmitted;
-                  const badge = isDone ? { label: "Done", color: "#18d18f", bg: "#18d18f15" }
-                    : session.status === "ONGOING" ? { label: "Ongoing", color: "#3d83f6", bg: "#3d83f615" }
-                    : { label: "Pending", color: "#f3ae2a", bg: "#f3ae2a15" };
-                  return (
-                    <Link key={session.id} href={`/labs/session/${session.id}`} style={{ textDecoration: "none" }}>
-                      <article
-                        style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 12, padding: "15px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", transition: "border-color 0.15s" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "#2a4a7a")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "var(--border-color)")}
-                      >
-                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${badge.color}20`, border: `1px solid ${badge.color}50`, display: "flex", alignItems: "center", justifyContent: "center", color: badge.color, fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
-                          {idx + 1}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-                            <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{session.title}</span>
-                            <span style={{ fontSize: "0.7rem", fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: badge.bg, color: badge.color }}>{badge.label}</span>
-                          </div>
-                          <div style={{ display: "flex", gap: 14, fontSize: "0.78rem", color: "var(--text-muted)", flexWrap: "wrap", alignItems: "center" }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Calendar size={12} /> {fmt(session.scheduledDate)}</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Clock size={12} /> {session.durationHours}h</span>
-                            {session.attended && <span style={{ color: "#18d18f", display: "inline-flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={12} /> Attended</span>}
-                            {session.reportSubmitted && <span style={{ color: "#18d18f", display: "inline-flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={12} /> Report</span>}
-                          </div>
-                        </div>
-                        <span style={{ color: "var(--text-muted)", fontSize: "1.2rem" }}>›</span>
-                      </article>
-                    </Link>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
       )}
 
       {/* ─── ASSIGNMENTS TAB ─── */}

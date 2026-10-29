@@ -5,14 +5,13 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
 import Link from "next/link";
-import { AlertTriangle, FlaskConical, Users, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, FlaskConical, Users } from "lucide-react";
 
 type Module = {
   id: number; code: string; name: string;
   coordinatorName: string | null;
   numStudents: number;
   labCount: number; brokenLabs: number;
-  totalSessions: number; upcomingSessions: number; completedSessions: number;
 };
 type Semester = { id: number; name: string; level: number; coordinatorName: string | null };
 
@@ -85,7 +84,7 @@ export default function SemesterGroupPage() {
               <div style={{ color: "#18d18f", fontWeight: 700, fontSize: "1.8rem" }}>
                 {modules.reduce((s, m) => s + Number(m.labCount ?? 0), 0)}
               </div>
-              <div style={{ color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 600 }}>LABS</div>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 600 }}>PRACTICALS</div>
             </div>
             <div style={{ textAlign: "center" }}>
               <div style={{ color: "#f3ae2a", fontWeight: 700, fontSize: "1.8rem" }}>
@@ -107,9 +106,6 @@ export default function SemesterGroupPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {modules.map((mod, idx) => {
             const color = getColor(mod.code, idx);
-            const done = Number(mod.completedSessions ?? 0);
-            const total = Number(mod.totalSessions ?? 0);
-            const progress = total > 0 ? Math.round((done / total) * 100) : 0;
             const broken = Number(mod.brokenLabs ?? 0);
             const labCount = Number(mod.labCount ?? 0);
 
@@ -129,7 +125,7 @@ export default function SemesterGroupPage() {
                       {broken > 0 && (
                         <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#ff4d57", background: "#ff4d5715", padding: "3px 10px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 }}>
                           <AlertTriangle size={12} />
-                          <span>{broken} lab{broken > 1 ? "s" : ""} not working</span>
+                          <span>{broken} practical{broken > 1 ? "s" : ""} not working</span>
                         </span>
                       )}
                     </div>
@@ -149,29 +145,14 @@ export default function SemesterGroupPage() {
                     )}
 
                     <div style={{ display: "flex", gap: 16, fontSize: "0.8rem", flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{ color: color, display: "inline-flex", alignItems: "center", gap: 4 }}><FlaskConical size={12} /> {labCount} lab{labCount !== 1 ? "s" : ""}</span>
+                      <span style={{ color: color, display: "inline-flex", alignItems: "center", gap: 4 }}><FlaskConical size={12} /> {labCount} practical{labCount !== 1 ? "s" : ""}</span>
                       <span style={{ color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: 4 }}><Users size={12} /> {mod.numStudents ?? 75} students</span>
-                      {total > 0 && (
-                        <span style={{ color: "#18d18f", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <CheckCircle2 size={12} />
-                          <span>{done}/{total} sessions done</span>
-                        </span>
-                      )}
                     </div>
-
-                    {/* Progress bar (if sessions exist) */}
-                    {total > 0 && (
-                      <div style={{ marginTop: 12 }}>
-                        <div style={{ background: "var(--bg-app)", borderRadius: 4, height: 4, overflow: "hidden" }}>
-                          <div style={{ width: `${progress}%`, background: color, height: "100%", borderRadius: 4, transition: "width 0.3s ease" }} />
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
                     <span style={{ color, fontSize: "1.6rem" }}>›</span>
-                    <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>View Labs</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.7rem" }}>View Practicals</span>
                   </div>
                 </article>
               </Link>

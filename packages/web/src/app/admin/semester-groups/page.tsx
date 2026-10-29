@@ -100,12 +100,6 @@ export default function AdminLabsPage() {
   const [newModCode, setNewModCode] = useState("");
   const [newModName, setNewModName] = useState("");
   const [newModSemId, setNewModSemId] = useState<number>(0);
-  const [newSessionModId, setNewSessionModId] = useState<number>(0);
-  const [newSessionTitle, setNewSessionTitle] = useState("");
-  const [newSessionDesc, setNewSessionDesc] = useState("");
-  const [newSessionDate, setNewSessionDate] = useState("");
-  const [newSessionDuration, setNewSessionDuration] = useState("3");
-  const [newSessionDocUrl, setNewSessionDocUrl] = useState("");
 
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
@@ -150,9 +144,8 @@ export default function AdminLabsPage() {
       .then((r) => r.json())
       .then((d) => {
         setModules(d.modules ?? []);
-        if (!newSessionModId && d.modules?.length) setNewSessionModId(d.modules[0].id);
       });
-  }, [newSessionModId]);
+  }, []);
 
   const fetchStudents = useCallback((semId: number) => {
     if (!semId) return;
@@ -291,38 +284,6 @@ export default function AdminLabsPage() {
       setNewModName("");
       if (selectedSemForModules === newModSemId) fetchModulesForSem(newModSemId);
       flash("Module added successfully!", "");
-    } catch {
-      flash("", "Network error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Create lab session ────────────────────────────────────────────────────
-  const handleCreateSession = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const body: Record<string, unknown> = {
-        title: newSessionTitle,
-        description: newSessionDesc || undefined,
-        scheduledDate: newSessionDate || undefined,
-        durationHours: Number(newSessionDuration),
-        documentUrl: newSessionDocUrl || undefined,
-      };
-      const res = await apiFetch(`/academic/modules/${newSessionModId}/lab-sessions`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        return flash("", d.error || "Failed");
-      }
-      setNewSessionTitle("");
-      setNewSessionDesc("");
-      setNewSessionDate("");
-      setNewSessionDocUrl("");
-      flash("Lab session created successfully!", "");
     } catch {
       flash("", "Network error");
     } finally {
@@ -836,84 +797,6 @@ export default function AdminLabsPage() {
               </div>
             </div>
           </Card>
-
-          {/* Add Lab Session */}
-          <div style={{ gridColumn: "1 / -1" }}>
-            <Card title="Add Lab Session to Module" icon={<FlaskConical size={20} />}>
-              <form onSubmit={handleCreateSession}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 14 }}>
-                  <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
-                    <span style={labelText}>Select Module</span>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <select
-                        style={{ ...selectStyle, flex: 1 }}
-                        value={newModSemId}
-                        onChange={(e) => {
-                          setNewModSemId(Number(e.target.value));
-                          fetchModulesForSem(Number(e.target.value));
-                        }}
-                      >
-                        {semesters.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select style={{ ...selectStyle, flex: 2 }} value={newSessionModId} onChange={(e) => setNewSessionModId(Number(e.target.value))} required>
-                        {modules.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.code} — {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </label>
-
-                  <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
-                    <span style={labelText}>Session Title</span>
-                    <input style={inputStyle} value={newSessionTitle} onChange={(e) => setNewSessionTitle(e.target.value)} placeholder="e.g. Lab 4: Three-Phase Power Measurement" required />
-                  </label>
-
-                  <label style={labelStyle}>
-                    <span style={labelText}>Scheduled Date</span>
-                    <input style={inputStyle} type="date" value={newSessionDate} onChange={(e) => setNewSessionDate(e.target.value)} />
-                  </label>
-
-                  <label style={labelStyle}>
-                    <span style={labelText}>Duration (hours)</span>
-                    <input style={inputStyle} type="number" step="0.5" value={newSessionDuration} onChange={(e) => setNewSessionDuration(e.target.value)} />
-                  </label>
-
-                  <label style={labelStyle}>
-                    <span style={labelText}>Document URL (optional)</span>
-                    <input style={inputStyle} type="url" value={newSessionDocUrl} onChange={(e) => setNewSessionDocUrl(e.target.value)} placeholder="https://…" />
-                  </label>
-
-                  <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
-                    <span style={labelText}>Description</span>
-                    <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 90 }} value={newSessionDesc} onChange={(e) => setNewSessionDesc(e.target.value)} placeholder="Describe what students will do in this lab session…" />
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  style={{
-                    background: "linear-gradient(135deg, #f3ae2a, #ff7043)",
-                    border: "none",
-                    borderRadius: 10,
-                    color: "#fff",
-                    fontWeight: 700,
-                    padding: "11px 24px",
-                    cursor: "pointer",
-                    fontSize: "0.92rem",
-                  }}
-                >
-                  {loading ? "Creating…" : "+ Create Lab Session"}
-                </button>
-              </form>
-            </Card>
-          </div>
         </div>
       )}
     </AppShell>
