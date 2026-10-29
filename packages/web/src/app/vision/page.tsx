@@ -8,7 +8,7 @@ import {
   Users, UserPlus, TrendingUp, Flame, Cloud, Play, Square, RotateCcw,
   FileVideo, Video, Eye, ClipboardList, Trash2, X, Plus,
   AlertTriangle, UploadCloud, VideoOff, PlayCircle, Grid, Monitor,
-  Maximize2, Shield, Settings2, Sliders, CheckCircle2
+  Maximize2
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ function Stat({ label, value, color, icon: Icon }: { label: string; value: strin
   );
 }
 
-// ── Department Laboratories (6 Labs) ──────────────────────────────────────────
+// ── Department Laboratories (6 Labs of EIE) ───────────────────────────────────
 const LABS = [
   { id: 1, name: "Power Systems and High Voltage Laboratory", shortName: "Power Systems Lab", location: "Block C, Ground Floor", icon: Zap },
   { id: 2, name: "Electric Machines and Power Electronics Laboratory", shortName: "Electric Machines Lab", location: "Block C, 1st Floor", icon: Activity },
@@ -201,7 +201,7 @@ export default function VisionMonitoringPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef     = useRef<WebSocket | null>(null);
 
-  // View state: Multi-feed Grid View vs Single-Stream Focus & AI
+  // View state: 3x2 Matrix Grid View vs Single-Stream Focus & AI
   const [viewMode, setViewMode] = useState<"grid" | "focus">("grid");
   const [focusLayout, setFocusLayout] = useState<"dual" | "ai-only" | "orig-only">("dual");
 
@@ -209,7 +209,7 @@ export default function VisionMonitoringPage() {
   const [phase, setPhase]         = useState<"idle" | "uploading" | "live" | "done" | "error">("idle");
   const [file, setFile]           = useState<File | null>(null);
   const [cctvUrl, setCctvUrl]     = useState("");
-  // Note: Webcam has been removed as requested; only cctv and upload modes remain
+  // Note: Webcam has been removed; only CCTV and Upload sources exist
   const [sourceTab, setSourceTab] = useState<"cctv" | "upload">("cctv");
   const [error, setError]         = useState("");
   const [uploadPct, setUploadPct] = useState(0);
@@ -218,7 +218,16 @@ export default function VisionMonitoringPage() {
   const [selectedLabId, setSelectedLabId] = useState<number>(3);
   const [cctvStreams, setCctvStreams]     = useState<Record<number, CCTVCamera[]>>(DEFAULT_CCTV_STREAMS);
   const [activeStreamId, setActiveStreamId] = useState<string | null>("cctv_mps_1");
-  const [gridFilterLabId, setGridFilterLabId] = useState<number | "all">("all");
+
+  // Active camera per lab in the 3x2 grid view
+  const [labActiveCam, setLabActiveCam] = useState<Record<number, string>>({
+    1: "cctv_hv_1",
+    2: "cctv_em_1",
+    3: "cctv_mps_1",
+    4: "cctv_cm_1",
+    5: "cctv_cie_1",
+    6: "cctv_ur_1",
+  });
 
   // Add camera form modal states
   const [addStreamName, setAddStreamName] = useState("");
@@ -243,16 +252,24 @@ export default function VisionMonitoringPage() {
     selectedLabIdRef.current = selectedLabId;
   }, [selectedLabId]);
 
-  // Load and save CCTV streams from localStorage
+  // Load and save CCTV streams from localStorage with guaranteed 6-lab initialization
   useEffect(() => {
     const saved = localStorage.getItem("elabs_cctv_streams");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setCctvStreams(parsed);
-        if (parsed[3] && parsed[3].length > 0) {
-          setActiveStreamId(parsed[3][0].id);
-          setCctvUrl(parsed[3][0].url);
+        // Ensure all 6 labs (1..6) have their default streams if missing in parsed
+        const merged: Record<number, CCTVCamera[]> = { ...DEFAULT_CCTV_STREAMS };
+        for (const lab of LABS) {
+          if (parsed[lab.id] && Array.isArray(parsed[lab.id]) && parsed[lab.id].length > 0) {
+            merged[lab.id] = parsed[lab.id];
+          }
+        }
+        setCctvStreams(merged);
+        localStorage.setItem("elabs_cctv_streams", JSON.stringify(merged));
+        if (merged[3] && merged[3].length > 0) {
+          setActiveStreamId(merged[3][0].id);
+          setCctvUrl(merged[3][0].url);
         }
       } catch (e) {
         console.error(e);
@@ -582,26 +599,13 @@ export default function VisionMonitoringPage() {
   const currentLab = LABS.find(l => l.id === selectedLabId) || LABS[0];
   const currentStreams = cctvStreams[selectedLabId] || [];
 
-  // All streams across all labs for grid view
-  const allStreamsList: { lab: typeof LABS[0]; cam: CCTVCamera }[] = [];
-  LABS.forEach(lab => {
-    const list = cctvStreams[lab.id] || [];
-    list.forEach(cam => {
-      allStreamsList.push({ lab, cam });
-    });
-  });
-
-  const displayedGridStreams = gridFilterLabId === "all" 
-    ? allStreamsList 
-    : allStreamsList.filter(item => item.lab.id === gridFilterLabId);
-
   return (
-    <AppShell title="Vision Monitoring" subtitle="Department CCTV surveillance matrix, live YOLOv8 tracking, and laboratory safety telemetry">
+    <AppShell title="Vision Monitoring" subtitle="Department 3 × 2 CCTV surveillance matrix, real-time YOLOv8 tracking, and laboratory safety telemetry">
       {/* ── Top Master Header & View Switcher ── */}
       <div className="panel" style={{ marginBottom: 16, padding: "14px 20px" }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
           
-          {/* View mode toggle: Grid View vs Focus View */}
+          {/* View mode toggle: 3x2 Matrix Grid vs Focus View */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-app)", padding: 4, borderRadius: 10, border: "1px solid var(--border-color)" }}>
             <button
               type="button"
@@ -615,7 +619,7 @@ export default function VisionMonitoringPage() {
               }}
             >
               <Grid size={15} />
-              <span>CCTV Grid View ({allStreamsList.length} Feeds)</span>
+              <span>6-Lab CCTV Matrix (3 × 2 Grid)</span>
             </button>
 
             <button
@@ -693,175 +697,187 @@ export default function VisionMonitoringPage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          MODE 1: MULTI-FEED CCTV GRID VIEW (Department Surveillance Matrix)
+          MODE 1: 3 × 2 HORIZONTAL & VERTICAL GRID (6 EIE DEPARTMENT LABS)
           ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "grid" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Horizontal Lab Filter Strip */}
-          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }} className="scrollbar-none">
-            <button
-              type="button"
-              onClick={() => setGridFilterLabId("all")}
-              style={{
-                padding: "8px 16px", borderRadius: 8, fontSize: "0.82rem", fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer", transition: "all 0.15s",
-                background: gridFilterLabId === "all" ? "var(--cyan, #1dd5e6)" : "var(--bg-card)",
-                color: gridFilterLabId === "all" ? "#0b0f19" : "var(--text-muted)",
-                border: `1px solid ${gridFilterLabId === "all" ? "transparent" : "var(--border-color)"}`
-              }}
-            >
-              All Department Labs ({allStreamsList.length} Feeds)
-            </button>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+            gap: 16,
+          }}
+          className="cctv-3x2-grid"
+        >
+          {LABS.map((lab) => {
+            const streams = cctvStreams[lab.id] || [];
+            const activeCamId = labActiveCam[lab.id] || streams[0]?.id;
+            const activeCam = streams.find(s => s.id === activeCamId) || streams[0] || {
+              id: `empty_${lab.id}`,
+              name: "No Camera Configured",
+              url: "rtsp://127.0.0.1:8554/unassigned",
+              location: lab.location
+            };
+            const isCurrentAnalyzing = isLive && activeStreamId === activeCam.id;
+            const Icon = lab.icon;
 
-            {LABS.map(l => {
-              const count = (cctvStreams[l.id] || []).length;
-              const isSelected = gridFilterLabId === l.id;
-              const Icon = l.icon;
-              return (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => setGridFilterLabId(l.id)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 8,
-                    fontSize: "0.82rem", fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", transition: "all 0.15s",
-                    background: isSelected ? "rgba(61, 131, 246, 0.18)" : "var(--bg-card)",
-                    color: isSelected ? "#3d83f6" : "var(--text-main)",
-                    border: `1px solid ${isSelected ? "#3d83f6" : "var(--border-color)"}`
-                  }}
-                >
-                  <Icon size={14} />
-                  <span>{l.shortName}</span>
-                  <span style={{ fontSize: "0.72rem", background: "rgba(0,0,0,0.15)", padding: "1px 6px", borderRadius: 10, opacity: 0.8 }}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* CCTV Multi-Camera Video Matrix Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
-            {displayedGridStreams.map(({ lab, cam }, idx) => {
-              const isCurrentAnalyzing = isLive && activeStreamId === cam.id;
-              return (
-                <div
-                  key={cam.id}
-                  style={{
-                    background: "#070b14",
-                    borderRadius: 12,
-                    border: `1.5px solid ${isCurrentAnalyzing ? "#1dd5e6" : "rgba(255,255,255,0.08)"}`,
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                    boxShadow: isCurrentAnalyzing ? "0 0 20px rgba(29, 213, 230, 0.2)" : "0 8px 24px rgba(0,0,0,0.3)"
-                  }}
-                >
-                  {/* Camera Top Bar */}
-                  <div style={{ padding: "8px 12px", background: "#0b1220", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: "0.72rem", fontWeight: 800, background: "#1e293b", color: "#94a3b8", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>
-                        CAM {String(idx + 1).padStart(2, "0")}
-                      </span>
-                      <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>
-                        {cam.name}
-                      </span>
+            return (
+              <div
+                key={lab.id}
+                style={{
+                  background: "#070b14",
+                  borderRadius: 12,
+                  border: `1.5px solid ${isCurrentAnalyzing ? "#1dd5e6" : "rgba(255,255,255,0.08)"}`,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  boxShadow: isCurrentAnalyzing ? "0 0 20px rgba(29, 213, 230, 0.25)" : "0 8px 24px rgba(0,0,0,0.3)"
+                }}
+              >
+                {/* Lab Header & Camera Selector Pills */}
+                <div style={{
+                  padding: "10px 14px",
+                  background: "#0b1220",
+                  borderBottom: "1px solid rgba(255,255,255,0.06)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(61, 131, 246, 0.15)", color: "#3d83f6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Icon size={15} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#f8fafc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {lab.name}
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                          Location: {lab.location}
+                        </div>
+                      </div>
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.7rem", color: "#18d18f", fontWeight: 700, fontFamily: "monospace" }}>
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#18d18f", animation: "pulse 1s infinite" }} />
                         LIVE
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteStream(lab.id, cam.id)}
-                        style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", padding: "2px 4px" }}
-                        title="Delete camera feed"
-                      >
-                        <Trash2 size={12} />
-                      </button>
                     </div>
                   </div>
 
-                  {/* CCTV Viewport Preview / CRT Monitor Display */}
-                  <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#020408", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                    {/* Simulated security monitor scanline / noise */}
-                    <div style={{
-                      position: "absolute", inset: 0,
-                      backgroundImage: "linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))",
-                      backgroundSize: "100% 3px, 6px 100%", pointerEvents: "none", zIndex: 1
-                    }} />
-
-                    {/* Camera OSD Overlays */}
-                    <div style={{ position: "absolute", top: 8, left: 10, zIndex: 2, fontFamily: "monospace", fontSize: "0.72rem", color: "#38bdf8", textShadow: "0 1px 3px #000" }}>
-                      REC ● {clockTime || "04:32:10.4"}
+                  {/* Multiple Camera Feeds Switcher Pills for this lab */}
+                  {streams.length > 0 && (
+                    <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingTop: 2 }} className="scrollbar-none">
+                      {streams.map((s) => {
+                        const isSelected = s.id === activeCam.id;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setLabActiveCam(prev => ({ ...prev, [lab.id]: s.id }))}
+                            style={{
+                              padding: "3px 9px",
+                              borderRadius: 5,
+                              fontSize: "0.72rem",
+                              fontWeight: isSelected ? 700 : 500,
+                              border: `1px solid ${isSelected ? "#3d83f6" : "rgba(255,255,255,0.08)"}`,
+                              background: isSelected ? "rgba(61, 131, 246, 0.22)" : "rgba(255,255,255,0.03)",
+                              color: isSelected ? "#38bdf8" : "#94a3b8",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4
+                            }}
+                          >
+                            <Video size={11} />
+                            <span>{s.name.replace(/ \(.*?\)/, "")}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div style={{ position: "absolute", top: 8, right: 10, zIndex: 2, fontFamily: "monospace", fontSize: "0.68rem", color: "rgba(255,255,255,0.7)", background: "rgba(0,0,0,0.5)", padding: "1px 5px", borderRadius: 3 }}>
-                      1080p @ 25 FPS
-                    </div>
+                  )}
+                </div>
 
-                    <div style={{ position: "absolute", bottom: 8, left: 10, zIndex: 2, fontSize: "0.7rem", color: "#cbd5e1", textShadow: "0 1px 3px #000" }}>
-                      📍 {lab.shortName} ({lab.location})
-                    </div>
+                {/* CCTV Monitor Viewport */}
+                <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#020408", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {/* Scanline CRT overlay */}
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    backgroundImage: "linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))",
+                    backgroundSize: "100% 3px, 6px 100%", pointerEvents: "none", zIndex: 1
+                  }} />
 
-                    {/* Center CCTV Graphic */}
-                    <div style={{ textAlign: "center", padding: 20, zIndex: 2 }}>
-                      <Video size={36} style={{ color: isCurrentAnalyzing ? "#1dd5e6" : "#475569", margin: "0 auto 8px" }} />
-                      <div style={{ color: "#94a3b8", fontSize: "0.78rem", fontFamily: "monospace", maxWidth: 280, wordBreak: "break-all" }}>
-                        {cam.url}
+                  {/* OSD Overlays */}
+                  <div style={{ position: "absolute", top: 8, left: 10, zIndex: 2, fontFamily: "monospace", fontSize: "0.72rem", color: "#38bdf8", textShadow: "0 1px 3px #000" }}>
+                    REC ● {clockTime || "04:43:05.9"}
+                  </div>
+                  <div style={{ position: "absolute", top: 8, right: 10, zIndex: 2, fontFamily: "monospace", fontSize: "0.68rem", color: "rgba(255,255,255,0.7)", background: "rgba(0,0,0,0.5)", padding: "1px 5px", borderRadius: 3 }}>
+                    1080p @ 25 FPS
+                  </div>
+
+                  {/* Bottom-left: Clean technical text without emoji */}
+                  <div style={{ position: "absolute", bottom: 8, left: 10, zIndex: 2, fontSize: "0.7rem", color: "#cbd5e1", textShadow: "0 1px 3px #000", fontFamily: "monospace" }}>
+                    Zone: {activeCam.name} • {lab.location}
+                  </div>
+
+                  {/* Center CCTV Graphic */}
+                  <div style={{ textAlign: "center", padding: 20, zIndex: 2 }}>
+                    <Video size={36} style={{ color: isCurrentAnalyzing ? "#1dd5e6" : "#475569", margin: "0 auto 8px" }} />
+                    <div style={{ color: "#94a3b8", fontSize: "0.76rem", fontFamily: "monospace", maxWidth: 280, wordBreak: "break-all" }}>
+                      {activeCam.url}
+                    </div>
+                    {isCurrentAnalyzing && (
+                      <div style={{ marginTop: 8, display: "inline-block", background: "rgba(29, 213, 230, 0.2)", border: "1px solid rgba(29, 213, 230, 0.5)", color: "#1dd5e6", fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: 4 }}>
+                        YOLOv8 AI Tracking Active ({lastFrame?.count ?? 0} Headcount)
                       </div>
-                      {isCurrentAnalyzing && (
-                        <div style={{ marginTop: 8, display: "inline-block", background: "rgba(29, 213, 230, 0.2)", border: "1px solid rgba(29, 213, 230, 0.5)", color: "#1dd5e6", fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: 4 }}>
-                          YOLOv8 AI Tracking Active ({lastFrame?.count ?? 0} Headcount)
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Camera Footer Actions */}
-                  <div style={{ padding: "10px 14px", background: "#0b1220", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                      RTSP Camera Stream
-                    </span>
-
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedLabId(lab.id);
-                          setActiveStreamId(cam.id);
-                          setCctvUrl(cam.url);
-                          setSourceTab("cctv");
-                          setViewMode("focus");
-                        }}
-                        style={{
-                          padding: "5px 10px", background: "rgba(255,255,255,0.06)",
-                          border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "#cbd5e1", fontSize: "0.75rem",
-                          fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5
-                        }}
-                      >
-                        <Maximize2 size={12} />
-                        <span>Focus</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => launchAnalysisOnCamera(lab.id, cam)}
-                        style={{
-                          padding: "5px 12px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none",
-                          borderRadius: 6, color: "#fff", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
-                          display: "flex", alignItems: "center", gap: 5, boxShadow: "0 2px 8px rgba(61, 131, 246, 0.3)"
-                        }}
-                      >
-                        <Play size={11} />
-                        <span>Analyze with AI</span>
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Card Footer Actions */}
+                <div style={{ padding: "10px 14px", background: "#0b1220", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "0.74rem", color: "#64748b", fontFamily: "monospace" }}>
+                    RTSP Camera Feed
+                  </span>
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLabId(lab.id);
+                        setActiveStreamId(activeCam.id);
+                        setCctvUrl(activeCam.url);
+                        setSourceTab("cctv");
+                        setViewMode("focus");
+                      }}
+                      style={{
+                        padding: "5px 10px", background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "#cbd5e1", fontSize: "0.75rem",
+                        fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5
+                      }}
+                    >
+                      <Maximize2 size={12} />
+                      <span>Focus</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => launchAnalysisOnCamera(lab.id, activeCam)}
+                      style={{
+                        padding: "5px 12px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none",
+                        borderRadius: 6, color: "#fff", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: 5, boxShadow: "0 2px 8px rgba(61, 131, 246, 0.3)"
+                      }}
+                    >
+                      <Play size={11} />
+                      <span>Analyze with AI</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
