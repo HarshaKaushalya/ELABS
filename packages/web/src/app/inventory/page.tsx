@@ -32,6 +32,7 @@ import {
   Inbox,
   Send,
   AlertCircle,
+  ShieldAlert,
 } from "lucide-react";
 
 type InventoryItem = {
@@ -117,6 +118,7 @@ type Transaction = {
     name: string;
     category: string;
     model: string;
+    conditionIn?: string | null;
   }[];
 };
 
@@ -953,6 +955,16 @@ export default function InventoryPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Approve & Handover modal state
+  const [approvingRequest, setApprovingRequest] = useState<BorrowRequest | null>(null);
+  const [approveError, setApproveError] = useState("");
+
+  // Return & Damage Inspection modal state
+  const [returningTx, setReturningTx] = useState<Transaction | null>(null);
+  const [returnCondition, setReturnCondition] = useState<"GOOD" | "DAMAGED">("GOOD");
+  const [damageNotes, setDamageNotes] = useState("");
+  const [returnError, setReturnError] = useState("");
+
   const fetchItems = useCallback(() => {
     apiFetch("/inventory/items")
       .then((r) => r.json())
@@ -1048,22 +1060,29 @@ export default function InventoryPage() {
     }
   };
 
-  // Staff approves a pending borrow request
-  const handleApproveRequest = async (requestId: number) => {
-    if (!confirm("Confirm handing over and issuing this equipment to the student?")) return;
+  // Staff opens modal to approve a pending borrow request
+  const openApproveModal = (req: BorrowRequest) => {
+    setApprovingRequest(req);
+    setApproveError("");
+  };
+
+  const handleConfirmApprove = async () => {
+    if (!approvingRequest) return;
     setActionLoading(true);
+    setApproveError("");
     try {
-      const res = await apiFetch(`/inventory/requests/${requestId}/approve`, { method: "PATCH" });
+      const res = await apiFetch(`/inventory/requests/${approvingRequest.id}/approve`, { method: "PATCH" });
       const data = await res.json();
       if (res.ok) {
+        setApprovingRequest(null);
         fetchBorrowRequests();
         fetchTransactions();
         fetchItems();
       } else {
-        alert(data.error || "Failed to approve request.");
+        setApproveError(data.error || "Failed to approve request.");
       }
     } catch {
-      alert("Network error.");
+      setApproveError("Network communication error.");
     } finally {
       setActionLoading(false);
     }
@@ -1094,24 +1113,44 @@ export default function InventoryPage() {
     }
   };
 
-  // Staff marks item as returned
-  const handleReturn = async (txId: number) => {
-    if (!confirm("Confirm equipment has been received and inspected back into inventory?")) return;
+  // Staff opens modal to inspect and return equipment
+  const openReturnModal = (tx: Transaction) => {
+    setReturningTx(tx);
+    setReturnCondition("GOOD");
+    setDamageNotes("");
+    setReturnError("");
+  };
+
+  const handleConfirmReturn = async () => {
+    if (!returningTx) return;
+    if (returnCondition === "DAMAGED" && !damageNotes.trim()) {
+      setReturnError("Please describe the damage or defect before proceeding.");
+      return;
+    }
+    setActionLoading(true);
+    setReturnError("");
     try {
       const res = await apiFetch("/inventory/return", {
         method: "POST",
-        body: JSON.stringify({ transactionId: txId }),
+        body: JSON.stringify({
+          transactionId: returningTx.id,
+          hasDamage: returnCondition === "DAMAGED",
+          damageNotes: returnCondition === "DAMAGED" ? damageNotes.trim() : null,
+        }),
       });
       if (res.ok) {
+        setReturningTx(null);
         fetchTransactions();
         fetchItems();
         if (isStudent) fetchMyBorrows();
       } else {
         const d = await res.json();
-        alert(d.error || "Return failed");
+        setReturnError(d.error || "Failed to process return.");
       }
     } catch {
-      alert("Network error.");
+      setReturnError("Network communication error.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1490,7 +1529,7 @@ export default function InventoryPage() {
                       Reject Request
                     </button>
                     <button
-                      onClick={() => handleApproveRequest(req.id)}
+                      onClick={() => openApproveModal(req)}
                       disabled={actionLoading}
                       style={{
                         padding: "7px 18px",
@@ -1577,11 +1616,18 @@ export default function InventoryPage() {
                           </div>
                         </td>
                         <td>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 3, maxWidth: 180 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 220 }}>
                             {parsedItems.slice(0, 2).map((it) => (
-                              <span key={it.elabsTag} style={{ fontSize: "0.78rem", color: "#2563eb", fontFamily: "monospace" }}>
-                                {it.elabsTag} ({it.name})
-                              </span>
+                              <div key={it.elabsTag} style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "0.78rem", color: "#2563eb", fontFamily: "monospace" }}>
+                                  {it.elabsTag} ({it.name})
+                                </span>
+                                {it.conditionIn && it.conditionIn.toLowerCase().includes("damage") && (
+                                  <span style={{ fontSize: "0.68rem", color: "#ef4444", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", padding: "1px 5px", borderRadius: 4, fontWeight: 600 }}>
+                                    ⚠️ {it.conditionIn}
+                                  </span>
+                                )}
+                              </div>
                             ))}
                             {parsedItems.length > 2 && (
                               <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
@@ -1603,7 +1649,7 @@ export default function InventoryPage() {
                         <td>
                           {tx.status === "BORROWED" && (
                             <button
-                              onClick={() => handleReturn(tx.id)}
+                              onClick={() => openReturnModal(tx)}
                               style={{
                                 background: "rgba(5,150,105,0.1)",
                                 border: "1px solid rgba(5,150,105,0.3)",
@@ -1760,6 +1806,256 @@ export default function InventoryPage() {
                 style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: "#dc2626", color: "#ffffff", fontWeight: 600, cursor: "pointer", fontSize: "0.85rem" }}
               >
                 {actionLoading ? "Rejecting…" : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Staff Handover & Approve Modal */}
+      {approvingRequest && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(5px)" }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 24, maxWidth: 520, width: "100%", boxShadow: "0 25px 50px rgba(0,0,0,0.35)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 42, height: 42, borderRadius: "50%", background: "rgba(5,150,105,0.12)", border: "1px solid rgba(5,150,105,0.25)", display: "flex", alignItems: "center", justifyContent: "center", color: "#059669" }}>
+                <CheckCheck size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "1.1rem" }}>Hand Over & Issue Equipment</h3>
+                <p style={{ margin: "2px 0 0", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                  Borrow Request <strong style={{ color: "#2563eb", fontFamily: "monospace" }}>#{approvingRequest.id}</strong> &bull; {approvingRequest.labName}
+                </p>
+              </div>
+            </div>
+
+            {approveError && (
+              <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ef4444", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <AlertCircle size={16} />
+                <span>{approveError}</span>
+              </div>
+            )}
+
+            {/* Borrower Details Card */}
+            <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <div>
+                  <span style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.92rem" }}>{approvingRequest.borrowerName}</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginLeft: 8, background: "rgba(37,99,235,0.08)", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                    {approvingRequest.borrowerIndexNo}
+                  </span>
+                </div>
+                {usageBadge(approvingRequest.usageType)}
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 4 }}>
+                {approvingRequest.purpose && <div><strong>Purpose:</strong> {approvingRequest.purpose}</div>}
+                {approvingRequest.dueAt && <div><strong>Return Due:</strong> {fmt(approvingRequest.dueAt)}</div>}
+              </div>
+            </div>
+
+            {/* Equipment Items */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+                Items to Hand Over ({approvingRequest.items.length})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 150, overflowY: "auto" }}>
+                {approvingRequest.items.map((it) => (
+                  <div key={it.elabsTag} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "8px 12px", fontSize: "0.84rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "#2563eb", fontFamily: "monospace", fontWeight: 600 }}>{it.elabsTag}</span>
+                      <span style={{ color: "var(--text-main)" }}>{it.name}</span>
+                    </div>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.76rem" }}>{it.model || it.category}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.2)", borderRadius: 8, padding: "10px 12px", fontSize: "0.8rem", color: "var(--text-main)", marginBottom: 18, display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <Info size={16} color="#2563eb" style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>Please verify the student&apos;s physical presence at the counter and ensure the items listed above are handed over in good working order.</span>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setApprovingRequest(null)}
+                disabled={actionLoading}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.85rem" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmApprove}
+                disabled={actionLoading}
+                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#059669", color: "#ffffff", fontWeight: 600, cursor: "pointer", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6 }}
+              >
+                <CheckCheck size={15} />
+                <span>{actionLoading ? "Issuing…" : "Confirm Handover & Issue"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Staff Return & Damage Inspection Modal */}
+      {returningTx && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(5px)" }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 24, maxWidth: 520, width: "100%", boxShadow: "0 25px 50px rgba(0,0,0,0.35)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 42, height: 42, borderRadius: "50%", background: returnCondition === "DAMAGED" ? "rgba(220,38,38,0.12)" : "rgba(5,150,105,0.12)", border: `1px solid ${returnCondition === "DAMAGED" ? "rgba(220,38,38,0.3)" : "rgba(5,150,105,0.3)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: returnCondition === "DAMAGED" ? "#ef4444" : "#059669", transition: "all 0.2s" }}>
+                {returnCondition === "DAMAGED" ? <ShieldAlert size={22} /> : <CheckCircle2 size={22} />}
+              </div>
+              <div>
+                <h3 style={{ margin: 0, color: "var(--text-main)", fontSize: "1.1rem" }}>Return & Equipment Inspection</h3>
+                <p style={{ margin: "2px 0 0", color: "var(--text-muted)", fontSize: "0.82rem" }}>
+                  Transaction <strong style={{ color: "#2563eb", fontFamily: "monospace" }}>#{returningTx.id}</strong> &bull; {returningTx.labName}
+                </p>
+              </div>
+            </div>
+
+            {returnError && (
+              <div style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, padding: "10px 14px", color: "#ef4444", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <AlertCircle size={16} />
+                <span>{returnError}</span>
+              </div>
+            )}
+
+            {/* Borrower & Loan Info */}
+            <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.88rem" }}>
+                  {returningTx.borrowerName || (returningTx.borrowerUserId ? `User #${returningTx.borrowerUserId}` : returningTx.borrowerGroupCode ?? "—")}
+                </div>
+                {returningTx.borrowerIndexNo && (
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>
+                    Reg: {returningTx.borrowerIndexNo} {returningTx.borrowerGroup ? `• ${returningTx.borrowerGroup}` : ""}
+                  </div>
+                )}
+              </div>
+              {usageBadge(returningTx.usageType)}
+            </div>
+
+            {/* Returning Items */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+                Returning Items ({(returningTx.items ?? []).length})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 120, overflowY: "auto" }}>
+                {(returningTx.items ?? []).map((it) => (
+                  <div key={it.elabsTag} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "6px 12px", fontSize: "0.82rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "#2563eb", fontFamily: "monospace", fontWeight: 600 }}>{it.elabsTag}</span>
+                      <span style={{ color: "var(--text-main)" }}>{it.name}</span>
+                    </div>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>{it.model || it.category}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Condition Selection */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Equipment Inspection Status *
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div
+                  onClick={() => setReturnCondition("GOOD")}
+                  style={{
+                    border: `1.5px solid ${returnCondition === "GOOD" ? "#059669" : "var(--border-color)"}`,
+                    background: returnCondition === "GOOD" ? "rgba(5, 150, 105, 0.08)" : "var(--bg-app)",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: returnCondition === "GOOD" ? "#059669" : "var(--text-main)", fontSize: "0.86rem" }}>
+                    <CheckCircle2 size={16} />
+                    <span>Good / Undamaged</span>
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: 4 }}>
+                    Intact & working. Returns item to Available status.
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setReturnCondition("DAMAGED")}
+                  style={{
+                    border: `1.5px solid ${returnCondition === "DAMAGED" ? "#ef4444" : "var(--border-color)"}`,
+                    background: returnCondition === "DAMAGED" ? "rgba(220, 38, 38, 0.08)" : "var(--bg-app)",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: returnCondition === "DAMAGED" ? "#ef4444" : "var(--text-main)", fontSize: "0.86rem" }}>
+                    <AlertTriangle size={16} />
+                    <span>Damaged / Defect</span>
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: 4 }}>
+                    Broken, burnt, or defective. Flags for Maintenance.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* If damaged, require damage notes */}
+            {returnCondition === "DAMAGED" && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "#ef4444", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  Describe Damage / Defect Details *
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="e.g. Broken display glass, channel 2 probe missing, component burned during test"
+                  value={damageNotes}
+                  onChange={(e) => setDamageNotes(e.target.value)}
+                  style={{ width: "100%", background: "var(--bg-app)", border: "1px solid rgba(220,38,38,0.4)", borderRadius: 8, padding: "10px 12px", color: "var(--text-main)", fontSize: "0.88rem", resize: "none" }}
+                />
+                <div style={{ marginTop: 6, fontSize: "0.75rem", color: "#ef4444", display: "flex", alignItems: "center", gap: 4 }}>
+                  <AlertCircle size={13} />
+                  <span>The returned item(s) will be automatically moved to <strong>MAINTENANCE</strong> status with these defect notes logged.</span>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+              <button
+                onClick={() => setReturningTx(null)}
+                disabled={actionLoading}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.85rem" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmReturn}
+                disabled={actionLoading}
+                style={{
+                  padding: "8px 20px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: returnCondition === "DAMAGED" ? "#dc2626" : "#059669",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {returnCondition === "DAMAGED" ? (
+                  <>
+                    <ShieldAlert size={15} />
+                    <span>{actionLoading ? "Processing…" : "Record Damage & Mark Returned"}</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={15} />
+                    <span>{actionLoading ? "Processing…" : "Confirm Return (Good Condition)"}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

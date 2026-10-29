@@ -111,6 +111,17 @@ router.get("/semesters/:id", requireAuth, async (req, res) => {
     const sem = (semRows as any[])[0];
     if (!sem) return res.status(404).json({ error: "Semester group not found" });
 
+    // Exact count of distinct students enrolled in this semester
+    const [studentCountRows] = await pool.query(
+      `SELECT COUNT(DISTINCT sp.user_id) AS totalStudents
+       FROM student_profiles sp
+       JOIN users u ON u.id = sp.user_id
+       WHERE sp.semester = :id
+          OR u.id IN (SELECT user_id FROM user_semester_groups WHERE semester_id = :id)`,
+      { id }
+    );
+    sem.studentCount = Number((studentCountRows as any[])[0]?.totalStudents ?? 0);
+
     const [modules] = await pool.query(`
       SELECT m.id, m.code, m.name,
              m.coordinator_name  AS coordinatorName,

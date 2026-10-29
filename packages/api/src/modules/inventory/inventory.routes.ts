@@ -724,7 +724,8 @@ router.get("/transactions", requireAuth, async (req: any, res) => {
                'elabsTag', i.elabs_tag,
                'name', i.name,
                'category', i.category,
-               'model', i.model
+               'model', i.model,
+               'conditionIn', bti.condition_in
              )
            ) as items
     FROM borrow_transactions t
@@ -759,6 +760,8 @@ router.post("/return", requireAuth, requirePermission("inventory:borrow"), async
     const body = z.object({
       transactionId: z.number(),
       conditionIn: z.string().max(255).nullable().optional(),
+      hasDamage: z.boolean().optional(),
+      damageNotes: z.string().max(255).nullable().optional(),
     }).parse(req.body);
 
     const conn = await pool.getConnection();
@@ -785,18 +788,40 @@ router.post("/return", requireAuth, requirePermission("inventory:borrow"), async
       );
 
       const returnedBy = req.user.id;
+      const conditionRecorded = body.hasDamage
+        ? (body.damageNotes?.trim() ? `Damaged: ${body.damageNotes.trim()}` : "Damaged / Defect Observed")
+        : (body.conditionIn?.trim() || "Good");
+
+      const itemStatus = body.hasDamage ? "MAINTENANCE" : "AVAILABLE";
+      const itemConditionNote = body.hasDamage && body.damageNotes?.trim()
+        ? `Damage on return: ${body.damageNotes.trim()}`
+        : null;
 
       for (const it of items as any[]) {
         await conn.query(
           `UPDATE borrow_transaction_items SET condition_in=:condIn WHERE transaction_id=:tx AND item_id=:itemId`,
-          { condIn: body.conditionIn ?? "Good", tx: body.transactionId, itemId: it.itemId }
+          { condIn: conditionRecorded, tx: body.transactionId, itemId: it.itemId }
         );
-        await conn.query(`UPDATE inventory_items SET status='AVAILABLE' WHERE id=:id`, { id: it.itemId });
+        await conn.query(
+          `UPDATE inventory_items 
+           SET status=:status, 
+               condition_note = COALESCE(:condNote, condition_note) 
+           WHERE id=:id`,
+          { status: itemStatus, condNote: itemConditionNote, id: it.itemId }
+        );
 
         await conn.query(
           `INSERT INTO barcode_events (event_type, lab_id, item_id, elabs_tag, actor_user_id, meta)
-           VALUES ('RETURN_SCAN', :labId, :itemId, :tag, :actor, JSON_OBJECT('transactionId', :tx))`,
-          { labId: tx.lab_id, itemId: it.itemId, tag: it.elabsTag, actor: returnedBy, tx: body.transactionId }
+           VALUES ('RETURN_SCAN', :labId, :itemId, :tag, :actor, JSON_OBJECT('transactionId', :tx, 'hasDamage', :hasDamage, 'damageNotes', :damageNotes))`,
+          {
+            labId: tx.lab_id,
+            itemId: it.itemId,
+            tag: it.elabsTag,
+            actor: returnedBy,
+            tx: body.transactionId,
+            hasDamage: !!body.hasDamage,
+            damageNotes: body.damageNotes ?? null,
+          }
         );
       }
 
@@ -825,12 +850,16 @@ router.post("/return", requireAuth, requirePermission("inventory:borrow"), async
         );
         const info = (txInfo as any[])[0];
         if (info?.borrower_user_id) {
+          const notifTitle = body.hasDamage ? "Equipment Return: Damage Noted" : "Equipment Return Confirmed";
+          const notifMsg = body.hasDamage
+            ? `Your returned equipment for loan #${body.transactionId} (${info.lab_name}) was inspected with defect/damage noted: "${body.damageNotes?.trim() || 'Damage reported'}".`
+            : `Your returned equipment for transaction #${body.transactionId} (${info.lab_name}) has been verified and returned to inventory in good condition by ${info.inspector_name || "Lab Staff"}.`;
           await createNotification(
             info.borrower_user_id,
             "BORROW_RETURNED",
-            "Equipment Return Confirmed",
-            `Your returned equipment for transaction #${body.transactionId} (${info.lab_name}) has been verified and returned to inventory by ${info.inspector_name || "Lab Staff"}.`,
-            { transactionId: body.transactionId, url: "/inventory" }
+            notifTitle,
+            notifMsg,
+            { transactionId: body.transactionId, url: "/inventory", hasDamage: !!body.hasDamage }
           );
         }
       } catch (notifErr) {

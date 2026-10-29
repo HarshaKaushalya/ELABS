@@ -13,7 +13,7 @@ type Module = {
   numStudents: number;
   labCount: number; brokenLabs: number;
 };
-type Semester = { id: number; name: string; level: number; coordinatorName: string | null };
+type Semester = { id: number; name: string; level: number; coordinatorName: string | null; studentCount?: number };
 
 const MODULE_COLORS: Record<string, string> = {
   EE6207: "#3d83f6",
@@ -88,7 +88,9 @@ export default function SemesterGroupPage() {
             </div>
             <div style={{ textAlign: "center" }}>
               <div style={{ color: "#f3ae2a", fontWeight: 700, fontSize: "1.8rem" }}>
-                {modules.reduce((s, m) => s + Number(m.numStudents ?? 0), 0) / Math.max(modules.length, 1)}
+                {Number(semester.studentCount ?? 0) > 0
+                  ? semester.studentCount
+                  : Math.max(...modules.map((m) => Number(m.numStudents ?? 0)), 75)}
               </div>
               <div style={{ color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 600 }}>STUDENTS</div>
             </div>
