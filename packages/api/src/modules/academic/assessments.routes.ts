@@ -46,6 +46,14 @@ const upload = multer({
   },
 });
 
+
+/** POST /academic/quiz-images — upload apparatus or setup diagram for a question */
+router.post("/quiz-images", requireAuth, requirePermission("admin:manage"), upload.single("image"), (req: any, res) => {
+  if (!req.file) return res.status(400).json({ error: "No image file provided" });
+  const imageUrl = `/uploads/submissions/${req.file.filename}`;
+  res.json({ ok: true, imageUrl, filename: req.file.originalname });
+});
+
 // ─── Helper: check if user is admin/lecturer ──────────────────────────────────
 async function isInstructor(userId: number): Promise<boolean> {
   const [rows] = await pool.query(
@@ -340,6 +348,7 @@ router.get("/modules/:id/quizzes", requireAuth, async (req: AuthedRequest, res) 
       SELECT q.id, q.title, q.description, q.time_limit_mins AS timeLimitMins,
              q.opened_at AS openedAt, q.closed_at AS closedAt,
              q.max_attempts AS maxAttempts, q.created_at AS createdAt,
+             (q.password IS NOT NULL AND q.password != '') AS requiresPassword,
              COUNT(DISTINCT qq.id) AS questionCount,
              SUM(COALESCE(qq.points, 0)) AS totalPoints,
              qa.id AS attemptId, qa.submitted_at AS attemptSubmittedAt,
@@ -375,35 +384,39 @@ router.post("/modules/:id/quizzes", requireAuth, requirePermission("admin:manage
       closedAt:       z.string().optional(),
       maxAttempts:    z.number().min(1).max(10).default(1),
       shuffleQuestions: z.boolean().default(true),
+      password:       z.string().max(255).optional().nullable(),
       questions: z.array(z.object({
         questionText: z.string().min(1),
         type:         z.enum(["MCQ", "SHORT"]).default("MCQ"),
         options:      z.array(z.string()).optional(),
         correctAnswer: z.string(),
+        imageUrl:     z.string().max(1000).optional().nullable(),
         points:       z.number().min(0.5).default(1),
         sortOrder:    z.number().default(0),
       })).min(1),
     }).parse(req.body);
 
     const [qResult] = await pool.query(`
-      INSERT INTO quizzes (module_id, title, description, time_limit_mins, opened_at, closed_at, max_attempts, shuffle_questions, created_by)
-      VALUES (:moduleId, :title, :description, :timeLimitMins, :openedAt, :closedAt, :maxAttempts, :shuffle, :createdBy)
+      INSERT INTO quizzes (module_id, title, description, time_limit_mins, opened_at, closed_at, max_attempts, shuffle_questions, password, created_by)
+      VALUES (:moduleId, :title, :description, :timeLimitMins, :openedAt, :closedAt, :maxAttempts, :shuffle, :password, :createdBy)
     `, {
       moduleId, title: body.title, description: body.description ?? null,
       timeLimitMins: body.timeLimitMins, openedAt: body.openedAt ?? null,
       closedAt: body.closedAt ?? null, maxAttempts: body.maxAttempts,
-      shuffle: body.shuffleQuestions ? 1 : 0, createdBy: req.user!.id,
+      shuffle: body.shuffleQuestions ? 1 : 0, password: body.password?.trim() || null,
+      createdBy: req.user!.id,
     }) as any;
     const quizId = qResult.insertId;
 
     for (const [i, q] of body.questions.entries()) {
       await pool.query(`
-        INSERT INTO quiz_questions (quiz_id, question_text, type, options, correct_answer, points, sort_order)
-        VALUES (:quizId, :text, :type, :options, :answer, :points, :order)
+        INSERT INTO quiz_questions (quiz_id, question_text, type, options, correct_answer, image_url, points, sort_order)
+        VALUES (:quizId, :text, :type, :options, :answer, :imageUrl, :points, :order)
       `, {
         quizId, text: q.questionText, type: q.type,
         options: q.options ? JSON.stringify(q.options) : null,
-        answer: q.correctAnswer, points: q.points, order: q.sortOrder ?? i,
+        answer: q.correctAnswer, imageUrl: q.imageUrl || null,
+        points: q.points, order: q.sortOrder ?? i,
       });
     }
     res.json({ id: quizId, moduleId, title: body.title, questionCount: body.questions.length });
@@ -418,10 +431,13 @@ router.get("/quizzes/:id", requireAuth, async (req: AuthedRequest, res) => {
   const id = Number(req.params.id);
   const userId = req.user!.id;
   try {
+    const instructor = await isInstructor(userId);
     const [quizRows] = await pool.query(`
       SELECT q.id, q.title, q.description, q.time_limit_mins AS timeLimitMins,
              q.opened_at AS openedAt, q.closed_at AS closedAt,
              q.max_attempts AS maxAttempts, q.shuffle_questions AS shuffleQuestions,
+             (q.password IS NOT NULL AND q.password != '') AS requiresPassword,
+             ${instructor ? "q.password AS password," : ""}
              q.module_id AS moduleId, m.code AS moduleCode, m.name AS moduleName
       FROM quizzes q JOIN modules m ON m.id = q.module_id
       WHERE q.id = :id
@@ -429,9 +445,9 @@ router.get("/quizzes/:id", requireAuth, async (req: AuthedRequest, res) => {
     const quiz = quizRows[0];
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
 
-    const instructor = await isInstructor(userId);
     const [questions] = await pool.query(`
       SELECT id, question_text AS questionText, type, options,
+             image_url AS imageUrl,
              ${instructor ? "correct_answer AS correctAnswer," : ""} points, sort_order AS sortOrder
       FROM quiz_questions WHERE quiz_id = :id ORDER BY sort_order ASC
     `, { id }) as any;
@@ -472,11 +488,19 @@ router.post("/quizzes/:id/start", requireAuth, async (req: AuthedRequest, res) =
   const studentId = req.user!.id;
   try {
     const [quizRows] = await pool.query(
-      "SELECT max_attempts AS maxAttempts, opened_at AS openedAt, closed_at AS closedAt FROM quizzes WHERE id = :quizId",
+      "SELECT max_attempts AS maxAttempts, opened_at AS openedAt, closed_at AS closedAt, password FROM quizzes WHERE id = :quizId",
       { quizId }
     ) as any;
     const quiz = quizRows[0];
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+
+    // Validate password if quiz has one set
+    if (quiz.password && quiz.password.trim() !== "") {
+      const provided = String(req.body?.password ?? "").trim();
+      if (provided !== quiz.password.trim()) {
+        return res.status(403).json({ error: "Invalid quiz access password. Please ask your laboratory instructor for the access code." });
+      }
+    }
     const now = new Date();
     if (quiz.openedAt && new Date(quiz.openedAt) > now) return res.status(400).json({ error: "Quiz has not opened yet" });
     if (quiz.closedAt && new Date(quiz.closedAt) < now) return res.status(400).json({ error: "Quiz is closed" });
@@ -582,6 +606,7 @@ router.get("/attempts/:id", requireAuth, async (req: AuthedRequest, res) => {
       SELECT qa.question_id AS questionId, qa.answer_text AS answerText,
              qa.is_correct AS isCorrect, qa.points_awarded AS pointsAwarded,
              qq.question_text AS questionText, qq.options, qq.correct_answer AS correctAnswer,
+             qq.image_url AS imageUrl,
              qq.points AS totalPoints, qq.type
       FROM quiz_answers qa
       JOIN quiz_questions qq ON qq.id = qa.question_id

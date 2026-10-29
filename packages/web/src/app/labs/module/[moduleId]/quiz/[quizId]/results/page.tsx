@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api";
 import Link from "next/link";
 import {
   ArrowLeft, Download, Award, Clock, BarChart2, LineChart, Eye,
-  CheckCircle, XCircle
+  CheckCircle, XCircle, Image as ImageIcon
 } from "lucide-react";
 
 type Attempt = {
@@ -45,6 +45,7 @@ type Answer = {
   questionText: string;
   options: string[] | null;
   correctAnswer: string;
+  imageUrl?: string | null;
   totalPoints: number;
   type: "MCQ" | "SHORT";
 };
@@ -440,6 +441,28 @@ export default function QuizResultsPage() {
                           </span>
                         </div>
                         <p style={{ margin: "0 0 10px", color: "var(--text-main)", fontSize: "0.88rem" }}>{ans.questionText}</p>
+
+                        {ans.imageUrl && (
+                          <div style={{
+                            margin: "10px 0 14px",
+                            background: "var(--bg-card, rgba(255,255,255,0.03))",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: 8,
+                            padding: 10,
+                            textAlign: "center"
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", fontWeight: 700, color: "#8b5cf6", marginBottom: 6 }}>
+                              <ImageIcon size={13} />
+                              <span>APPARATUS / EXPERIMENT SETUP</span>
+                            </div>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={ans.imageUrl}
+                              alt={`Apparatus for Question ${idx + 1}`}
+                              style={{ maxWidth: "100%", maxHeight: 220, objectFit: "contain", borderRadius: 6 }}
+                            />
+                          </div>
+                        )}
 
                         {isMcq && ans.options && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
