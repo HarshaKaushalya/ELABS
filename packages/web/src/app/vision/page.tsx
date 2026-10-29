@@ -8,7 +8,7 @@ import {
   Users, UserPlus, TrendingUp, Flame, Cloud, Play, Square, RotateCcw,
   FileVideo, Video, Eye, ClipboardList, Trash2, X, Plus,
   AlertTriangle, UploadCloud, VideoOff, PlayCircle, Grid, Monitor,
-  Maximize2
+  Maximize2, ArrowLeft
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -625,39 +625,33 @@ export default function VisionMonitoringPage() {
       <div className="panel" style={{ marginBottom: 16, padding: "14px 20px" }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
           
-          {/* View mode toggle: 3x2 Matrix Grid vs Focus View */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-app)", padding: 4, borderRadius: 10, border: "1px solid var(--border-color)" }}>
+          {/* Left view status / Back to Grid button */}
+          {viewMode === "focus" ? (
             <button
               type="button"
               onClick={() => setViewMode("grid")}
               style={{
-                display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none",
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8,
+                border: "1px solid rgba(29, 213, 230, 0.4)", background: "rgba(29, 213, 230, 0.08)",
                 fontWeight: 700, fontSize: "0.84rem", cursor: "pointer", transition: "all 0.2s",
-                background: viewMode === "grid" ? "var(--bg-card)" : "transparent",
-                color: viewMode === "grid" ? "var(--cyan, #1dd5e6)" : "var(--text-muted)",
-                boxShadow: viewMode === "grid" ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
+                color: "var(--cyan, #1dd5e6)",
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to 6-Lab CCTV Grid</span>
+            </button>
+          ) : (
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8,
+                background: "var(--bg-app)", border: "1px solid var(--border-color)",
+                fontWeight: 700, fontSize: "0.84rem", color: "var(--cyan, #1dd5e6)"
               }}
             >
               <Grid size={15} />
               <span>6-Lab CCTV Matrix (3 × 2 Grid)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setViewMode("focus")}
-              style={{
-                display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none",
-                fontWeight: 700, fontSize: "0.84rem", cursor: "pointer", transition: "all 0.2s",
-                background: viewMode === "focus" ? "var(--bg-card)" : "transparent",
-                color: viewMode === "focus" ? "#3d83f6" : "var(--text-muted)",
-                boxShadow: viewMode === "focus" ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
-              }}
-            >
-              <Monitor size={15} />
-              <span>Focus & AI Analysis</span>
-              {isLive && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#18d18f", animation: "pulse 1.2s infinite" }} />}
-            </button>
-          </div>
+            </div>
+          )}
 
           {/* Right actions & status */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
