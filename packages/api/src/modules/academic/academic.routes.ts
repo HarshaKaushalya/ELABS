@@ -54,15 +54,15 @@ const practicalUpload = multer({
 // SEMESTER GROUPS
 // ============================================================
 
-// GET /academic/semesters — list all semester groups with module count
+// GET /academic/semesters — list all semester groups with module count (guaranteed deduplicated)
 router.get("/semesters", requireAuth, async (_req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT s.id, s.name, s.level,
+      SELECT MIN(s.id) AS id, s.name, s.level,
              COUNT(DISTINCT m.id) AS moduleCount
       FROM semesters s
       LEFT JOIN modules m ON m.semester_id = s.id
-      GROUP BY s.id
+      GROUP BY s.name, s.level
       ORDER BY s.level ASC
     `);
     res.json({ semesters: rows });
@@ -79,6 +79,14 @@ router.post("/semesters", requireAuth, requirePermission("admin:manage"), async 
       name: z.string().min(2).max(50),
       level: z.number().int().min(1).max(99),
     }).parse(req.body);
+
+    const [existing] = await pool.query(
+      `SELECT id FROM semesters WHERE level = :level OR name = :name LIMIT 1`,
+      body
+    );
+    if ((existing as any[]).length > 0) {
+      return res.status(409).json({ error: "Semester already exists" });
+    }
 
     const [result] = await pool.query(
       `INSERT INTO semesters (name, level) VALUES (:name, :level)`,

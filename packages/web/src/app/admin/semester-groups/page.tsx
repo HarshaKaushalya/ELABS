@@ -124,12 +124,22 @@ export default function AdminLabsPage() {
     apiFetch("/academic/semesters")
       .then((r) => r.json())
       .then((d) => {
-        setSemesters(d.semesters ?? []);
-        if (!newModSemId && d.semesters?.length) setNewModSemId(d.semesters[0].id);
-        if (d.semesters?.some((s: Semester) => s.id === 6)) {
+        const raw = (d.semesters ?? []) as Semester[];
+        const seen = new Set<string>();
+        const deduped: Semester[] = [];
+        for (const s of raw) {
+          const key = `${(s.name || "").trim().toLowerCase()}_${s.level}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            deduped.push(s);
+          }
+        }
+        setSemesters(deduped);
+        if (!newModSemId && deduped.length) setNewModSemId(deduped[0].id);
+        if (deduped.some((s: Semester) => s.id === 6)) {
           setSelectedSemForStudents(6);
-        } else if (d.semesters?.length) {
-          setSelectedSemForStudents(d.semesters[0].id);
+        } else if (deduped.length) {
+          setSelectedSemForStudents(deduped[0].id);
         }
       });
   }, [newModSemId]);

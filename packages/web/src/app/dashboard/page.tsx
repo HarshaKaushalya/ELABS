@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -372,7 +372,17 @@ export default function DashboardPage() {
 
         if (semsRes && "ok" in semsRes && semsRes.ok) {
           const semsData = await (semsRes as any).json();
-          setSemestersList(semsData.semesters ?? []);
+          const raw = (semsData.semesters ?? []) as SemesterItem[];
+          const seen = new Set<string>();
+          const deduped: SemesterItem[] = [];
+          for (const s of raw) {
+            const key = `${(s.name || "").trim().toLowerCase()}_${s.level}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              deduped.push(s);
+            }
+          }
+          setSemestersList(deduped);
         }
 
         // Determine initial semester:
@@ -634,7 +644,20 @@ export default function DashboardPage() {
     );
   });
 
-  const selectedSemesterObj = semestersList.find((s) => String(s.id) === selectedSemesterId);
+  const uniqueSemestersList = useMemo(() => {
+    const seen = new Set<string>();
+    const out: SemesterItem[] = [];
+    for (const sem of semestersList) {
+      const key = `${(sem.name || "").trim().toLowerCase()}_${sem.level}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(sem);
+      }
+    }
+    return out;
+  }, [semestersList]);
+
+  const selectedSemesterObj = uniqueSemestersList.find((s) => String(s.id) === selectedSemesterId);
 
   const practicalsByModule = filteredSemesterPracticals.reduce((acc, p) => {
     const key = p.moduleCode;
@@ -1576,7 +1599,7 @@ export default function DashboardPage() {
                       }}
                     >
                       <option value="ALL">All Semesters (Faculty-wide)</option>
-                      {semestersList.map((sem) => (
+                      {uniqueSemestersList.map((sem) => (
                         <option key={sem.id} value={String(sem.id)}>
                           {sem.name}
                         </option>
@@ -1858,7 +1881,7 @@ export default function DashboardPage() {
                       }}
                     >
                       <option value="ALL">All Semesters (Faculty-wide)</option>
-                      {semestersList.map((sem) => (
+                      {uniqueSemestersList.map((sem) => (
                         <option key={sem.id} value={String(sem.id)}>
                           {sem.name}
                         </option>
