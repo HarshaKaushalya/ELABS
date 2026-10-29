@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api";
 import { 
   Zap, Activity, Wrench, Radio, Network, FlaskConical,
   Users, UserPlus, TrendingUp, Flame, Cloud, Play, Square, RotateCcw,
   FileVideo, Video, Eye, ClipboardList, Trash2, X, Plus,
   AlertTriangle, UploadCloud, VideoOff, PlayCircle, Grid, Monitor,
-  Maximize2, ArrowLeft
+  Maximize2, ArrowLeft, ShieldAlert
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -199,6 +201,9 @@ const DEFAULT_CCTV_STREAMS: Record<number, CCTVCamera[]> = {
 
 // ── Main Page Component ───────────────────────────────────────────────────────
 export default function VisionMonitoringPage() {
+  const { me, loading } = useAuth();
+  const isStudent = !loading && !!me && me.roles?.includes("STUDENT") && !me.roles?.some(r => ["SYSTEM_ADMIN", "LECTURER", "TECHNICIAN"].includes(r));
+
   const videoRef  = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef     = useRef<WebSocket | null>(null);
@@ -618,6 +623,77 @@ export default function VisionMonitoringPage() {
 
   const currentLab = LABS.find(l => l.id === selectedLabId) || LABS[0];
   const currentStreams = cctvStreams[selectedLabId] || [];
+
+  if (loading) {
+    return (
+      <AppShell title="Vision Monitoring" subtitle="Department 3 × 2 CCTV surveillance matrix, real-time YOLOv8 tracking, and laboratory safety telemetry">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 380 }}>
+          <div style={{ color: "var(--text-muted)", fontSize: "0.9rem", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 18, height: 18, border: "2px solid #3d83f6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            Verifying security clearance...
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (isStudent) {
+    return (
+      <AppShell title="Vision Monitoring" subtitle="Laboratory CCTV Surveillance Access Control">
+        <div style={{
+          maxWidth: 580,
+          margin: "60px auto",
+          textAlign: "center",
+          padding: "44px 32px",
+          background: "var(--bg-card)",
+          borderRadius: 16,
+          border: "1px solid var(--border-color)",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.3)"
+        }}>
+          <div style={{
+            width: 68,
+            height: 68,
+            borderRadius: "50%",
+            background: "rgba(239, 68, 68, 0.12)",
+            color: "#ef4444",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 20px"
+          }}>
+            <ShieldAlert size={38} />
+          </div>
+
+          <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--text-main)", marginBottom: 12 }}>
+            Access Restricted to Staff & Technicians
+          </h2>
+
+          <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 24 }}>
+            Live CCTV feeds and Laboratory Vision Monitoring are restricted by university security policy. Under Faculty of Engineering and Department of Electrical & Information Engineering regulations, video surveillance feeds are strictly accessible to Academic Staff, Technical Officers, and System Administrators.
+          </p>
+
+          <Link
+            href="/dashboard"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 24px",
+              background: "linear-gradient(135deg, #3d83f6, #1dd5e6)",
+              color: "#fff",
+              borderRadius: 8,
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              textDecoration: "none",
+              boxShadow: "0 4px 14px rgba(61, 131, 246, 0.3)"
+            }}
+          >
+            Return to Dashboard
+          </Link>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title="Vision Monitoring" subtitle="Department 3 × 2 CCTV surveillance matrix, real-time YOLOv8 tracking, and laboratory safety telemetry">
