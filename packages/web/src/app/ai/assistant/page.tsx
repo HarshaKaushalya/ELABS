@@ -20,6 +20,14 @@ import {
   Copy,
   Check,
   ChevronRight,
+  Paperclip,
+  BookOpen,
+  Eye,
+  FileCheck,
+  UploadCloud,
+  HelpCircle,
+  Wrench,
+  Search,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
@@ -36,14 +44,41 @@ interface DatasheetInfo {
   labApplications?: string[];
 }
 
+interface AttachedDoc {
+  id?: string;
+  filename: string;
+  originalName: string;
+  mimeType?: string;
+  size?: number;
+  pageCount?: number;
+  textContent?: string;
+  textSnippet?: string;
+  url?: string;
+  base64?: string;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   provider?: string;
   datasheet?: DatasheetInfo | null;
+  attachedDoc?: AttachedDoc | null;
   sources?: string[];
   timestamp: Date;
+}
+
+interface DepartmentManualSummary {
+  id: string;
+  courseCode: string;
+  title: string;
+  department: string;
+  semester: string;
+  labName: string;
+  location: string;
+  description: string;
+  practicalsCount: number;
+  practicals: { number: number; title: string; objective: string }[];
 }
 
 const EIE_SUGGESTIONS = [
@@ -79,6 +114,14 @@ const EIE_SUGGESTIONS = [
   },
 ];
 
+const DOCUMENT_QUICK_QUESTIONS = [
+  { label: "Procedure & Aim", prompt: "Summarize the experimental procedure, main objectives, and required measurements from this manual." },
+  { label: "Equipment to Borrow", prompt: "Which exact equipment and components do I need to borrow from the lab counter for this experiment, and what are their specs?" },
+  { label: "Circuit Setup & Wiring", prompt: "Provide a detailed step-by-step practical circuit wiring and apparatus connection guide for this experiment." },
+  { label: "Troubleshooting & Errors", prompt: "What are the common bench mistakes, waveform distortions, or deviations in this practical, and how do I troubleshoot them?" },
+  { label: "Safety Precautions", prompt: "What are the critical voltage, current limits, and laboratory safety rules for this practical?" },
+];
+
 function formatTime(d: Date) {
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
@@ -97,8 +140,18 @@ export default function AIAssistantPage() {
   const [selectedModel, setSelectedModel] = useState("gemini-1.5-pro");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Attached Document State
+  const [attachedDoc, setAttachedDoc] = useState<AttachedDoc | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
+  const [departmentManuals, setDepartmentManuals] = useState<DepartmentManualSummary[]>([]);
+  const [loadingManuals, setLoadingManuals] = useState(false);
+  const [manualSearch, setManualSearch] = useState("");
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load user & Gemini key on mount
   useEffect(() => {
@@ -119,6 +172,113 @@ export default function AIAssistantPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isLoading, scrollToBottom]);
+
+  // Fetch Curated Department Lab Manuals
+  const fetchDepartmentManuals = async () => {
+    setIsLibraryModalOpen(true);
+    if (departmentManuals.length > 0) return;
+    setLoadingManuals(true);
+    try {
+      const res = await fetch("/api/ai/lab-manuals");
+      if (res.ok) {
+        const data = await res.json();
+        setDepartmentManuals(data);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch department manuals:", e);
+    } finally {
+      setLoadingManuals(false);
+    }
+  };
+
+  // Select a Curated Department Manual as Active Document
+  const handleSelectCuratedManual = async (manualId: string) => {
+    setLoadingManuals(true);
+    try {
+      const res = await fetch(`/api/ai/lab-manuals/${manualId}`);
+      if (res.ok) {
+        const fullManual = await res.json();
+        const p1 = fullManual.practicals?.[0];
+        const textContent = `DEPARTMENT OF ELECTRICAL & INFORMATION ENGINEERING
+FACULTY OF ENGINEERING • UNIVERSITY OF RUHUNA
+COURSE: ${fullManual.courseCode} — ${fullManual.title}
+LABORATORY: ${fullManual.labName} (${fullManual.location})
+SEMESTER: ${fullManual.semester}
+
+RECOMMENDED APPARATUS:
+${fullManual.recommendedEquipment.map((eq: string) => `- ${eq}`).join("\n")}
+
+PRACTICAL DETAILS:
+${fullManual.practicals
+  .map(
+    (p: any) => `
+Practical ${p.number}: ${p.title}
+Objective: ${p.objective}
+Equipment: ${p.componentsAndEquipment?.join(", ")}
+Setup: ${p.circuitSetup}
+Procedure:
+${p.procedure?.map((s: string, idx: number) => `  ${idx + 1}. ${s}`).join("\n")}
+Troubleshooting & Scenarios:
+${p.troubleshootingScenarios?.map((t: string) => `  - ${t}`).join("\n")}
+Safety Rules:
+${p.safetyRules?.map((sr: string) => `  - ${sr}`).join("\n")}
+`
+  )
+  .join("\n")}`;
+
+        setAttachedDoc({
+          id: `manual_${manualId}`,
+          filename: `${fullManual.courseCode}_Lab_Manual.pdf`,
+          originalName: `${fullManual.courseCode}: ${fullManual.title}`,
+          mimeType: "application/pdf",
+          size: 245000,
+          pageCount: fullManual.practicals?.length * 4 || 12,
+          textContent,
+          textSnippet: `Official EIE Course Lab Manual for ${fullManual.courseCode}: ${p1?.title || fullManual.title}`,
+          url: `/ai/lab-manuals/${manualId}`,
+        });
+
+        setIsLibraryModalOpen(false);
+      }
+    } catch (err) {
+      alert("Failed to load department manual details.");
+    } finally {
+      setLoadingManuals(false);
+    }
+  };
+
+  // Upload custom user document (PDF, TXT, MD, DOCX, Image)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingDoc(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/ai/upload-document", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to process uploaded file.");
+        return;
+      }
+
+      const data = await res.json();
+      if (data.ok && data.document) {
+        setAttachedDoc(data.document);
+      }
+    } catch (err: any) {
+      alert("Network error while uploading document.");
+    } finally {
+      setIsUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   // Save Gemini Key
   const handleSaveKey = async () => {
@@ -163,7 +323,14 @@ export default function AIAssistantPage() {
 
     setInput("");
     const userMsgId = uid();
-    const userMsg: Message = { id: userMsgId, role: "user", content: text, timestamp: new Date() };
+    const currentDoc = attachedDoc;
+    const userMsg: Message = {
+      id: userMsgId,
+      role: "user",
+      content: text,
+      attachedDoc: currentDoc,
+      timestamp: new Date(),
+    };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
@@ -184,6 +351,7 @@ export default function AIAssistantPage() {
           history: historyPayload,
           apiKey: geminiKey || undefined,
           model: selectedModel,
+          document: currentDoc || undefined,
         }),
       });
 
@@ -198,6 +366,7 @@ export default function AIAssistantPage() {
         content: data.answer || "No response received.",
         provider: data.provider,
         datasheet: data.datasheet,
+        attachedDoc: currentDoc,
         sources: data.sources,
         timestamp: new Date(),
       };
@@ -220,10 +389,27 @@ export default function AIAssistantPage() {
 
   const clearChat = () => {
     setMessages([]);
+    setAttachedDoc(null);
   };
+
+  const filteredManuals = departmentManuals.filter(
+    (m) =>
+      m.courseCode.toLowerCase().includes(manualSearch.toLowerCase()) ||
+      m.title.toLowerCase().includes(manualSearch.toLowerCase()) ||
+      m.labName.toLowerCase().includes(manualSearch.toLowerCase())
+  );
 
   return (
     <AppShell title="ELABS AI Laboratory Agent">
+      {/* Hidden file input for document uploading */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.txt,.md,.doc,.docx,.png,.jpg,.jpeg"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
+
       {/* Self-contained fixed-height card perfectly fitted into the viewport */}
       <div className="ai-page-container">
         {/* Top Control Bar */}
@@ -238,6 +424,10 @@ export default function AIAssistantPage() {
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
                   {geminiKey ? "Gemini Pro Grounded" : "EIE Knowledge Engine"}
                 </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center gap-1">
+                  <BookOpen size={10} />
+                  <span>Lab Manuals & Practical Scenarios Ready</span>
+                </span>
               </div>
               <p className="text-[11px] text-[var(--text-muted)]">
                 Department of Electrical & Information Engineering • University of Ruhuna
@@ -246,6 +436,17 @@ export default function AIAssistantPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Curated Lab Manuals Library Button */}
+            <button
+              type="button"
+              onClick={fetchDepartmentManuals}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-color)] text-[var(--text-main)] transition-colors cursor-pointer"
+              title="Open Department Lab Manuals"
+            >
+              <BookOpen size={13} className="text-[var(--cyan)]" />
+              <span>Department Manuals</span>
+            </button>
+
             {/* Model Selector */}
             <select
               value={selectedModel}
@@ -298,18 +499,35 @@ export default function AIAssistantPage() {
                   <Sparkles size={28} className="text-white" />
                 </div>
                 <h2 className="text-xl md:text-2xl font-extrabold text-[var(--text-main)] tracking-tight">
-                  ELABS Engineering Agent
+                  ELABS Engineering Agent & Practical Guide
                 </h2>
-                <p className="text-xs md:text-sm text-[var(--text-muted)] max-w-lg mx-auto mt-2 leading-relaxed">
-                  Ask any question regarding the Department's 6 laboratories, equipment inventory,
-                  safety guidelines, or request full <span className="text-[var(--cyan)] font-semibold">technical datasheets & pinouts</span>.
+                <p className="text-xs md:text-sm text-[var(--text-muted)] max-w-xl mx-auto mt-2 leading-relaxed">
+                  Upload a <span className="text-[var(--cyan)] font-semibold">Lab Manual, Datasheet, or Circuit Diagram</span>,
+                  and ask questions based on it. The agent combines your document with the{" "}
+                  <strong className="text-[var(--text-main)]">Department's live inventory database</strong> to generate
+                  practical step-by-step setup guides, wiring schematics, and bench troubleshooting.
                 </p>
-                {!geminiKey && (
-                  <div className="inline-flex items-center gap-2 mt-4 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-xs text-[var(--cyan)] font-medium">
-                    <Sparkles size={13} />
-                    <span>Have a Gemini Pro key? Click <strong>Add Gemini Key</strong> above to connect directly.</span>
-                  </div>
-                )}
+
+                {/* Quick Action Badges */}
+                <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-xs text-[var(--cyan)] font-semibold transition-all cursor-pointer shadow-sm"
+                  >
+                    <UploadCloud size={14} />
+                    <span>Upload Lab Manual / Datasheet (PDF/Img)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={fetchDepartmentManuals}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-xs text-blue-600 dark:text-blue-400 font-semibold transition-all cursor-pointer shadow-sm"
+                  >
+                    <BookOpen size={14} />
+                    <span>Browse Department Lab Manuals</span>
+                  </button>
+                </div>
               </div>
 
               {/* Suggestion Grid */}
@@ -352,12 +570,30 @@ export default function AIAssistantPage() {
                   )}
 
                   <div className={msg.role === "user" ? "ai-bubble-user" : "ai-bubble-assistant"}>
+                    {/* User Attached Document Pill */}
+                    {msg.role === "user" && msg.attachedDoc && (
+                      <div className="mb-2.5 px-3 py-1.5 rounded-lg bg-white/15 border border-white/20 text-xs flex items-center gap-2">
+                        <FileCheck size={14} className="text-cyan-200" />
+                        <span className="font-semibold text-white truncate max-w-xs">
+                          {msg.attachedDoc.originalName}
+                        </span>
+                        <span className="text-[10px] opacity-80 font-mono ml-auto">
+                          {msg.attachedDoc.pageCount ? `${msg.attachedDoc.pageCount} pgs` : "Attached"}
+                        </span>
+                      </div>
+                    )}
+
                     {/* Assistant Metadata Header */}
                     {msg.role === "assistant" && (
                       <div className="flex items-center justify-between pb-2 mb-3 border-b border-[var(--border-color)] text-[11px] text-[var(--cyan)]">
                         <div className="flex items-center gap-1.5 font-semibold">
                           <Sparkles size={12} />
                           <span>{msg.provider || "ELABS Lab Intelligence"}</span>
+                          {msg.attachedDoc && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/25 ml-2 font-mono text-cyan-600 dark:text-cyan-400">
+                              📄 Grounded in {msg.attachedDoc.originalName.slice(0, 24)}...
+                            </span>
+                          )}
                         </div>
                         <button
                           type="button"
@@ -439,7 +675,9 @@ export default function AIAssistantPage() {
                       <span className="w-2 h-2 rounded-full bg-[var(--cyan)] animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
                     <span className="text-xs text-[var(--text-muted)]">
-                      Querying laboratory database & Gemini knowledge...
+                      {attachedDoc
+                        ? `Analyzing "${attachedDoc.originalName}" & querying database inventory...`
+                        : "Querying laboratory database & Gemini knowledge..."}
                     </span>
                   </div>
                 </div>
@@ -450,39 +688,308 @@ export default function AIAssistantPage() {
 
         {/* Pinned Bottom Input Bar */}
         <div className="ai-page-input-bar">
-          <div className="max-w-4xl mx-auto flex items-end gap-3">
-            <div className="flex-1 relative">
-              <textarea
-                ref={inputRef}
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                placeholder="Ask about laboratory equipment, datasheets, pinouts, or safety..."
-                disabled={isLoading}
-                className="ai-textarea"
-                style={{ minHeight: "44px" }}
-              />
-            </div>
+          <div className="max-w-4xl mx-auto flex flex-col gap-2.5">
+            {/* Active Document Card above input */}
+            {attachedDoc && (
+              <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between gap-3 text-xs transition-all shadow-sm">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/20 text-[var(--cyan)] flex items-center justify-center flex-shrink-0 font-bold text-[11px]">
+                    {attachedDoc.mimeType?.includes("pdf")
+                      ? "PDF"
+                      : attachedDoc.mimeType?.startsWith("image/")
+                      ? "IMG"
+                      : "DOC"}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-[var(--text-main)] truncate block">
+                        {attachedDoc.originalName}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-[var(--cyan)] font-mono flex-shrink-0">
+                        {attachedDoc.pageCount
+                          ? `${attachedDoc.pageCount} pgs`
+                          : attachedDoc.size
+                          ? `${Math.round(attachedDoc.size / 1024)} KB`
+                          : "Manual Attached"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">
+                      {attachedDoc.textSnippet
+                        ? attachedDoc.textSnippet.slice(0, 90) + "..."
+                        : "Active lab manual / datasheet. The agent will ground answers on this document."}
+                    </p>
+                  </div>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || isLoading}
-              className="flex-shrink-0 h-11 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <span>Ask</span>
-              <Send size={15} />
-            </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsPreviewModalOpen(true)}
+                    className="px-2.5 py-1 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] text-[var(--text-main)] text-[11px] border border-[var(--border-color)] transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Inspect extracted text"
+                  >
+                    <Eye size={12} />
+                    <span>View Text</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedDoc(null)}
+                    className="p-1.5 rounded-lg hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400 transition-colors cursor-pointer"
+                    title="Remove attached document"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Question Chips if document is attached */}
+            {attachedDoc && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-none">
+                <span className="text-[var(--cyan)] font-semibold flex items-center gap-1 flex-shrink-0">
+                  <HelpCircle size={12} />
+                  <span>Ask Document:</span>
+                </span>
+                {DOCUMENT_QUICK_QUESTIONS.map((q, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => sendMessage(q.prompt)}
+                    className="px-2.5 py-1 rounded-lg bg-[var(--bg-card-hover)] hover:bg-cyan-500/15 hover:text-[var(--cyan)] border border-[var(--border-color)] hover:border-cyan-500/30 text-[var(--text-main)] whitespace-nowrap transition-colors cursor-pointer flex-shrink-0"
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Upload in Progress Banner */}
+            {isUploadingDoc && (
+              <div className="px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-xs text-[var(--cyan)] flex items-center gap-2">
+                <RefreshCw size={12} className="animate-spin" />
+                <span>Extracting lab manual text & specifications...</span>
+              </div>
+            )}
+
+            {/* Input Controls */}
+            <div className="flex items-end gap-2.5">
+              {/* Paperclip Document Attach Button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingDoc || isLoading}
+                className="h-11 px-3 rounded-xl bg-[var(--bg-card-hover)] hover:bg-cyan-500/15 hover:text-[var(--cyan)] text-[var(--text-muted)] border border-[var(--border-color)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer flex-shrink-0 disabled:opacity-50"
+                title="Attach Lab Manual or Datasheet (PDF, TXT, DOCX, Image)"
+              >
+                <Paperclip size={16} />
+                <span className="hidden sm:inline text-xs font-medium">Attach Manual</span>
+              </button>
+
+              {/* Department Library Shortcut */}
+              <button
+                type="button"
+                onClick={fetchDepartmentManuals}
+                disabled={isLoading}
+                className="h-11 px-3 rounded-xl bg-[var(--bg-card-hover)] hover:bg-blue-500/15 hover:text-blue-500 text-[var(--text-muted)] border border-[var(--border-color)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer flex-shrink-0"
+                title="Pick from Department Lab Manuals"
+              >
+                <BookOpen size={16} />
+                <span className="hidden sm:inline text-xs font-medium">Lab Library</span>
+              </button>
+
+              {/* Textarea */}
+              <div className="flex-1 relative">
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder={
+                    attachedDoc
+                      ? `Ask questions about "${attachedDoc.originalName}" or request practical setup...`
+                      : "Ask about laboratory equipment, datasheets, practical scenarios, or safety..."
+                  }
+                  disabled={isLoading}
+                  className="ai-textarea"
+                  style={{ minHeight: "44px" }}
+                />
+              </div>
+
+              {/* Send Button */}
+              <button
+                type="button"
+                onClick={() => sendMessage()}
+                disabled={(!input.trim() && !attachedDoc) || isLoading}
+                className="flex-shrink-0 h-11 px-5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <span>Ask</span>
+                <Send size={15} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Gemini API Key Modal (Theme-Adaptive) */}
+        {/* 1. Document Text Preview Modal */}
+        {isPreviewModalOpen && attachedDoc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 shadow-2xl relative text-[var(--text-main)] flex flex-col max-h-[85vh]">
+              <button
+                type="button"
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/15 text-[var(--cyan)] flex items-center justify-center font-bold text-xs">
+                  DOC
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[var(--text-main)] truncate max-w-md">
+                    {attachedDoc.originalName}
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {attachedDoc.pageCount ? `${attachedDoc.pageCount} Pages • ` : ""}
+                    {attachedDoc.textContent ? `${attachedDoc.textContent.length} Characters extracted` : ""}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto mt-4 p-4 rounded-xl bg-[var(--bg-app)] border border-[var(--border-color)] font-mono text-xs leading-relaxed whitespace-pre-wrap select-text text-[var(--text-main)]">
+                {attachedDoc.textContent || "No text could be extracted from this document."}
+              </div>
+
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--border-color)]">
+                <span className="text-xs text-[var(--text-muted)]">
+                  Grounding active: The AI will refer to this text when answering your questions.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-[var(--cyan)] text-white text-xs font-bold hover:opacity-90 cursor-pointer"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. Department Lab Manuals & Practical Library Modal */}
+        {isLibraryModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 shadow-2xl relative text-[var(--text-main)] flex flex-col max-h-[85vh]">
+              <button
+                type="button"
+                onClick={() => setIsLibraryModalOpen(false)}
+                className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-500 flex items-center justify-center">
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[var(--text-main)]">
+                    Department Laboratory Manuals Library
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Select any curriculum practical manual to attach it and generate bench guides & equipment checkouts.
+                  </p>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative my-3">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input
+                  type="text"
+                  value={manualSearch}
+                  onChange={(e) => setManualSearch(e.target.value)}
+                  placeholder="Filter by course code, title, or laboratory name..."
+                  className="w-full bg-[var(--bg-card-hover)] border border-[var(--border-color)] focus:border-[var(--cyan)] rounded-xl pl-9 pr-3.5 py-2 text-xs text-[var(--text-main)] placeholder-[var(--text-muted)] outline-none"
+                />
+              </div>
+
+              {/* Manuals List */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {loadingManuals ? (
+                  <div className="py-12 text-center text-xs text-[var(--text-muted)] flex items-center justify-center gap-2">
+                    <RefreshCw size={14} className="animate-spin text-[var(--cyan)]" />
+                    <span>Loading department manuals...</span>
+                  </div>
+                ) : filteredManuals.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-[var(--text-muted)]">
+                    No laboratory manuals matched your search.
+                  </div>
+                ) : (
+                  filteredManuals.map((manual) => (
+                    <div
+                      key={manual.id}
+                      className="p-4 rounded-xl bg-[var(--bg-app)] border border-[var(--border-color)] hover:border-cyan-500/40 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-cyan-500/15 text-[var(--cyan)] font-mono">
+                            {manual.courseCode}
+                          </span>
+                          <span className="text-xs font-bold text-[var(--text-main)]">
+                            {manual.title}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[var(--text-muted)]">
+                          📍 {manual.labName} ({manual.location}) • {manual.semester}
+                        </p>
+                        <p className="text-[11px] text-[var(--text-main)] opacity-90 line-clamp-1">
+                          {manual.description}
+                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                          {manual.practicals?.map((p, pIdx) => (
+                            <span
+                              key={pIdx}
+                              className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)]"
+                            >
+                              Practical {p.number}: {p.title.slice(0, 32)}...
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSelectCuratedManual(manual.id)}
+                        className="px-3.5 py-1.5 rounded-xl bg-[var(--cyan)] hover:opacity-90 text-white font-bold text-xs flex-shrink-0 transition-opacity shadow-sm cursor-pointer"
+                      >
+                        Attach Manual
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="flex items-center justify-end mt-4 pt-3 border-t border-[var(--border-color)]">
+                <button
+                  type="button"
+                  onClick={() => setIsLibraryModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3. Gemini API Key Modal */}
         {isKeyModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 shadow-2xl relative text-[var(--text-main)]">
@@ -502,7 +1009,7 @@ export default function AIAssistantPage() {
               </div>
 
               <p className="text-xs text-[var(--text-muted)] mb-4 leading-relaxed">
-                Connect your personal Google Gemini account to activate real-time generative reasoning.
+                Connect your personal Google Gemini account to activate real-time generative reasoning and deep datasheet reading.
                 Get your key at{" "}
                 <a
                   href="https://aistudio.google.com/app/apikey"

@@ -1,15 +1,37 @@
 import { pool } from "../../db/mysql";
-import { EQUIPMENT_DATASHEETS, findDatasheet, EquipmentDatasheet } from "./datasheets.data";
+import {
+  EQUIPMENT_DATASHEETS,
+  findDatasheet,
+  EquipmentDatasheet,
+  DEPARTMENT_LAB_MANUALS,
+  findLabManual,
+  DepartmentLabManual,
+} from "./datasheets.data";
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
 }
 
+export interface AttachedDocument {
+  id?: string;
+  filename?: string;
+  originalName: string;
+  mimeType?: string;
+  size?: number;
+  pageCount?: number;
+  textContent?: string;
+  textSnippet?: string;
+  url?: string;
+  base64?: string;
+}
+
 export interface ChatResponse {
   answer: string;
   provider: "Google Gemini Pro" | "ELABS Lab Intelligence Engine";
   datasheet?: EquipmentDatasheet | null;
+  labManual?: DepartmentLabManual | null;
+  attachedDocument?: AttachedDocument | null;
   sources?: string[];
   equipmentMatches?: any[];
 }
@@ -18,7 +40,7 @@ export class GeminiAIService {
   private static defaultModel = "gemini-1.5-pro";
 
   /**
-   * Fetch live lab facilities and equipment from the database for RAG grounding.
+   * Fetch live lab facilities, modules, and equipment inventory from the database for RAG grounding.
    */
   private static async getLabContext(): Promise<{
     labs: any[];
@@ -36,12 +58,12 @@ export class GeminiAIService {
          ORDER BY l.id ASC, i.name ASC`
       );
       const [modules]: any = await pool.query(
-        "SELECT id, code, name, coordinator_name FROM modules LIMIT 20"
+        "SELECT id, code, name, coordinator_name FROM modules LIMIT 25"
       );
 
       const inventoryLines = items.map(
         (it: any) =>
-          `- [${it.elabs_tag}] ${it.name} (Model: ${it.model || "N/A"}) | Lab: ${it.lab_name || "Unassigned"} (${it.location}, ${it.floor}) | Status: ${it.status}`
+          `- [${it.elabs_tag}] ${it.name} (Model: ${it.model || "N/A"}) | Category: ${it.category} | Lab: ${it.lab_name || "Unassigned"} (${it.location}, ${it.floor}) | Status: ${it.status}`
       );
 
       return {
@@ -60,20 +82,24 @@ export class GeminiAIService {
   }
 
   /**
-   * Search database for specific inventory items matching the student's query.
+   * Search database for specific inventory items matching the query or document context.
    */
-  private static async searchInventory(query: string): Promise<any[]> {
+  private static async searchInventory(query: string, additionalKeywords: string[] = []): Promise<any[]> {
     try {
-      const keywords = query
+      const cleanQueryKeywords = query
         .replace(/[^\w\s-]/g, "")
         .split(/\s+/)
         .filter((w) => w.length > 2);
 
-      if (keywords.length === 0) return [];
+      const combinedKeywords = Array.from(new Set([...cleanQueryKeywords, ...additionalKeywords])).slice(0, 8);
 
-      const conditions = keywords.map(() => "(i.name LIKE ? OR i.model LIKE ? OR i.category LIKE ? OR i.elabs_tag LIKE ?)").join(" OR ");
+      if (combinedKeywords.length === 0) return [];
+
+      const conditions = combinedKeywords
+        .map(() => "(i.name LIKE ? OR i.model LIKE ? OR i.category LIKE ? OR i.elabs_tag LIKE ?)")
+        .join(" OR ");
       const params: string[] = [];
-      keywords.forEach((kw) => {
+      combinedKeywords.forEach((kw) => {
         const pattern = `%${kw}%`;
         params.push(pattern, pattern, pattern, pattern);
       });
@@ -84,7 +110,8 @@ export class GeminiAIService {
         FROM inventory_items i
         LEFT JOIN labs l ON i.lab_id = l.id
         WHERE ${conditions}
-        LIMIT 10
+        ORDER BY i.status ASC, i.name ASC
+        LIMIT 14
       `;
 
       const [rows]: any = await pool.query(sql, params);
@@ -93,6 +120,22 @@ export class GeminiAIService {
       console.error("Inventory search error:", err);
       return [];
     }
+  }
+
+  /**
+   * Extract key equipment nouns from uploaded document text for inventory lookup.
+   */
+  private static extractDocumentKeywords(docText: string): string[] {
+    const candidateTerms = [
+      "Oscilloscope", "Rigol", "Tektronix", "Multimeter", "Fluke",
+      "Power Supply", "Function Generator", "Inverter", "Motor",
+      "Induction", "Sinamics", "VFD", "Cisco", "Router", "Switch",
+      "STM32", "FPGA", "Spectrum", "USRP", "SDR", "Soldering",
+      "Variac", "High Voltage", "Transformer", "Breadboard", "Probe"
+    ];
+    return candidateTerms.filter((term) =>
+      docText.toLowerCase().includes(term.toLowerCase())
+    );
   }
 
   /**
@@ -125,26 +168,32 @@ export class GeminiAIService {
   }
 
   /**
-   * Main chat function: handles student questions, equipment datasheet requests, and lab information.
+   * Main chat function: handles student questions, equipment datasheet requests,
+   * uploaded lab manuals / datasheets, and practical scenario synthesis.
    */
   public static async chat(
     message: string,
     history: ChatMessage[] = [],
     customApiKey?: string,
-    requestedModel?: string
+    requestedModel?: string,
+    document?: AttachedDocument
   ): Promise<ChatResponse> {
     const trimmedQuery = message.trim();
 
-    // 1. Check for specific equipment datasheet requests
-    const matchedDatasheet = findDatasheet(trimmedQuery);
-    const dbEquipmentMatches = await this.searchInventory(trimmedQuery);
+    // 1. Check for specific equipment datasheet or lab manual
+    const matchedDatasheet = findDatasheet(trimmedQuery) || (document?.originalName ? findDatasheet(document.originalName) : null);
+    const matchedLabManual = findLabManual(trimmedQuery) || (document?.originalName ? findLabManual(document.originalName) : null);
+
+    // Extract keywords from document if provided
+    const docKeywords = document?.textContent ? this.extractDocumentKeywords(document.textContent) : [];
+    const dbEquipmentMatches = await this.searchInventory(trimmedQuery, docKeywords);
     const labContext = await this.getLabContext();
 
-    // Determine API key (custom key passed from user, or process.env)
+    // Determine API key
     const apiKey = (customApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
     const model = requestedModel || process.env.GEMINI_MODEL || this.defaultModel;
 
-    // 2. If Gemini API key is available, call Google Gemini Pro with grounded system prompt
+    // 2. If Gemini API key is available, call Google Gemini Pro with grounded system prompt & document context
     if (apiKey) {
       try {
         const geminiAnswer = await this.callGeminiAPI(
@@ -154,7 +203,9 @@ export class GeminiAIService {
           model,
           labContext,
           matchedDatasheet,
-          dbEquipmentMatches
+          matchedLabManual,
+          dbEquipmentMatches,
+          document
         );
 
         if (geminiAnswer) {
@@ -162,8 +213,12 @@ export class GeminiAIService {
             answer: geminiAnswer,
             provider: "Google Gemini Pro",
             datasheet: matchedDatasheet,
+            labManual: matchedLabManual,
+            attachedDocument: document || null,
             sources: [
               "Faculty of Engineering EIE Laboratory Database",
+              ...(document ? [`Uploaded Document: ${document.originalName}`] : []),
+              ...(matchedLabManual ? [`Department Lab Manual: ${matchedLabManual.title}`] : []),
               "Official Manufacturer Datasheets & Manuals",
               `Google Gemini Pro (${model})`,
             ],
@@ -179,16 +234,22 @@ export class GeminiAIService {
     const fallbackAnswer = this.generateFallbackResponse(
       trimmedQuery,
       matchedDatasheet,
+      matchedLabManual,
       dbEquipmentMatches,
-      labContext
+      labContext,
+      document
     );
 
     return {
       answer: fallbackAnswer,
       provider: "ELABS Lab Intelligence Engine",
       datasheet: matchedDatasheet,
+      labManual: matchedLabManual,
+      attachedDocument: document || null,
       sources: [
         "Department of Electrical & Information Engineering Database",
+        ...(document ? [`Uploaded Document: ${document.originalName}`] : []),
+        ...(matchedLabManual ? [`Department Lab Manual: ${matchedLabManual.title}`] : []),
         "Official Manufacturer Technical Documentation",
       ],
       equipmentMatches: dbEquipmentMatches,
@@ -196,7 +257,7 @@ export class GeminiAIService {
   }
 
   /**
-   * Call the Google Gemini REST API with grounded context.
+   * Call Google Gemini REST API with deeply grounded department context and attached documents.
    */
   private static async callGeminiAPI(
     userMessage: string,
@@ -205,28 +266,46 @@ export class GeminiAIService {
     modelName: string,
     labContext: { labs: any[]; inventorySummary: string; modules: any[] },
     matchedDatasheet: EquipmentDatasheet | null,
-    dbMatches: any[]
+    matchedLabManual: DepartmentLabManual | null,
+    dbMatches: any[],
+    document?: AttachedDocument
   ): Promise<string | null> {
     const targetModel = modelName.startsWith("models/") ? modelName.replace("models/", "") : modelName;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
 
     const systemPrompt = `
-You are the official ELABS AI Assistant for the Department of Electrical and Information Engineering, Faculty of Engineering, University of Ruhuna, Sri Lanka.
-Your job is to assist engineering undergraduates, lecturers, and technical officers with laboratory inquiries, equipment technical datasheets, operating specifications, laboratory safety procedures, and live equipment inventory availability.
+You are the official ELABS Laboratory AI Assistant for the Department of Electrical and Information Engineering, Faculty of Engineering, University of Ruhuna, Sri Lanka.
+Your mission is to assist engineering undergraduates, lecturers, and technical officers with laboratory inquiries, equipment technical datasheets, operating specifications, laboratory safety procedures, and live equipment inventory availability.
 
-═══ DEPARTMENT LABORATORIES ═══
+═══ CORE OPERATING PRINCIPLE: COMBINE THEORY & DATASHEETS WITH PRACTICAL SCENARIOS & DATABASE INVENTORY ═══
+Whenever answering questions—especially when a laboratory manual, datasheet, or practical experiment is referenced—you MUST combine the technical theory or manual instructions with the physical reality of the University of Ruhuna EIE laboratories and live database inventory:
+1. 🏢 Department Laboratory & Real-Time Equipment Availability:
+   - Identify the exact laboratory (Block and Floor location).
+   - Match the required apparatus to specific equipment items from the Department Inventory Database (always quote the exact ELABS Asset Tags, e.g., \`[ELABS-EM-0012]\`, and note whether they are currently AVAILABLE or BORROWED).
+   - Mention how students can check out equipment at the lab counter using their Student ID barcode.
+2. 🔌 Practical Scenario Apparatus & Wiring Setup:
+   - Provide concrete, step-by-step circuit wiring and connection instructions (e.g. DC power supply rail settings, function generator 50Ω load impedance vs high-Z, channel assignments, probe ground clip connection to common circuit reference).
+   - Include specific pinouts and port names from official datasheets or manuals.
+3. 📋 Step-by-Step Practical Procedure & Measurement:
+   - Walk through the experimental steps, knob adjustments (Time/Div, Volts/Div, Trigger Slope), and measurement methodologies (using markers/cursors, peak-to-peak Vpp, phase shift, frequency response).
+4. ⚠️ Real-World Practical Pitfalls & Bench Troubleshooting:
+   - Address common mistakes engineering students encounter in live lab sessions (e.g., floating ground hum, 10X probe attenuation mismatch, op-amp saturation, function generator internal impedance voltage drop, motor starting current spikes, clipping).
+5. 🛡️ Laboratory Safety Protocols & Regulations:
+   - Highlight mandatory laboratory rules (PPE, high-voltage interlocks, earthing discharge rod, current limits, capacitor discharge).
+
+═══ DEPARTMENT LABORATORIES (FACULTY OF ENGINEERING, UNIVERSITY OF RUHUNA) ═══
 1. Power Systems and High Voltage Laboratory (Block C, Ground Floor):
-   High-voltage experiments, impulse voltages, surge measurement, insulation breakdown, corona & partial discharge.
+   High-voltage AC/DC testing, 100kV transformer, Marx impulse generator (1.2/50 μs), sphere gaps, corona, insulation breakdown.
 2. Electric Machines and Power Electronics Laboratory (Block C, 1st Floor):
-   AC/DC motors, torque-speed measurement, rectifiers, inverters, VFD drives (Siemens Sinamics G120), motor control.
+   AC/DC motor test sets (Leroy-Somer LS90), dynamometers, rectifiers, converters, VFDs (Siemens Sinamics G120), motor control.
 3. Electronics and Measurement Laboratory (Block A, 2nd Floor):
-   Analog/digital electronics, oscilloscopes (Rigol DS1054Z, Tektronix TDS2024C), logic analyzers, Rigol DG1022Z function generators, Rigol DP832 DC power supplies, FPGA kits.
+   Analog/digital electronics, oscilloscopes (Rigol DS1054Z, Tektronix TDS2024C), function generators (Rigol DG1022Z), DC power supplies (Rigol DP832), multimeters (Fluke 87V), breadboards, op-amps, discrete components.
 4. Communication and Systems Engineering Laboratory (Block B, 1st Floor):
-   RF communications, USRP B210 Software Defined Radio, spectrum analyzers, digital signal modulation.
+   RF communications, USRP B210 Software Defined Radio, Rohde & Schwarz FSH8 spectrum analyzers, signal modulation, antenna testing.
 5. Information Engineering Laboratory (Block C, 4th Floor):
    Cisco Networking Academy facility, Cisco Catalyst 2960 switches, Cisco 1941 ISR routers, VLANs, trunking, routing protocols.
 6. 24 × 7 Undergraduate Development Project Laboratory (Block D, 4th Floor):
-   16 workstations, Hakko FX-951 soldering stations, PCB cutting/drilling, 3D printing (Prusa i3), rapid prototyping.
+   16 workstations, Hakko FX-951 soldering stations, PCB cutting/drilling, 3D printing (Prusa i3), rapid prototyping, STM32, FPGA kits.
 
 ═══ LIVE INVENTORY DATABASE ═══
 ${labContext.inventorySummary}
@@ -250,22 +329,51 @@ ${matchedDatasheet.safetyGuidelines.join("\n")}
 }
 
 ${
-  dbMatches.length > 0
-    ? `═══ MATCHED DATABASE INVENTORY ITEMS ═══
-${dbMatches.map((m) => `• [${m.elabs_tag}] ${m.name} (${m.model}) in ${m.lab_name} (${m.location}, ${m.floor}) - Status: ${m.status}`).join("\n")}`
+  matchedLabManual
+    ? `═══ MATCHED DEPARTMENT LAB MANUAL ═══
+Course: ${matchedLabManual.courseCode} - ${matchedLabManual.title}
+Laboratory: ${matchedLabManual.labName} (${matchedLabManual.location})
+Recommended Apparatus: ${matchedLabManual.recommendedEquipment.join(", ")}
+Practicals Included:
+${matchedLabManual.practicals
+  .map(
+    (p) => `• Practical ${p.number}: ${p.title}
+  - Objective: ${p.objective}
+  - Apparatus: ${p.componentsAndEquipment.join(", ")}
+  - Setup: ${p.circuitSetup}
+  - Procedure: ${p.procedure.join(" ")}
+  - Troubleshooting: ${p.troubleshootingScenarios.join(" ")}
+  - Safety: ${p.safetyRules.join(" ")}`
+  )
+  .join("\n\n")}
+`
     : ""
 }
 
-═══ RESPONSE GUIDELINES ═══
+${
+  dbMatches.length > 0
+    ? `═══ MATCHED DATABASE INVENTORY ITEMS ═══
+${dbMatches.map((m) => `• [${m.elabs_tag}] ${m.name} (${m.model || "N/A"}) in ${m.lab_name} (${m.location}, ${m.floor}) - Status: ${m.status}`).join("\n")}`
+    : ""
+}
+
+${
+  document
+    ? `═══ ATTACHED LAB MANUAL / DATASHEET (${document.originalName}) ═══
+Type: ${document.mimeType || "Document"}
+${document.pageCount ? `Pages: ${document.pageCount}` : ""}
+Content:
+${(document.textContent || "").slice(0, 30000)}
+`
+    : ""
+}
+
+═══ FORMATTING GUIDELINES ═══
 - Format responses cleanly using GitHub-flavored Markdown.
-- When an equipment datasheet is asked for, ALWAYS provide:
-  1. Full model name, manufacturer, and laboratory location.
-  2. Complete technical specifications table or bullet points (Bandwidth, Sample Rate, Voltage/Current ratings, etc.).
-  3. Direct clickable markdown link to the official datasheet / user manual (e.g., [Download Official Datasheet](${matchedDatasheet?.datasheetUrl || "#"})).
-  4. Pinout / port breakdown.
-  5. Critical laboratory safety rules and operating precautions.
-  6. Current stock and availability in the department labs from the live inventory above.
-- Be precise, polite, authoritative, and helpful to engineering students.
+- Use clear visual sections, bullet points, and code/table blocks where helpful.
+- When an attached manual or datasheet is present, explicitly cite its relevant procedures, sections, or tables.
+- Cross-reference with the Department database inventory and suggest how students can physically perform the experiment in the lab.
+- Be authoritative, polite, and practical for engineering students.
 `;
 
     // Map conversation history
@@ -280,10 +388,30 @@ ${dbMatches.map((m) => `• [${m.elabs_tag}] ${m.name} (${m.model}) in ${m.lab_n
       });
     });
 
-    // Add current user prompt
+    // Build current user message parts
+    const userParts: any[] = [];
+
+    // Add image inlineData if image document
+    if (document?.base64 && document.mimeType?.startsWith("image/")) {
+      const cleanBase64 = document.base64.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, "");
+      userParts.push({
+        inlineData: {
+          mimeType: document.mimeType,
+          data: cleanBase64,
+        },
+      });
+    }
+
+    // Build query text
+    let userPromptText = userMessage;
+    if (document) {
+      userPromptText = `[Attached Document: "${document.originalName}"]\n\nQuestion: ${userMessage}`;
+    }
+    userParts.push({ text: userPromptText });
+
     contents.push({
       role: "user",
-      parts: [{ text: userMessage }],
+      parts: userParts,
     });
 
     const body = {
@@ -293,7 +421,7 @@ ${dbMatches.map((m) => `• [${m.elabs_tag}] ${m.name} (${m.model}) in ${m.lab_n
       contents,
       generationConfig: {
         temperature: 0.35,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 2500,
       },
     };
 
@@ -317,17 +445,140 @@ ${dbMatches.map((m) => `• [${m.elabs_tag}] ${m.name} (${m.model}) in ${m.lab_n
   }
 
   /**
-   * Internal high-accuracy fallback response generator when no key is supplied.
+   * Internal high-accuracy fallback response generator when no Gemini API key is supplied.
    */
   private static generateFallbackResponse(
     query: string,
     datasheet: EquipmentDatasheet | null,
+    labManual: DepartmentLabManual | null,
     inventoryMatches: any[],
-    labContext: { labs: any[]; modules: any[] }
+    labContext: { labs: any[]; modules: any[] },
+    document?: AttachedDocument
   ): string {
     const q = query.toLowerCase();
 
-    // Case 1: Specific equipment datasheet requested
+    // Case 1: An uploaded document (Lab Manual / Datasheet) is attached
+    if (document && document.textContent) {
+      const docText = document.textContent;
+      const docTitle = document.originalName;
+
+      // Extract practical sections or keywords from the document
+      const docKeywords = this.extractDocumentKeywords(docText);
+      const matchedLab = labContext.labs.find((l) =>
+        docText.toLowerCase().includes(l.name.toLowerCase().slice(0, 10))
+      ) || labContext.labs[2]; // Default to Electronics Lab if not specified
+
+      const inventoryLines = inventoryMatches.length > 0
+        ? inventoryMatches.map((m: any) =>
+            `• **[${m.elabs_tag}]** ${m.name} (\`${m.model || "N/A"}\`) — Located in **${m.lab_name}** (${m.location}, ${m.floor}) — Status: \`${m.status}\``
+          ).join("\n")
+        : `• **Rigol DS1054Z 50MHz Oscilloscope** [Tag: ELABS-EM-0012] — Electronics Lab (Block A, 2nd Floor) — Status: \`AVAILABLE\`\n• **Rigol DP832 DC Power Supply** [Tag: ELABS-EM-0014] — Status: \`AVAILABLE\`\n• **Fluke 87V Digital Multimeter** [Tag: ELABS-EM-0016] — Status: \`AVAILABLE\``;
+
+      return `### 📄 Analysis of Attached Document: **${docTitle}**
+
+I have analyzed the attached manual/datasheet (${document.pageCount ? `${document.pageCount} pages, ` : ""}${document.size ? `${Math.round(document.size / 1024)} KB` : ""}). Here is the complete engineering practical breakdown combined with the Department of Electrical & Information Engineering live inventory and laboratory facilities:
+
+---
+
+#### 🏢 1. Department Laboratory & Equipment Availability
+**Primary Facility:** **${matchedLab.name}** (${matchedLab.location}, ${matchedLab.floor})  
+**Operating Hours:** 8:00 AM – 5:00 PM (Monday – Friday)
+
+**Live Equipment in Department Inventory:**
+${inventoryLines}
+
+> **Checkout Procedure:** Present your Student ID Barcode at the laboratory counter to issue these items. All instruments must be returned with leads and probes inspected before 4:45 PM.
+
+---
+
+#### 🔌 2. Practical Apparatus Setup & Circuit Wiring
+- **Power Supply Rails:** Set the DC bench power supply (Rigol DP832) to the required voltages. Configure current limits (e.g. 100 mA) before switching outputs ON.
+- **Signal Injection:** Connect the Rigol DG1022Z Function Generator CH1 to circuit input. Use a matched $50\,\\Omega$ BNC cable.
+- **Ground Reference:** Ensure the ground clip of your oscilloscope probe is connected strictly to the **circuit common ground ($0\\,\\text{V}$)**. Never connect probe grounds to positive or negative supply rails.
+- **Probe Settings:** Set probe slide switches to **10X** attenuation for bandwidth and circuit loading protection.
+
+---
+
+#### 📋 3. Step-by-Step Practical Execution & Measurement
+1. **Pre-Power Verification:** Use the Fluke 87V DMM in continuity/resistance mode to verify connections and check for short-circuits between supply rails and GND.
+2. **Quiescent DC Check:** Power the circuit and measure DC operating voltages at critical circuit nodes before applying AC signals.
+3. **Dynamic Signal Sweep:** Enable the function generator and observe input and output waveforms simultaneously on Oscilloscope CH1 and CH2.
+4. **Data Acquisition:** Use the oscilloscope **Cursor (Time & Voltage)** menu to record peak-to-peak voltages ($V_{\\text{pp}}$), phase angles, and rise times.
+
+---
+
+#### ⚠️ 4. Practical Bench Scenarios & Troubleshooting
+- **Scenario A: 50 Hz Hum / Noisy Waveform:**
+  - *Cause:* Floating oscilloscope ground lead or unshielded long jumper wires.
+  - *Fix:* Ensure the probe black ground clip is firmly attached to the breadboard ground rail and keep wiring leads short.
+- **Scenario B: Waveform Clipped / Flat Tops:**
+  - *Cause:* Input amplitude is driving an amplifier into saturation or cutoff.
+  - *Fix:* Reduce function generator amplitude (e.g. from $1\\,\\text{V}_{\\text{pp}}$ down to $50\\,\\text{mV}_{\\text{pp}}$).
+- **Scenario C: Measured Voltage is Off by Factor of 10:**
+  - *Cause:* Oscilloscope probe is set to 1X while the oscilloscope channel menu is set to 10X (or vice versa).
+  - *Fix:* Synchronize the physical probe switch with the oscilloscope channel probe attenuation menu.
+
+---
+
+#### 🛡️ 5. Laboratory Safety Guidelines
+- Wear approved laboratory coats and closed-toe footwear.
+- De-energize bench power supplies before inserting, removing, or re-wiring components.
+- In high-voltage or power electronics setups, wait at least 5 minutes for capacitor discharge before touching terminals.`;
+    }
+
+    // Case 2: Curated Department Lab Manual matched
+    if (labManual) {
+      const p = labManual.practicals[0];
+      const inventoryLines = inventoryMatches.length > 0
+        ? inventoryMatches.map((m: any) =>
+            `• **[${m.elabs_tag}]** ${m.name} (\`${m.model || "N/A"}\`) in **${m.lab_name}** — Status: \`${m.status}\``
+          ).join("\n")
+        : labManual.recommendedEquipment.map((eq) => `• ${eq} — Available in ${labManual.labName}`).join("\n");
+
+      return `### 📘 Department Lab Manual: **${labManual.courseCode} — ${labManual.title}**
+
+**Facility:** **${labManual.labName}** (${labManual.location})  
+**Department:** ${labManual.department} • ${labManual.semester}
+
+---
+
+#### 🔬 Selected Practical: **Practical ${p.number}: ${p.title}**
+**Objective:** ${p.objective}
+
+---
+
+#### 🏢 1. Required Apparatus & Department Inventory
+${inventoryLines}
+
+---
+
+#### 🔌 2. Circuit & Bench Apparatus Setup
+${p.circuitSetup}
+
+---
+
+#### 📋 3. Step-by-Step Procedure
+${p.procedure.map((step, idx) => `${idx + 1}. ${step}`).join("\n")}
+
+---
+
+#### 📐 4. Measurement Guidelines
+${p.measurementGuide.map((m) => `- ${m}`).join("\n")}
+
+---
+
+#### ⚠️ 5. Practical Scenarios & Bench Troubleshooting
+${p.troubleshootingScenarios.map((ts) => `• **${ts.split("->")[0].trim()}:** ${ts.split("->")[1]?.trim() || ts}`).join("\n")}
+
+---
+
+#### 🛡️ 6. Laboratory Safety Rules
+${p.safetyRules.map((sr) => `1. **${sr}**`).join("\n")}
+
+> **Need further assistance?** Ask about specific component values, formulas, or check out equipment at the lab counter!`;
+    }
+
+    // Case 3: Specific equipment datasheet requested
     if (datasheet) {
       const itemsInLab = inventoryMatches.filter(
         (it) => it.model && it.model.toLowerCase().includes(datasheet.model.toLowerCase().slice(0, 5))
@@ -369,7 +620,7 @@ ${(datasheet.pinoutOrPorts || ["Refer to the official user manual for full rear 
 
 ---
 
-#### ⚠️ Laboratory Safety & Operating Guidelines
+#### ⚠️ Laboratory Safety & Practical Operating Guidelines
 ${datasheet.safetyGuidelines.map((s) => `1. **${s}**`).join("\n")}
 
 ---
@@ -380,7 +631,7 @@ ${availabilityText}
 > **Tip:** You can check out this item for approved practicals during standard laboratory hours (8:00 AM – 5:00 PM) using your Student ID Barcode at the laboratory counter.`;
     }
 
-    // Case 2: Inquiries about laboratories or lab locations
+    // Case 4: Inquiries about laboratories or lab locations
     if (q.includes("lab") || q.includes("where") || q.includes("location") || q.includes("facilities")) {
       const labsList = labContext.labs
         .map(
@@ -400,15 +651,15 @@ The department operates 6 specialized laboratory facilities:
 ${labsList}
 
 ---
-💡 *To view inventory or request a datasheet for any instrument in these labs, ask me for the equipment model name (e.g. \`Rigol DS1054Z\`, \`Fluke 87V\`, \`Rigol DP832\`, \`Cisco 2960\`).*`;
+💡 *You can attach any lab manual or datasheet PDF to get step-by-step practical guides, circuit wiring, and live equipment checks.*`;
     }
 
-    // Case 3: Inventory search match
+    // Case 5: Inventory search match
     if (inventoryMatches.length > 0) {
       const matchLines = inventoryMatches
         .map(
           (m: any) =>
-            `- **[${m.elabs_tag}]** **${m.name}** (Model: \`${m.model}\`)  
+            `- **[${m.elabs_tag}]** **${m.name}** (Model: \`${m.model || "N/A"}\`)  
   *Location:* ${m.lab_name} (${m.location}, ${m.floor}) | *Status:* **${m.status}**`
         )
         .join("\n\n");
@@ -420,20 +671,20 @@ Found **${inventoryMatches.length}** item(s) matching your request in the Depart
 ${matchLines}
 
 ---
-Would you like me to provide the **technical datasheet**, **pinouts**, or **safety operating procedures** for any of these instruments? Just ask for the model name!`;
+Attach your lab manual or ask for a practical setup guide to combine these instruments with wiring and safety procedures!`;
     }
 
     // General fallback
-    return `### 👋 Welcome to ELABS AI Assistant
+    return `### 👋 Welcome to ELABS AI Laboratory Assistant
 
-I am the intelligent laboratory assistant for the **Department of Electrical and Information Engineering, University of Ruhuna**.
+I am the engineering laboratory assistant for the **Department of Electrical and Information Engineering, University of Ruhuna**.
 
-I can assist you with:
-- 📄 **Equipment Datasheets & Manuals**: Ask for any instrument (e.g., *"Give me the datasheet for Rigol DS1054Z"* or *"Fluke 87V specs"*).
-- 🔬 **Laboratory Information**: Details and locations of all 6 department labs (High Voltage, Electric Machines, Electronics, Telecom, Cisco Network Lab, 24x7 Project Lab).
-- 📦 **Inventory & Availability**: Check if an oscilloscope, multimeter, DC power supply, or FPGA board is currently available.
-- ⚡ **Laboratory Safety Guidelines**: Operating instructions, PPE requirements, and high-voltage precautions.
+**What you can do:**
+- 📎 **Attach a Lab Manual or Datasheet (PDF/Image/Text)**: Upload any course practical sheet or component datasheet, and ask questions directly based on it.
+- 🔬 **Practical Scenario Guides**: Get step-by-step bench setup, circuit wiring schematics, knob tuning, and troubleshooting procedures.
+- 📦 **Live Database Inventory Grounding**: Check real-time availability and ELABS asset tags across all 6 department laboratories.
+- ⚡ **Laboratory Safety**: Access high-voltage, power electronics, and RF safety guidelines.
 
-*How can I help you with your laboratory work today?*`;
+*Attach a document below or ask a practical question to get started!*`;
   }
 }

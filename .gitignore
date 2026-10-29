@@ -42,3 +42,7 @@ packages/vision/src/storage/outputs/
 
 # Spreadsheets
 *.xlsx
+
+# Uploads
+uploads/
+packages/api/uploads/

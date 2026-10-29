@@ -511,3 +511,358 @@ export function findDatasheet(query: string): EquipmentDatasheet | null {
   }
   return null;
 }
+
+// ============================================================
+// DEPARTMENT OF ELECTRICAL & INFORMATION ENGINEERING LAB MANUALS
+// ============================================================
+
+export interface PracticalDetail {
+  number: number;
+  title: string;
+  objective: string;
+  componentsAndEquipment: string[];
+  circuitSetup: string;
+  procedure: string[];
+  measurementGuide: string[];
+  troubleshootingScenarios: string[];
+  safetyRules: string[];
+}
+
+export interface DepartmentLabManual {
+  id: string;
+  courseCode: string;
+  title: string;
+  department: string;
+  semester: string;
+  labName: string;
+  location: string;
+  description: string;
+  recommendedEquipment: string[];
+  practicals: PracticalDetail[];
+}
+
+export const DEPARTMENT_LAB_MANUALS: Record<string, DepartmentLabManual> = {
+  "EE3203-analog": {
+    id: "EE3203-analog",
+    courseCode: "EE3203",
+    title: "Analog Electronics Laboratory Manual",
+    department: "Department of Electrical & Information Engineering",
+    semester: "Semester 5",
+    labName: "Electronics and Measurement Laboratory",
+    location: "Block A, 2nd Floor",
+    description: "Covers discrete transistor amplifiers, operational amplifier topologies, active filters, and non-linear waveform generators.",
+    recommendedEquipment: [
+      "Rigol DS1054Z 50MHz Digital Oscilloscope",
+      "Rigol DG1022Z Dual-Channel Arbitrary Function Generator",
+      "Rigol DP832 Triple-Output Programmable DC Power Supply",
+      "Fluke 87V True-RMS Digital Multimeter",
+      "Solderless Breadboard, BNC-to-Alligator Cables, 10X Probes",
+    ],
+    practicals: [
+      {
+        number: 1,
+        title: "BJT Common Emitter Amplifier Frequency Response & Gain Analysis",
+        objective: "Biasing 2N3904/2N2222 transistor in active region, measuring midband AC voltage gain, lower cutoff (fL) and upper cutoff (fH) frequencies.",
+        componentsAndEquipment: ["2N3904 NPN BJT", "Resistors (10k, 2.2k, 1k, 470Ω)", "Capacitors (10uF, 100uF, 100nF)", "Rigol DS1054Z", "Rigol DG1022Z", "Rigol DP832"],
+        circuitSetup: "Configure voltage divider bias (R1=10kΩ, R2=2.2kΩ, RC=1kΩ, RE=470Ω). Connect Cin=10uF to base, Cout=10uF to collector, and bypass capacitor CE=100uF across RE. Supply +12V DC from Rigol DP832 CH1.",
+        procedure: [
+          "Verify DC quiescent point before applying AC signal: Measure VBE (~0.7V), VCE (~6V) using Fluke 87V.",
+          "Set Function Generator CH1 to 1 kHz Sine wave, 20 mVpp (Low amplitude to avoid clipping non-linearity).",
+          "Connect Oscilloscope CH1 to input AC coupling, and CH2 to amplifier output AC coupling.",
+          "Vary frequency from 20 Hz to 2 MHz in decade intervals; record input and output peak-to-peak voltages.",
+          "Plot Bode magnitude response: Gain (dB) = 20 * log10(Vout / Vin) and determine 3dB bandwidth.",
+        ],
+        measurementGuide: [
+          "Use Oscilloscope Cursor menu (Time & Amplitude) for exact peak-to-peak and phase measurement.",
+          "Confirm 180° phase inversion between input and output waveforms.",
+          "If output waveform shows flat tops (saturation) or flat bottoms (cutoff), decrease input amplitude below 20 mVpp.",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Output signal is flat or 0V -> Check DC power supply rails and ensure ground clip of BNC probe is connected to breadboard 0V bus.",
+          "Scenario B: 50 Hz hum on trace -> Ensure oscilloscope ground clip is firmly connected to circuit common GND, not left floating.",
+          "Scenario C: Gain is 10x smaller than calculated -> Check if CE bypass capacitor is plugged in backwards (observe electrolytic polarity!) or disconnected.",
+        ],
+        safetyRules: [
+          "Ensure DP832 DC current limit is set to 100 mA before powering the circuit.",
+          "Never connect probe ground clips to supply rails (+12V); probe ground is connected directly to Earth Ground!",
+        ],
+      },
+      {
+        number: 2,
+        title: "Operational Amplifier Active Low-Pass & Sallen-Key Filters",
+        objective: "Design and verify first-order and second-order active low-pass filters using LM741 / TL082 op-amps.",
+        componentsAndEquipment: ["TL082 / LM741 Op-Amp", "Resistors (10k, 1k)", "Capacitors (10nF, 100nF)", "Dual Power Supply (+/- 12V)", "Rigol DS1054Z"],
+        circuitSetup: "Dual supply: Connect +12V to Pin 7 (or Pin 8 on TL082), -12V to Pin 4, and common ground to circuit 0V reference. Configure feedback resistors on inverting pin.",
+        procedure: [
+          "Measure op-amp output DC offset with inputs grounded; ensure offset is < 5 mV.",
+          "Inject 100 Hz to 100 kHz sinusoidal sweep from Rigol DG1022Z.",
+          "Record amplitude roll-off rate (-20 dB/decade for 1st order, -40 dB/decade for 2nd order Sallen-Key).",
+          "Determine experimental cutoff frequency fc = 1 / (2 * pi * R * C) and compare with theoretical value.",
+        ],
+        measurementGuide: [
+          "Enable Rigol DS1054Z Channel Math (FFT or Bode feature) to observe spectral roll-off.",
+          "Ensure input voltage does not exceed op-amp common-mode input range.",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Op-amp output latches to +12V or -12V -> Check that negative supply pin is connected to -12V and NOT ground.",
+          "Scenario B: High frequency oscillation -> Place 100nF ceramic decoupling capacitors directly across supply pins 7 & 4 to ground.",
+        ],
+        safetyRules: [
+          "Always turn off DC supply before inserting or removing op-amp ICs from the breadboard.",
+        ],
+      },
+    ],
+  },
+  "EE4302-machines": {
+    id: "EE4302-machines",
+    courseCode: "EE4302",
+    title: "Electric Machines & Power Electronics Laboratory Manual",
+    department: "Department of Electrical & Information Engineering",
+    semester: "Semester 7",
+    labName: "Electric Machines and Power Electronics Laboratory",
+    location: "Block C, 1st Floor",
+    description: "Focuses on three-phase induction machine dynamics, Siemens Sinamics VFD inverter motor control, and thyristor power converters.",
+    recommendedEquipment: [
+      "Leroy-Somer LS90 1.5kW 3-Phase Induction Motor & Dynamometer Test Set",
+      "Siemens Sinamics G120 Variable Frequency Drive (VFD)",
+      "Fluke 435-II 3-Phase Power Quality Analyzer",
+      "Tektronix Isolated High-Voltage Differential Probes",
+      "Digital Optical Tachometer & Torque Transducer Console",
+    ],
+    practicals: [
+      {
+        number: 1,
+        title: "3-Phase Induction Motor No-Load and Blocked-Rotor Tests",
+        objective: "Determine equivalent circuit parameters (R1, X1, R2', X2', Rc, Xm) and assess efficiency and torque-slip characteristics.",
+        componentsAndEquipment: ["Leroy-Somer LS90 1.5kW Motor", "3-Phase Auto-transformer (Variac)", "Fluke 435-II Analyzer", "Mechanical Brake / Dynamometer"],
+        circuitSetup: "Connect stator in Star (Y) configuration to 3-phase supply via 3-phase variac and Fluke 435-II current clamps and voltage leads.",
+        procedure: [
+          "No-Load Test: Run motor uncoupled at rated line voltage (400V, 50Hz); record V0, I0, and P0 (core loss + friction loss).",
+          "Blocked-Rotor Test: Mechanically lock rotor shaft securely. Slowly increase variac from 0V until rated current (approx 3.2A) is reached.",
+          "Record short-circuit voltage Vsc, current Isc, and active power Psc; immediately shut off power to avoid rotor overheating.",
+          "Compute per-phase equivalent circuit resistance and reactance parameters.",
+        ],
+        measurementGuide: [
+          "Use Fluke 435-II two-wattmeter method display for accurate total 3-phase active power measurement.",
+          "Measure DC stator winding resistance with Fluke 87V DMM immediately after test and apply temperature correction.",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Motor hums loudly and will not rotate -> Check for blown phase fuse or open conductor in one phase (single phasing).",
+          "Scenario B: Inverted active power reading on one phase -> Reverse current clamp direction (arrow must point towards motor load).",
+        ],
+        safetyRules: [
+          "Always lock coupling guard cage before energizing motor.",
+          "Blocked-rotor test must NOT exceed 15 seconds to prevent thermal breakdown of rotor windings.",
+          "Keep Emergency Stop button within hand reach at all times.",
+        ],
+      },
+      {
+        number: 2,
+        title: "Siemens Sinamics G120 VFD Variable Speed & V/f Control",
+        objective: "Parameterize Siemens Sinamics G120 inverter drive, implement scalar V/f constant flux speed regulation, and observe inverter PWM harmonics.",
+        componentsAndEquipment: ["Siemens Sinamics G120 Inverter", "3-Phase Induction Motor", "Torque Dynamometer", "Differential Probes", "Rigol DS1054Z"],
+        circuitSetup: "Wire 400V 3-phase mains to L1, L2, L3 of G120 drive. Connect motor terminals U, V, W to drive output. Connect operator panel (BOP-2) or PC via USB.",
+        procedure: [
+          "Perform motor identification and quick commissioning: Enter motor nameplate kW, rpm, rated current, and voltage.",
+          "Set control mode to linear V/f (p1300 = 0). Set minimum frequency to 5 Hz and maximum frequency to 60 Hz.",
+          "Run motor at 25 Hz, 50 Hz, and 60 Hz under varying mechanical dynamometer loads.",
+          "Measure stator terminal voltage and fundamental frequency; plot V vs f curve to verify constant flux region.",
+          "Observe inverter output PWM switching waveform using Tektronix differential voltage probe on oscilloscope.",
+        ],
+        measurementGuide: [
+          "NEVER connect standard single-ended oscilloscope probe ground clip to VFD motor outputs! Use high-voltage differential probes only.",
+          "Observe DC link bus voltage (~560V DC) via drive parameter r0026.",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Drive trips on Fault F07801 (Motor overcurrent) -> Increase acceleration ramp time (p1120) from 2.0s to 6.0s.",
+          "Scenario B: Drive trips on Fault F07900 (Motor blocked / stall) -> Check mechanical brake load; reduce dynamometer torque.",
+        ],
+        safetyRules: [
+          "Wait at least 5 minutes after disconnecting AC supply before touching VFD terminals to allow DC link capacitors to discharge below 50V.",
+          "Ensure protective earth (PE) cable is bolted tightly to the drive chassis.",
+        ],
+      },
+    ],
+  },
+  "EE3402-hv": {
+    id: "EE3402-hv",
+    courseCode: "EE3402",
+    title: "Power Systems and High Voltage Engineering Laboratory Manual",
+    department: "Department of Electrical & Information Engineering",
+    semester: "Semester 6",
+    labName: "Power Systems and High Voltage Laboratory",
+    location: "Block C, Ground Floor",
+    description: "High-voltage breakdown studies, sphere-gap calibration, lightning impulse flashover testing, and dielectric insulation diagnostics.",
+    recommendedEquipment: [
+      "Haefely Hipotronics 100kV AC High-Voltage Test Transformer Set",
+      "Multi-Stage Marx Lightning Impulse Voltage Generator (1.2/50 μs)",
+      "Standard 100mm and 250mm Sphere-Sphere Gap Assembly",
+      "Capacitive & Resistive High-Voltage Voltage Divider",
+      "High-Voltage Earthing Discharge Rod & Safety Interlock Cage",
+    ],
+    practicals: [
+      {
+        number: 1,
+        title: "High-Voltage AC Breakdown of Sphere-Sphere and Needle-Plane Gaps",
+        objective: "Investigate electric field uniformity effect on air dielectric breakdown, verify Peek's formula, and establish sparkover voltage vs gap distance curves.",
+        componentsAndEquipment: ["100kV AC Test Set", "100mm Sphere Gap", "Needle-Plane Electrode Set", "Barometer & Thermometer", "Grounding Stick"],
+        circuitSetup: "Mount electrode assembly inside the grounded high-voltage Faraday cage. Connect high-voltage bushing to upper electrode via water damping resistor (100kΩ). Connect lower electrode to system solid ground.",
+        procedure: [
+          "Record ambient temperature (°C) and atmospheric pressure (mmHg) to calculate air density correction factor (kd).",
+          "Set sphere gap distance to 10 mm, 20 mm, 30 mm, 40 mm, and 50 mm.",
+          "Close safety interlock gate. Turn on high-voltage control console key switch.",
+          "Gradually raise primary variac voltage at a steady rate of ~1 kV/s until sparkover occurs.",
+          "Record primary voltage, calculate secondary high-voltage breakdown value, repeat 5 times per distance, and compute average.",
+          "Repeat the experiment using needle-plane electrodes to observe non-uniform field corona discharge and lower breakdown threshold.",
+        ],
+        measurementGuide: [
+          "Calibrate secondary voltage measurement using the capacitive voltage divider readout.",
+          "Correct all breakdown voltages to standard atmospheric conditions (20°C, 760 mmHg).",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Sparkover occurs at erratic low voltages -> Clean sphere surfaces with ethanol; inspect for dust, pit marks, or moisture.",
+          "Scenario B: High-voltage will not energize -> Check safety cage gate limit switch interlock; ensure grounding rod is removed from HT busbar and hung in its cradle switch.",
+        ],
+        safetyRules: [
+          "STRICT 2-PERSON OPERATING RULE: One person operates the console while the safety observer monitors the cage.",
+          "NEVER enter the high-voltage cage without first touching the high-voltage bushing with the grounded discharge rod.",
+          "Maintain minimum 2.5 meters clearance from any energized high-voltage conductor.",
+        ],
+      },
+    ],
+  },
+  "EE2201-circuits": {
+    id: "EE2201-circuits",
+    courseCode: "EE2201",
+    title: "Electric Circuit Theory Laboratory Manual",
+    department: "Department of Electrical & Information Engineering",
+    semester: "Semester 3",
+    labName: "Electronics and Measurement Laboratory",
+    location: "Block A, 2nd Floor",
+    description: "Fundamental circuit network theorems, transient analysis of RLC networks, and resonant circuit quality factor evaluation.",
+    recommendedEquipment: [
+      "Rigol DS1054Z Digital Storage Oscilloscope",
+      "Rigol DG1022Z Function Generator",
+      "Fluke 87V Digital Multimeter",
+      "Decade Resistance, Inductance, and Capacitance Substitution Boxes",
+    ],
+    practicals: [
+      {
+        number: 1,
+        title: "Verification of Thevenin's, Norton's Theorems and Maximum Power Transfer",
+        objective: "Determine open-circuit voltage (Vth), short-circuit current (In), and equivalent resistance (Rth) of a multi-source linear DC network, and verify RL = Rth for Pmax.",
+        componentsAndEquipment: ["DC Power Supply", "Resistors (1k, 2.2k, 3.3k, 4.7k)", "Decade Resistance Box", "Fluke 87V DMM"],
+        circuitSetup: "Assemble resistive bridge network with two DC sources (+12V and +5V). Designate load terminals A and B.",
+        procedure: [
+          "Disconnect load resistor RL. Measure open-circuit voltage Vth across terminals A-B using Fluke 87V.",
+          "Replace DC voltage sources with their internal resistances (short circuits). Measure Rth across A-B.",
+          "Connect variable decade resistance box as RL. Vary RL from 100 Ω to 10 kΩ and measure load voltage VL and load current IL.",
+          "Compute load power PL = VL * IL. Plot PL vs RL and identify peak power point.",
+        ],
+        measurementGuide: [
+          "Confirm that maximum power occurs precisely when RL equals measured Rth.",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Theoretical and experimental Vth differ by > 5% -> Account for multimeter internal input impedance (10 MΩ) in high-resistance dividers.",
+        ],
+        safetyRules: ["Turn off power when measuring resistance directly with ohmmeter to avoid blowing meter fuse."],
+      },
+    ],
+  },
+  "EE3501-comm": {
+    id: "EE3501-comm",
+    courseCode: "EE3501",
+    title: "Communication Systems Engineering Laboratory Manual",
+    department: "Department of Electrical & Information Engineering",
+    semester: "Semester 6",
+    labName: "Communication and Systems Engineering Laboratory",
+    location: "Block B, 1st Floor",
+    description: "Covers RF signal modulation, superheterodyne receivers, spectrum analysis, and Software Defined Radio (USRP) transmission.",
+    recommendedEquipment: [
+      "Ettus Research USRP B210 Software Defined Radio",
+      "Rohde & Schwarz FSH8 Handheld Spectrum Analyzer (9 kHz - 8 GHz)",
+      "Keysight N5181A MXG RF Analog Signal Generator",
+      "High-Frequency 50Ω Coaxial SMA Cables and Attenuators",
+    ],
+    practicals: [
+      {
+        number: 1,
+        title: "Amplitude Modulation (AM/DSB-SC) and Spectrum Analysis",
+        objective: "Generate standard AM and DSB-SC modulated signals, measure modulation index (m), sideband power distribution, and spectral bandwidth.",
+        componentsAndEquipment: ["Keysight N5181A RF Generator", "Rigol DG1022Z Generator", "Rohde & Schwarz FSH8", "Rigol DS1054Z"],
+        circuitSetup: "Carrier fc = 10 MHz (from Keysight N5181A), Message fm = 10 kHz (from Rigol DG1022Z). Connect to analog multiplier module. Route output to Spectrum Analyzer via 20 dB RF attenuator.",
+        procedure: [
+          "Observe modulated envelope on oscilloscope in time domain; determine Vmax and Vmin to compute modulation index m = (Vmax - Vmin) / (Vmax + Vmin).",
+          "Observe spectral components on R&S FSH8 Spectrum Analyzer: Identify carrier peak at 10 MHz and upper/lower sidebands at (fc + fm) and (fc - fm).",
+          "Verify sideband power is 6 dB below carrier for m = 1.0.",
+        ],
+        measurementGuide: [
+          "Set Spectrum Analyzer RBW (Resolution Bandwidth) to 1 kHz and VBW to 1 kHz for clear sideband separation.",
+          "Always insert 20 dB inline RF attenuator before spectrum analyzer input to prevent mixer overload.",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Intermodulation distortion peaks appear -> Carrier power exceeds linear mixer input; reduce RF generator output level to -10 dBm.",
+        ],
+        safetyRules: ["Never connect RF generator directly to spectrum analyzer without checking signal power level. Maximum input is +20 dBm."],
+      },
+    ],
+  },
+  "EE3301-digital": {
+    id: "EE3301-digital",
+    courseCode: "EE3301",
+    title: "Digital Systems & Microcontrollers Laboratory Manual",
+    department: "Department of Electrical & Information Engineering",
+    semester: "Semester 5",
+    labName: "24 × 7 Undergraduate Development Project Laboratory",
+    location: "Block D, 4th Floor",
+    description: "Embedded microcontroller programming (ARM Cortex-M4), FPGA digital logic synthesis, and enterprise network switch administration.",
+    recommendedEquipment: [
+      "STM32F4 Discovery ARM Cortex-M4 Development Board",
+      "Altera / Xilinx FPGA Cyclone IV Development Kit",
+      "Cisco Catalyst 2960 Switch & Cisco 1941 Router",
+      "Tektronix MDO3104 Mixed-Signal Oscilloscope & Logic Analyzer",
+    ],
+    practicals: [
+      {
+        number: 1,
+        title: "STM32 ARM Cortex-M4 Timer PWM Generation & ADC Sensor Acquisition",
+        objective: "Configure hardware timers (TIM1/TIM2) for complementary PWM motor drive and setup continuous DMA-based ADC sampling.",
+        componentsAndEquipment: ["STM32F4 Discovery Board", "Segger J-Link Debugger", "Rigol DS1054Z", "Rotary Potentiometer"],
+        circuitSetup: "Connect Potentiometer wiper to STM32 Pin PA1 (ADC1_IN1). Connect PWM output Pin PA8 (TIM1_CH1) to Oscilloscope CH1.",
+        procedure: [
+          "Initialize STM32CubeIDE project for STM32F407VG microcontroller.",
+          "Configure System Clock to 168 MHz using external 8 MHz crystal oscillator PLL.",
+          "Set Timer 1 Prescaler = 167 and Auto-Reload Register (ARR) = 999 for 1 kHz PWM frequency.",
+          "Implement ADC interrupt service routine to map 12-bit ADC value (0-4095) directly to Pulse Width Capture/Compare register (CCR1).",
+          "Observe PWM duty cycle variation on oscilloscope as potentiometer is rotated from 0% to 100%.",
+        ],
+        measurementGuide: [
+          "Use oscilloscope frequency measurement and duty cycle measurement markers for jitter verification.",
+        ],
+        troubleshootingScenarios: [
+          "Scenario A: Timer does not generate PWM -> Ensure HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) is explicitly called in main initialization.",
+        ],
+        safetyRules: ["Do not exceed 3.3V on any STM32 GPIO input pin. Connecting 5V to non-tolerant pins will permanently destroy the microcontroller port."],
+      },
+    ],
+  },
+};
+
+export function findLabManual(query: string): DepartmentLabManual | null {
+  const q = query.toLowerCase().trim();
+  for (const [key, manual] of Object.entries(DEPARTMENT_LAB_MANUALS)) {
+    if (
+      key.toLowerCase().includes(q) ||
+      manual.courseCode.toLowerCase().includes(q) ||
+      manual.title.toLowerCase().includes(q) ||
+      manual.labName.toLowerCase().includes(q) ||
+      q.includes(manual.courseCode.toLowerCase()) ||
+      q.includes(key.toLowerCase()) ||
+      q.includes(manual.title.toLowerCase())
+    ) {
+      return manual;
+    }
+  }
+  return null;
+}
+
