@@ -361,7 +361,7 @@ export default function AdminLabsPage() {
 
   return (
     <AppShell
-      title="Admin & Technician — Semester & Group Management"
+      title="Semester & Group Management"
       subtitle="Manage student group allocations (7 students / group), modules, and academic practicals"
     >
       {success && <SuccessBanner msg={success} />}
