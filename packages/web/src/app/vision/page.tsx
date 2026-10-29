@@ -168,30 +168,32 @@ const LABS = [
 ];
 
 // ── Default CCTV Cameras across all 6 Department Laboratories ─────────────────
+const CCTV_STORAGE_KEY = "elabs_cctv_streams_v2";
+
 const DEFAULT_CCTV_STREAMS: Record<number, CCTVCamera[]> = {
   1: [
-    { id: "cctv_hv_1", name: "High Voltage Bay 1 (Impulse Area)", url: "rtsp://127.0.0.1:8554/hv-bay1", location: "Block C, Ground Floor" },
-    { id: "cctv_hv_2", name: "100kV AC Transformer Test Cell", url: "rtsp://127.0.0.1:8554/hv-cell", location: "Block C, Ground Floor" },
+    { id: "cctv_pwr_1", name: "Entrance Cam", url: "rtsp://127.0.0.1:8554/power-cam1", location: "Block C, Ground Floor" },
+    { id: "cctv_pwr_2", name: "Wall Cam", url: "rtsp://127.0.0.1:8554/power-cam2", location: "Block C, Ground Floor" },
   ],
   2: [
-    { id: "cctv_em_1", name: "Motor Dynamometer Test Benches", url: "rtsp://127.0.0.1:8554/machines-dyno", location: "Block C, 1st Floor" },
-    { id: "cctv_em_2", name: "Siemens Sinamics VFD Drive Stations", url: "rtsp://127.0.0.1:8554/machines-vfd", location: "Block C, 1st Floor" },
+    { id: "cctv_em_1", name: "Entrance Cam", url: "rtsp://127.0.0.1:8554/machines-cam1", location: "Block C, 1st Floor" },
+    { id: "cctv_em_2", name: "Wall Cam", url: "rtsp://127.0.0.1:8554/machines-cam2", location: "Block C, 1st Floor" },
   ],
   3: [
-    { id: "cctv_mps_1", name: "Electronics Lab Entrance & Main Aisle", url: "rtsp://127.0.0.1:8554/power-entrance", location: "Block A, 2nd Floor" },
-    { id: "cctv_mps_2", name: "Oscilloscope & Measurement Workbenches", url: "rtsp://127.0.0.1:8554/electronics-bench", location: "Block A, 2nd Floor" },
+    { id: "cctv_el_1", name: "Entrance Cam", url: "rtsp://127.0.0.1:8554/electronics-cam1", location: "Block A, 2nd Floor" },
+    { id: "cctv_el_2", name: "Wall Cam", url: "rtsp://127.0.0.1:8554/electronics-cam2", location: "Block A, 2nd Floor" },
   ],
   4: [
-    { id: "cctv_cm_1", name: "RF & USRP SDR Test Stations", url: "rtsp://127.0.0.1:8554/comm-rf", location: "Block B, 1st Floor" },
-    { id: "cctv_cm_2", name: "Spectrum Analyzer & Antenna Bay", url: "rtsp://127.0.0.1:8554/comm-spectrum", location: "Block B, 1st Floor" },
+    { id: "cctv_cm_1", name: "Entrance Cam", url: "rtsp://127.0.0.1:8554/comm-cam1", location: "Block B, 1st Floor" },
+    { id: "cctv_cm_2", name: "Wall Cam", url: "rtsp://127.0.0.1:8554/comm-cam2", location: "Block B, 1st Floor" },
   ],
   5: [
-    { id: "cctv_cie_1", name: "CIE Front Entrance & Cisco Rack 1", url: "rtsp://127.0.0.1:8554/cie-main", location: "Block C, 4th Floor" },
-    { id: "cctv_cie_2", name: "Computing Cluster & Network Switches", url: "rtsp://127.0.0.1:8554/cie-cluster", location: "Block C, 4th Floor" },
+    { id: "cctv_ie_1", name: "Entrance Cam", url: "rtsp://127.0.0.1:8554/info-cam1", location: "Block C, 4th Floor" },
+    { id: "cctv_ie_2", name: "Wall Cam", url: "rtsp://127.0.0.1:8554/info-cam2", location: "Block C, 4th Floor" },
   ],
   6: [
-    { id: "cctv_ur_1", name: "PCB Fabrication & Soldering Workstations", url: "rtsp://127.0.0.1:8554/proj-pcb", location: "Block D, 4th Floor" },
-    { id: "cctv_ur_2", name: "3D Prototyping & CNC Machine Area", url: "rtsp://127.0.0.1:8554/proj-3dprint", location: "Block D, 4th Floor" },
+    { id: "cctv_ur_1", name: "Entrance Cam", url: "rtsp://127.0.0.1:8554/project-cam1", location: "Block D, 4th Floor" },
+    { id: "cctv_ur_2", name: "Wall Cam", url: "rtsp://127.0.0.1:8554/project-cam2", location: "Block D, 4th Floor" },
   ],
 };
 
@@ -217,15 +219,15 @@ export default function VisionMonitoringPage() {
   // Lab Selector and CCTV streams states
   const [selectedLabId, setSelectedLabId] = useState<number>(3);
   const [cctvStreams, setCctvStreams]     = useState<Record<number, CCTVCamera[]>>(DEFAULT_CCTV_STREAMS);
-  const [activeStreamId, setActiveStreamId] = useState<string | null>("cctv_mps_1");
+  const [activeStreamId, setActiveStreamId] = useState<string | null>("cctv_el_1");
 
   // Active camera per lab in the 3x2 grid view
   const [labActiveCam, setLabActiveCam] = useState<Record<number, string>>({
-    1: "cctv_hv_1",
+    1: "cctv_pwr_1",
     2: "cctv_em_1",
-    3: "cctv_mps_1",
+    3: "cctv_el_1",
     4: "cctv_cm_1",
-    5: "cctv_cie_1",
+    5: "cctv_ie_1",
     6: "cctv_ur_1",
   });
 
@@ -252,12 +254,30 @@ export default function VisionMonitoringPage() {
     selectedLabIdRef.current = selectedLabId;
   }, [selectedLabId]);
 
-  // Load and save CCTV streams from localStorage with guaranteed 6-lab initialization
+  // Load and save CCTV streams from localStorage with guaranteed 6-lab initialization & migration
   useEffect(() => {
-    const saved = localStorage.getItem("elabs_cctv_streams");
+    // Migration: clear old storage if present
+    const oldSaved = localStorage.getItem("elabs_cctv_streams");
+    if (oldSaved) {
+      localStorage.removeItem("elabs_cctv_streams");
+    }
+
+    const saved = localStorage.getItem(CCTV_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        const savedStr = JSON.stringify(parsed);
+        // If saved data has old dummy equipment names, reset to clean defaults
+        const hasOutdatedNames = /transformer|dynamometer|sinamics|impulse|usrp|cisco|bay 1/i.test(savedStr);
+
+        if (hasOutdatedNames) {
+          localStorage.setItem(CCTV_STORAGE_KEY, JSON.stringify(DEFAULT_CCTV_STREAMS));
+          setCctvStreams(DEFAULT_CCTV_STREAMS);
+          setActiveStreamId("cctv_el_1");
+          setCctvUrl("rtsp://127.0.0.1:8554/electronics-cam1");
+          return;
+        }
+
         // Ensure all 6 labs (1..6) have their default streams if missing in parsed
         const merged: Record<number, CCTVCamera[]> = { ...DEFAULT_CCTV_STREAMS };
         for (const lab of LABS) {
@@ -266,7 +286,7 @@ export default function VisionMonitoringPage() {
           }
         }
         setCctvStreams(merged);
-        localStorage.setItem("elabs_cctv_streams", JSON.stringify(merged));
+        localStorage.setItem(CCTV_STORAGE_KEY, JSON.stringify(merged));
         if (merged[3] && merged[3].length > 0) {
           setActiveStreamId(merged[3][0].id);
           setCctvUrl(merged[3][0].url);
@@ -275,10 +295,10 @@ export default function VisionMonitoringPage() {
         console.error(e);
       }
     } else {
-      localStorage.setItem("elabs_cctv_streams", JSON.stringify(DEFAULT_CCTV_STREAMS));
+      localStorage.setItem(CCTV_STORAGE_KEY, JSON.stringify(DEFAULT_CCTV_STREAMS));
       setCctvStreams(DEFAULT_CCTV_STREAMS);
-      setActiveStreamId("cctv_mps_1");
-      setCctvUrl("rtsp://127.0.0.1:8554/power-entrance");
+      setActiveStreamId("cctv_el_1");
+      setCctvUrl("rtsp://127.0.0.1:8554/electronics-cam1");
     }
   }, []);
 
@@ -343,7 +363,7 @@ export default function VisionMonitoringPage() {
     };
 
     setCctvStreams(nextStreams);
-    localStorage.setItem("elabs_cctv_streams", JSON.stringify(nextStreams));
+    localStorage.setItem(CCTV_STORAGE_KEY, JSON.stringify(nextStreams));
     
     setSelectedLabId(addStreamLabId);
     setActiveStreamId(newStream.id);
@@ -363,7 +383,7 @@ export default function VisionMonitoringPage() {
     };
 
     setCctvStreams(nextStreams);
-    localStorage.setItem("elabs_cctv_streams", JSON.stringify(nextStreams));
+    localStorage.setItem(CCTV_STORAGE_KEY, JSON.stringify(nextStreams));
 
     if (activeStreamId === streamId) {
       const remaining = nextStreams[selectedLabId] || [];
@@ -791,7 +811,7 @@ export default function VisionMonitoringPage() {
                             }}
                           >
                             <Video size={11} />
-                            <span>{s.name.replace(/ \(.*?\)/, "")}</span>
+                            <span>{s.name}</span>
                           </button>
                         );
                       })}
@@ -1274,7 +1294,7 @@ export default function VisionMonitoringPage() {
                 <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>CAMERA NAME / ZONE</label>
                 <input
                   required
-                  placeholder="e.g. High Voltage Test Bench Cam 2"
+                  placeholder="e.g. Entrance Cam, Wall Cam, Camera 2"
                   value={addStreamName}
                   onChange={e => setAddStreamName(e.target.value)}
                   style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "9px 12px", fontSize: "0.85rem", color: "var(--text-main)", outline: "none" }}
