@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
 import Link from "next/link";
@@ -97,7 +97,15 @@ export default function LabsPage() {
     ])
       .then(([labsRes, semRes]) => {
         setLabs(labsRes.labs ?? []);
-        setSemesters(semRes.semesters ?? []);
+        const rawSems = (semRes.semesters ?? []) as Semester[];
+        const map = new Map<number, Semester>();
+        for (const s of rawSems) {
+          const existing = map.get(s.level);
+          if (!existing || (s.moduleCount ?? 0) > (existing.moduleCount ?? 0)) {
+            map.set(s.level, s);
+          }
+        }
+        setSemesters(Array.from(map.values()).sort((a, b) => a.level - b.level));
       })
       .catch((err) => {
         console.error("Labs page load error:", err);
@@ -105,6 +113,17 @@ export default function LabsPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const uniqueSemesters = useMemo(() => {
+    const map = new Map<number, Semester>();
+    for (const s of semesters) {
+      const existing = map.get(s.level);
+      if (!existing || (s.moduleCount ?? 0) > (existing.moduleCount ?? 0)) {
+        map.set(s.level, s);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.level - b.level);
+  }, [semesters]);
 
   return (
     <AppShell
@@ -484,7 +503,7 @@ export default function LabsPage() {
             paddingBottom: 32,
           }}
         >
-          {semesters.map((sem) => {
+          {uniqueSemesters.map((sem) => {
             const color = GROUP_COLORS[sem.level] ?? "var(--text-muted)";
             const isRnD = sem.level === 9;
             const yearStr = isRnD ? "Research" : `Year ${Math.ceil(sem.level / 2)}`;
