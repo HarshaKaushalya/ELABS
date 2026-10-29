@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
 import { 
-  Zap, Sun, Activity, Wrench, Radio, Laptop, Network, FlaskConical,
+  Zap, Activity, Wrench, Radio, Network, FlaskConical,
   Users, UserPlus, TrendingUp, Flame, Cloud, Play, Square, RotateCcw,
-  FileVideo, Video, Webcam, Eye, ClipboardList, Trash2, X, Plus,
-  AlertTriangle, UploadCloud, VideoOff, PlayCircle
+  FileVideo, Video, Eye, ClipboardList, Trash2, X, Plus,
+  AlertTriangle, UploadCloud, VideoOff, PlayCircle, Grid, Monitor,
+  Maximize2, Shield, Settings2, Sliders, CheckCircle2
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -27,6 +28,13 @@ interface FrameData {
   image_b64?: string;
   fps?: number; duration_sec?: number; width?: number; height?: number;
   detail?: string;
+}
+
+interface CCTVCamera {
+  id: string;
+  name: string;
+  url: string;
+  location?: string;
 }
 
 const VISION_URL = process.env.NEXT_PUBLIC_VISION_BASE ?? "http://127.0.0.1:8002";
@@ -62,27 +70,27 @@ function drawOverlay(canvas: HTMLCanvasElement, data: FrameData) {
     const color = ACT_COLOR[activity] ?? "#3d83f6";
 
     ctx.strokeStyle = color;
-    ctx.lineWidth   = 2;
+    ctx.lineWidth   = 2.5;
     ctx.setLineDash(is_new ? [6, 3] : []);
     ctx.strokeRect(x1, y1, w, h);
     ctx.setLineDash([]);
 
     // Label bar
-    ctx.fillStyle = color + "cc";
+    ctx.fillStyle = color + "dd";
     ctx.fillRect(x1, y1 - 24, w, 24);
     ctx.fillStyle = "#fff";
     ctx.font = "bold 13px monospace";
-    ctx.fillText(`#${id} ${activity} ${Math.round(conf * 100)}%`, x1 + 4, y1 - 7);
+    ctx.fillText(`#${id} ${activity.toUpperCase()} ${Math.round(conf * 100)}%`, x1 + 5, y1 - 7);
   }
 
   // Pose skeletons
   for (const pose of data.poses) {
     const kps = pose.keypoints;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     for (const [a, b] of SKELETON) {
       const ka = kps[a], kb = kps[b];
       if (!ka || !kb || ka.conf < 0.3 || kb.conf < 0.3) continue;
-      ctx.strokeStyle = "#ffffff80";
+      ctx.strokeStyle = "#ffffff90";
       ctx.beginPath();
       ctx.moveTo(ka.x, ka.y);
       ctx.lineTo(kb.x, kb.y);
@@ -93,7 +101,7 @@ function drawOverlay(canvas: HTMLCanvasElement, data: FrameData) {
       if (!kp || kp.conf < 0.3) continue;
       ctx.fillStyle = KP_COLORS[i] ?? "#fff";
       ctx.beginPath();
-      ctx.arc(kp.x, kp.y, 4, 0, 2 * Math.PI);
+      ctx.arc(kp.x, kp.y, 4.5, 0, 2 * Math.PI);
       ctx.fill();
     }
   }
@@ -104,20 +112,20 @@ function drawOverlay(canvas: HTMLCanvasElement, data: FrameData) {
       canvas.width / 2, canvas.height * 0.8, 0,
       canvas.width / 2, canvas.height * 0.8, canvas.height * 0.5,
     );
-    grad.addColorStop(0, "rgba(255,60,0,0.35)");
+    grad.addColorStop(0, "rgba(255,60,0,0.4)");
     grad.addColorStop(1, "rgba(255,60,0,0)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#ff3d00";
-    ctx.font = `bold ${Math.max(18, canvas.height * 0.03)}px sans-serif`;
-    ctx.fillText("FIRE DETECTED", 16, 44);
+    ctx.font = `bold ${Math.max(20, canvas.height * 0.035)}px sans-serif`;
+    ctx.fillText("🔥 FIRE HAZARD DETECTED", 20, 50);
   }
   if (data.smoke) {
-    ctx.fillStyle = "rgba(180,180,180,0.12)";
+    ctx.fillStyle = "rgba(180,180,180,0.18)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#ccc";
-    ctx.font = `bold ${Math.max(18, canvas.height * 0.03)}px sans-serif`;
-    ctx.fillText("SMOKE DETECTED", 16, data.fire ? 80 : 44);
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = `bold ${Math.max(20, canvas.height * 0.035)}px sans-serif`;
+    ctx.fillText("☁ SMOKE DETECTED", 20, data.fire ? 90 : 50);
   }
 }
 
@@ -127,10 +135,10 @@ function AlertToast({ alerts }: { alerts: { msg: string; type: string; ts: numbe
     fire: "#ff4d57", smoke: "#94a3b8", entry: "#18d18f", exit: "#f3ae2a"
   };
   return (
-    <div style={{ position: "absolute", top: 8, right: 8, display: "flex", flexDirection: "column", gap: 6, zIndex: 10, maxWidth: 240, pointerEvents: "none" }}>
+    <div style={{ position: "absolute", top: 12, right: 12, display: "flex", flexDirection: "column", gap: 8, zIndex: 10, maxWidth: 280, pointerEvents: "none" }}>
       {alerts.slice(-4).reverse().map(a => (
-        <div key={a.ts} style={{ background: `${colors[a.type] ?? "#3d83f6"}22`, border: `1px solid ${colors[a.type] ?? "#3d83f6"}60`, borderRadius: 8, padding: "8px 12px", color: colors[a.type] ?? "var(--text-main)", fontSize: "0.78rem", fontWeight: 600, backdropFilter: "blur(8px)", display: "flex", alignItems: "center", gap: 8 }}>
-          {a.type === "fire" ? <Flame size={14} /> : a.type === "smoke" ? <Cloud size={14} /> : a.type === "entry" ? <UserPlus size={14} /> : <Users size={14} />}
+        <div key={a.ts} style={{ background: `${colors[a.type] ?? "#3d83f6"}25`, border: `1px solid ${colors[a.type] ?? "#3d83f6"}70`, borderRadius: 8, padding: "9px 14px", color: colors[a.type] ?? "var(--text-main)", fontSize: "0.82rem", fontWeight: 700, backdropFilter: "blur(10px)", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 4px 14px rgba(0,0,0,0.2)" }}>
+          {a.type === "fire" ? <Flame size={16} /> : a.type === "smoke" ? <Cloud size={16} /> : a.type === "entry" ? <UserPlus size={16} /> : <Users size={16} />}
           {a.msg}
         </div>
       ))}
@@ -141,48 +149,95 @@ function AlertToast({ alerts }: { alerts: { msg: string; type: string; ts: numbe
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function Stat({ label, value, color, icon: Icon }: { label: string; value: string | number; color: string; icon: React.ComponentType<any> }) {
   return (
-    <div style={{ background: "var(--bg-card)", border: `1px solid ${color}30`, borderRadius: 12, padding: "14px 18px", flex: 1, minWidth: 110 }}>
+    <div style={{ background: "var(--bg-card)", border: `1px solid ${color}35`, borderRadius: 12, padding: "14px 18px", flex: 1, minWidth: 130 }}>
       <div style={{ color, marginBottom: 6 }}><Icon size={20} /></div>
-      <div style={{ color, fontSize: "1.5rem", fontWeight: 700, fontFamily: "monospace" }}>{value}</div>
-      <div style={{ color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 600, letterSpacing: 1 }}>{label}</div>
+      <div style={{ color, fontSize: "1.6rem", fontWeight: 700, fontFamily: "monospace" }}>{value}</div>
+      <div style={{ color: "var(--text-muted)", fontSize: "0.72rem", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" }}>{label}</div>
     </div>
   );
 }
 
-// ── Fixed laboratory sections ──────────────────────────────────────────────────
+// ── Department Laboratories (6 Labs) ──────────────────────────────────────────
 const LABS = [
-  { id: 1, name: "Power Systems and High Voltage Laboratory", icon: Zap },
-  { id: 2, name: "Electric Machines and Power Electronics Laboratory", icon: Activity },
-  { id: 3, name: "Electronics and Measurement Laboratory", icon: Wrench },
-  { id: 4, name: "Communication and Systems Engineering Laboratory", icon: Radio },
-  { id: 5, name: "Information Engineering Laboratory", icon: Network },
-  { id: 6, name: "24 × 7 Undergraduate Development Project Laboratory", icon: FlaskConical }
+  { id: 1, name: "Power Systems and High Voltage Laboratory", shortName: "Power Systems Lab", location: "Block C, Ground Floor", icon: Zap },
+  { id: 2, name: "Electric Machines and Power Electronics Laboratory", shortName: "Electric Machines Lab", location: "Block C, 1st Floor", icon: Activity },
+  { id: 3, name: "Electronics and Measurement Laboratory", shortName: "Electronics Lab", location: "Block A, 2nd Floor", icon: Wrench },
+  { id: 4, name: "Communication and Systems Engineering Laboratory", shortName: "Communication Lab", location: "Block B, 1st Floor", icon: Radio },
+  { id: 5, name: "Information Engineering Laboratory", shortName: "Information Eng Lab", location: "Block C, 4th Floor", icon: Network },
+  { id: 6, name: "24 × 7 Undergraduate Development Project Laboratory", shortName: "24 × 7 Project Lab", location: "Block D, 4th Floor", icon: FlaskConical }
 ];
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Default CCTV Cameras across all 6 Department Laboratories ─────────────────
+const DEFAULT_CCTV_STREAMS: Record<number, CCTVCamera[]> = {
+  1: [
+    { id: "cctv_hv_1", name: "High Voltage Bay 1 (Impulse Area)", url: "rtsp://127.0.0.1:8554/hv-bay1", location: "Block C, Ground Floor" },
+    { id: "cctv_hv_2", name: "100kV AC Transformer Test Cell", url: "rtsp://127.0.0.1:8554/hv-cell", location: "Block C, Ground Floor" },
+  ],
+  2: [
+    { id: "cctv_em_1", name: "Motor Dynamometer Test Benches", url: "rtsp://127.0.0.1:8554/machines-dyno", location: "Block C, 1st Floor" },
+    { id: "cctv_em_2", name: "Siemens Sinamics VFD Drive Stations", url: "rtsp://127.0.0.1:8554/machines-vfd", location: "Block C, 1st Floor" },
+  ],
+  3: [
+    { id: "cctv_mps_1", name: "Electronics Lab Entrance & Main Aisle", url: "rtsp://127.0.0.1:8554/power-entrance", location: "Block A, 2nd Floor" },
+    { id: "cctv_mps_2", name: "Oscilloscope & Measurement Workbenches", url: "rtsp://127.0.0.1:8554/electronics-bench", location: "Block A, 2nd Floor" },
+  ],
+  4: [
+    { id: "cctv_cm_1", name: "RF & USRP SDR Test Stations", url: "rtsp://127.0.0.1:8554/comm-rf", location: "Block B, 1st Floor" },
+    { id: "cctv_cm_2", name: "Spectrum Analyzer & Antenna Bay", url: "rtsp://127.0.0.1:8554/comm-spectrum", location: "Block B, 1st Floor" },
+  ],
+  5: [
+    { id: "cctv_cie_1", name: "CIE Front Entrance & Cisco Rack 1", url: "rtsp://127.0.0.1:8554/cie-main", location: "Block C, 4th Floor" },
+    { id: "cctv_cie_2", name: "Computing Cluster & Network Switches", url: "rtsp://127.0.0.1:8554/cie-cluster", location: "Block C, 4th Floor" },
+  ],
+  6: [
+    { id: "cctv_ur_1", name: "PCB Fabrication & Soldering Workstations", url: "rtsp://127.0.0.1:8554/proj-pcb", location: "Block D, 4th Floor" },
+    { id: "cctv_ur_2", name: "3D Prototyping & CNC Machine Area", url: "rtsp://127.0.0.1:8554/proj-3dprint", location: "Block D, 4th Floor" },
+  ],
+};
+
+// ── Main Page Component ───────────────────────────────────────────────────────
 export default function VisionMonitoringPage() {
   const videoRef  = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef     = useRef<WebSocket | null>(null);
 
-  const [phase, setPhase]           = useState<"idle" | "uploading" | "live" | "done" | "error">("idle");
-  const [file, setFile]             = useState<File | null>(null);
-  const [cctvUrl, setCctvUrl]       = useState("");
-  const [sourceTab, setSourceTab]   = useState<"upload" | "cctv" | "webcam">("upload");
-  const [error, setError]           = useState("");
-  const [uploadPct, setUploadPct]   = useState(0);
+  // View state: Multi-feed Grid View vs Single-Stream Focus & AI
+  const [viewMode, setViewMode] = useState<"grid" | "focus">("grid");
+  const [focusLayout, setFocusLayout] = useState<"dual" | "ai-only" | "orig-only">("dual");
 
-  // ── Lab Selector and CCTV streams states
+  // Stream & analysis states
+  const [phase, setPhase]         = useState<"idle" | "uploading" | "live" | "done" | "error">("idle");
+  const [file, setFile]           = useState<File | null>(null);
+  const [cctvUrl, setCctvUrl]     = useState("");
+  // Note: Webcam has been removed as requested; only cctv and upload modes remain
+  const [sourceTab, setSourceTab] = useState<"cctv" | "upload">("cctv");
+  const [error, setError]         = useState("");
+  const [uploadPct, setUploadPct] = useState(0);
+
+  // Lab Selector and CCTV streams states
   const [selectedLabId, setSelectedLabId] = useState<number>(3);
-  const [cctvStreams, setCctvStreams] = useState<Record<number, { id: string; name: string; url: string }[]>>({});
-  const [activeStreamId, setActiveStreamId] = useState<string | null>(null);
+  const [cctvStreams, setCctvStreams]     = useState<Record<number, CCTVCamera[]>>(DEFAULT_CCTV_STREAMS);
+  const [activeStreamId, setActiveStreamId] = useState<string | null>("cctv_mps_1");
+  const [gridFilterLabId, setGridFilterLabId] = useState<number | "all">("all");
 
-  // Add stream form states
+  // Add camera form modal states
   const [addStreamName, setAddStreamName] = useState("");
-  const [addStreamUrl, setAddStreamUrl] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [addStreamUrl, setAddStreamUrl]   = useState("");
+  const [addStreamLabId, setAddStreamLabId] = useState<number>(3);
+  const [showAddForm, setShowAddForm]     = useState(false);
 
-  // Keep ref of lab ID to read inside WebSocket handle callback without recreation
+  // Clock time for CCTV OSD overlay
+  const [clockTime, setClockTime] = useState("");
+  useEffect(() => {
+    const updateTime = () => {
+      const d = new Date();
+      setClockTime(d.toLocaleTimeString("en-US", { hour12: false }) + "." + String(Math.floor(d.getMilliseconds() / 100)));
+    };
+    updateTime();
+    const timer = setInterval(updateTime, 250);
+    return () => clearInterval(timer);
+  }, []);
+
   const selectedLabIdRef = useRef<number>(3);
   useEffect(() => {
     selectedLabIdRef.current = selectedLabId;
@@ -198,42 +253,24 @@ export default function VisionMonitoringPage() {
         if (parsed[3] && parsed[3].length > 0) {
           setActiveStreamId(parsed[3][0].id);
           setCctvUrl(parsed[3][0].url);
-          setSourceTab("cctv");
         }
       } catch (e) {
         console.error(e);
       }
     } else {
-      const defaults = {
-        6: [
-          { id: "cctv_cie_1", name: "CIE Front Entrance", url: "rtsp://127.0.0.1:8554/cie-main" },
-          { id: "cctv_cie_2", name: "Computing Cluster Cam 2", url: "rtsp://127.0.0.1:8554/cie-cluster" }
-        ],
-        3: [
-          { id: "cctv_mps_1", name: "Power Lab Entrance", url: "rtsp://127.0.0.1:8554/power-entrance" }
-        ],
-        14: [
-          { id: "cctv_net_1", name: "Networking Main Rack", url: "rtsp://127.0.0.1:8554/net-rack" }
-        ]
-      };
-      localStorage.setItem("elabs_cctv_streams", JSON.stringify(defaults));
-      setCctvStreams(defaults);
+      localStorage.setItem("elabs_cctv_streams", JSON.stringify(DEFAULT_CCTV_STREAMS));
+      setCctvStreams(DEFAULT_CCTV_STREAMS);
       setActiveStreamId("cctv_mps_1");
       setCctvUrl("rtsp://127.0.0.1:8554/power-entrance");
-      setSourceTab("cctv");
     }
   }, []);
 
-  // ── Video source for the <video> element (blob URL or stream)
+  // Video source for original feed
   const [videoSrcUrl, setVideoSrcUrl] = useState<string>("");
   const [sampleVideo, setSampleVideo] = useState<{ path: string; filename: string; url: string } | null>(null);
   const [isSampleLoading, setIsSampleLoading] = useState(false);
 
-  // WebRTC webcam references
-  const webcamStreamRef = useRef<MediaStream | null>(null);
-  const captureTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // ── Analytics state
+  // Analytics state
   const [lastFrame, setLastFrame]   = useState<FrameData | null>(null);
   const [peakOcc, setPeakOcc]       = useState(0);
   const [totalSeen, setTotalSeen]   = useState(0);
@@ -241,21 +278,19 @@ export default function VisionMonitoringPage() {
   const [sessionLog, setSessionLog] = useState<{ time: number; event: string; color: string }[]>([]);
   const [actCounts, setActCounts]   = useState({ standing: 0, walking: 0, running: 0 });
 
-  // Debounce repeated alerts (same type within 3s)
   const lastAlertAt = useRef<Record<string, number>>({});
   const lastSyncedCountRef = useRef<number>(-1);
 
   // Clean up streaming on unmount
   useEffect(() => {
     return () => {
-      if (captureTimerRef.current) clearInterval(captureTimerRef.current);
-      if (webcamStreamRef.current) webcamStreamRef.current.getTracks().forEach(t => t.stop());
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
 
   const isLive = phase === "live";
 
+  // Handle lab selection
   const handleLabChange = (labId: number) => {
     if (isLive) return;
     setSelectedLabId(labId);
@@ -272,24 +307,28 @@ export default function VisionMonitoringPage() {
     }
   };
 
+  // Add camera
   const handleAddStream = (e: React.FormEvent) => {
     e.preventDefault();
     if (!addStreamName.trim() || !addStreamUrl.trim()) return;
 
-    const newStream = {
+    const targetLab = LABS.find(l => l.id === addStreamLabId) || LABS[0];
+    const newStream: CCTVCamera = {
       id: `stream_${Date.now()}`,
       name: addStreamName.trim(),
-      url: addStreamUrl.trim()
+      url: addStreamUrl.trim(),
+      location: targetLab.location
     };
 
     const nextStreams = {
       ...cctvStreams,
-      [selectedLabId]: [...(cctvStreams[selectedLabId] || []), newStream]
+      [addStreamLabId]: [...(cctvStreams[addStreamLabId] || []), newStream]
     };
 
     setCctvStreams(nextStreams);
     localStorage.setItem("elabs_cctv_streams", JSON.stringify(nextStreams));
     
+    setSelectedLabId(addStreamLabId);
     setActiveStreamId(newStream.id);
     setCctvUrl(newStream.url);
     setSourceTab("cctv");
@@ -299,10 +338,11 @@ export default function VisionMonitoringPage() {
     setShowAddForm(false);
   };
 
-  const handleDeleteStream = (streamId: string) => {
+  // Delete camera
+  const handleDeleteStream = (labId: number, streamId: string) => {
     const nextStreams = {
       ...cctvStreams,
-      [selectedLabId]: (cctvStreams[selectedLabId] || []).filter(s => s.id !== streamId)
+      [labId]: (cctvStreams[labId] || []).filter(s => s.id !== streamId)
     };
 
     setCctvStreams(nextStreams);
@@ -321,7 +361,7 @@ export default function VisionMonitoringPage() {
     }
   };
 
-  // ── Handle incoming WS frame ──────────────────────────────────────────────
+  // Handle incoming WS frame
   const handleFrameData = useCallback((data: FrameData) => {
     if (data.type === "meta")  return;
     if (data.type === "end")   { setPhase("done"); return; }
@@ -371,7 +411,7 @@ export default function VisionMonitoringPage() {
       ].slice(-50));
     }
 
-    // ── Draw on AI canvas ─────────────────────────────────────────────────
+    // Draw on AI canvas
     const cnv = canvasRef.current;
     if (!cnv) return;
 
@@ -389,7 +429,7 @@ export default function VisionMonitoringPage() {
     }
   }, []);
 
-  // ── Load sample video from vision backend ───────────────────────────────────
+  // Load sample video
   const loadSampleVideo = async () => {
     try {
       setIsSampleLoading(true);
@@ -411,8 +451,8 @@ export default function VisionMonitoringPage() {
     }
   };
 
-  // ── Start analysis ────────────────────────────────────────────────────────
-  const startLive = useCallback(async () => {
+  // Start analysis
+  const startLive = useCallback(async (customCctvUrl?: string) => {
     setError("");
     setPeakOcc(0);
     setTotalSeen(0);
@@ -424,6 +464,8 @@ export default function VisionMonitoringPage() {
 
     let videoPath = "";
     let sessionId = `session_${Date.now()}`;
+
+    const effectiveCctvUrl = customCctvUrl || cctvUrl;
 
     if (sourceTab === "upload") {
       if (file) {
@@ -460,63 +502,24 @@ export default function VisionMonitoringPage() {
         setError("Please select a video file or load the sample lab footage.");
         return;
       }
-
-    } else if (sourceTab === "cctv" && cctvUrl) {
-      videoPath = cctvUrl;
+    } else if (sourceTab === "cctv" && effectiveCctvUrl) {
+      videoPath = effectiveCctvUrl;
       sessionId = `cctv_${Date.now()}`;
-    } else if (sourceTab === "webcam") {
-      sessionId = `webcam_${Date.now()}`;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }
-        });
-        webcamStreamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(console.error);
-        }
-      } catch (err: any) {
-        setError(`Webcam access error: ${err?.message || "Please check camera permissions"}`);
-        return;
-      }
     } else {
-      setError("Please select a video source.");
+      setError("Please select a CCTV camera feed or video file.");
       return;
     }
 
     setPhase("live");
+    setViewMode("focus");
 
     const ws = new WebSocket(`${VISION_WS}/vision/live/ws/${sessionId}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (sourceTab === "webcam") {
-        ws.send(JSON.stringify({ mode: "client_stream", fps: 10 }));
-
-        const offscreenCanvas = document.createElement("canvas");
-        offscreenCanvas.width = 640;
-        offscreenCanvas.height = 480;
-        const offCtx = offscreenCanvas.getContext("2d");
-
-        if (captureTimerRef.current) clearInterval(captureTimerRef.current);
-        captureTimerRef.current = setInterval(() => {
-          if (!videoRef.current || ws.readyState !== WebSocket.OPEN) return;
-          if (videoRef.current.readyState < 2) return;
-
-          if (offCtx) {
-            offscreenCanvas.width = videoRef.current.videoWidth || 640;
-            offscreenCanvas.height = videoRef.current.videoHeight || 480;
-            offCtx.drawImage(videoRef.current, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-            const frameB64 = offscreenCanvas.toDataURL("image/jpeg", 0.65);
-            ws.send(JSON.stringify({ frame_b64: frameB64, time_sec: performance.now() / 1000 }));
-          }
-        }, 110);
-
-      } else {
-        ws.send(JSON.stringify({ path: videoPath, fps: 12 }));
-        if (videoRef.current && sourceTab === "upload") {
-          videoRef.current.play().catch(() => {});
-        }
+      ws.send(JSON.stringify({ path: videoPath, fps: 12 }));
+      if (videoRef.current && sourceTab === "upload") {
+        videoRef.current.play().catch(() => {});
       }
     };
 
@@ -529,20 +532,11 @@ export default function VisionMonitoringPage() {
 
   }, [sourceTab, file, sampleVideo, cctvUrl, handleFrameData]);
 
+  // Stop analysis
   const stopStream = useCallback(() => {
-    if (captureTimerRef.current) {
-      clearInterval(captureTimerRef.current);
-      captureTimerRef.current = null;
-    }
-    if (webcamStreamRef.current) {
-      webcamStreamRef.current.getTracks().forEach(track => track.stop());
-      webcamStreamRef.current = null;
-    }
     if (videoRef.current) {
       videoRef.current.pause();
-      videoRef.current.srcObject = null;
     }
-
     wsRef.current?.send(JSON.stringify({ stop: true }));
     wsRef.current?.close();
     wsRef.current = null;
@@ -569,135 +563,124 @@ export default function VisionMonitoringPage() {
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f?.type.startsWith("video/")) setFile(f);
+    if (f?.type.startsWith("video/")) {
+      setFile(f);
+      setSourceTab("upload");
+    }
   }, []);
+
+  // Quick switch from grid view to focus & analysis on a camera
+  const launchAnalysisOnCamera = (labId: number, cam: CCTVCamera) => {
+    setSelectedLabId(labId);
+    setActiveStreamId(cam.id);
+    setCctvUrl(cam.url);
+    setSourceTab("cctv");
+    setViewMode("focus");
+    startLive(cam.url);
+  };
 
   const currentLab = LABS.find(l => l.id === selectedLabId) || LABS[0];
   const currentStreams = cctvStreams[selectedLabId] || [];
 
+  // All streams across all labs for grid view
+  const allStreamsList: { lab: typeof LABS[0]; cam: CCTVCamera }[] = [];
+  LABS.forEach(lab => {
+    const list = cctvStreams[lab.id] || [];
+    list.forEach(cam => {
+      allStreamsList.push({ lab, cam });
+    });
+  });
+
+  const displayedGridStreams = gridFilterLabId === "all" 
+    ? allStreamsList 
+    : allStreamsList.filter(item => item.lab.id === gridFilterLabId);
+
   return (
-    <AppShell title="Vision Monitoring" subtitle="Live lab monitoring, occupancy headcount, and safety tracking">
-      <style>{`
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-        .lab-btn {
-          width: 100%;
-          text-align: left;
-          background: transparent;
-          border: 1px solid transparent;
-          border-radius: 8px;
-          padding: 10px 14px;
-          color: var(--text-muted);
-          font-size: 0.85rem;
-          font-weight: 500;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .lab-btn:hover {
-          background: var(--panel-2);
-          color: var(--text);
-          border-color: var(--line);
-        }
-        .lab-btn.active {
-          background: rgba(61, 131, 246, 0.08);
-          border-color: var(--blue);
-          color: var(--blue);
-          font-weight: 600;
-          box-shadow: inset 0 0 8px rgba(61, 131, 246, 0.05);
-        }
-        .stream-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 8px 12px;
-          border-radius: 6px;
-          background: var(--bg-app);
-          border: 1px solid var(--line);
-          font-size: 0.8rem;
-          color: var(--text);
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .stream-item:hover {
-          border-color: var(--blue);
-          background: rgba(61, 131, 246, 0.03);
-        }
-        .stream-item.active {
-          border-color: var(--cyan);
-          background: rgba(29, 213, 230, 0.05);
-          color: var(--cyan);
-          font-weight: 600;
-        }
-        .stream-item-delete {
-          background: transparent;
-          border: none;
-          color: var(--text-muted);
-          cursor: pointer;
-          font-size: 1.1rem;
-          padding: 0 4px;
-          line-height: 1;
-        }
-        .stream-item-delete:hover {
-          color: var(--red);
-        }
-      `}</style>
-
-      {/* ── Controls bar ── */}
-      <div className="panel" style={{ marginBottom: 16, padding: "16px 20px" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <AppShell title="Vision Monitoring" subtitle="Department CCTV surveillance matrix, live YOLOv8 tracking, and laboratory safety telemetry">
+      {/* ── Top Master Header & View Switcher ── */}
+      <div className="panel" style={{ marginBottom: 16, padding: "14px 20px" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
           
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 10, color: "var(--text)" }}>
-            {(() => {
-              const Icon = currentLab.icon;
-              return <Icon size={18} />;
-            })()}
-            <strong style={{ fontSize: "0.95rem" }}>{currentLab.name}</strong>
+          {/* View mode toggle: Grid View vs Focus View */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-app)", padding: 4, borderRadius: 10, border: "1px solid var(--border-color)" }}>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              style={{
+                display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none",
+                fontWeight: 700, fontSize: "0.84rem", cursor: "pointer", transition: "all 0.2s",
+                background: viewMode === "grid" ? "var(--bg-card)" : "transparent",
+                color: viewMode === "grid" ? "var(--cyan, #1dd5e6)" : "var(--text-muted)",
+                boxShadow: viewMode === "grid" ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
+              }}
+            >
+              <Grid size={15} />
+              <span>CCTV Grid View ({allStreamsList.length} Feeds)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setViewMode("focus")}
+              style={{
+                display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "none",
+                fontWeight: 700, fontSize: "0.84rem", cursor: "pointer", transition: "all 0.2s",
+                background: viewMode === "focus" ? "var(--bg-card)" : "transparent",
+                color: viewMode === "focus" ? "#3d83f6" : "var(--text-muted)",
+                boxShadow: viewMode === "focus" ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
+              }}
+            >
+              <Monitor size={15} />
+              <span>Focus & AI Analysis</span>
+              {isLive && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#18d18f", animation: "pulse 1.2s infinite" }} />}
+            </button>
           </div>
 
-          {/* Source tabs */}
-          <div style={{ display: "flex", background: "var(--bg-app)", borderRadius: 10, border: "1px solid var(--border-color)", overflow: "hidden" }}>
-            {(["upload", "cctv", "webcam"] as const).map(tab => (
-              <button key={tab} onClick={() => setSourceTab(tab)} disabled={isLive}
-                style={{ padding: "8px 18px", border: "none", borderRight: "1px solid var(--border-color)", fontWeight: 600, fontSize: "0.82rem",
-                  cursor: isLive ? "not-allowed" : "pointer", transition: "all 0.2s",
-                  background: sourceTab === tab ? "#3d83f620" : "transparent",
-                  color:      sourceTab === tab ? "#3d83f6"   : "var(--text-muted)" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {tab === "upload" ? <FileVideo size={14} /> : tab === "cctv" ? <Video size={14} /> : <Webcam size={14} />}
-                  {tab === "upload" ? "Video File" : tab === "cctv" ? "CCTV Stream" : "Webcam"}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {!isLive ? (
-            <button onClick={startLive} disabled={phase === "uploading"}
-              style={{ padding: "9px 24px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-              <Play size={14} />
-              {phase === "uploading" ? `Uploading ${uploadPct}%…` : "Start Analysis"}
+          {/* Right actions & status */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => setShowAddForm(true)}
+              disabled={isLive}
+              style={{
+                padding: "8px 16px", background: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderRadius: 8, color: "var(--text-main)", fontSize: "0.82rem", fontWeight: 600,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6
+              }}
+            >
+              <Plus size={14} className="text-cyan-400" />
+              <span>Add Camera Feed</span>
             </button>
-          ) : (
-            <button onClick={stopStream}
-              style={{ padding: "9px 24px", background: "#ff4d5720", border: "1px solid #ff4d5760", borderRadius: 8, color: "#ff4d57", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-              <Square size={14} />
-              Stop
-            </button>
-          )}
 
-          {(phase === "done" || phase === "error") && (
-            <button onClick={reset}
-              style={{ padding: "9px 24px", background: "var(--border-color)", border: "1px solid #2a4060", borderRadius: 8, color: "var(--text-muted)", fontWeight: 600, fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
-              <RotateCcw size={14} />
-              Reset
-            </button>
-          )}
+            {/* Analysis Controls */}
+            {viewMode === "focus" && (
+              <>
+                {!isLive ? (
+                  <button onClick={() => startLive()} disabled={phase === "uploading"}
+                    style={{ padding: "8px 22px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 14px rgba(61, 131, 246, 0.25)" }}>
+                    <Play size={14} />
+                    {phase === "uploading" ? `Uploading ${uploadPct}%…` : "Start Analysis"}
+                  </button>
+                ) : (
+                  <button onClick={stopStream}
+                    style={{ padding: "8px 22px", background: "#ff4d5720", border: "1px solid #ff4d5760", borderRadius: 8, color: "#ff4d57", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Square size={14} />
+                    Stop Analysis
+                  </button>
+                )}
 
-          <div style={{ display: "flex", gap: 8, marginLeft: "auto", alignItems: "center" }}>
-            {isLive && <span style={{ background: "#18d18f20", border: "1px solid #18d18f40", borderRadius: 20, color: "#18d18f", fontSize: "0.75rem", fontWeight: 700, padding: "4px 12px", animation: "pulse 1.5s ease-in-out infinite" }}>● LIVE</span>}
-            {lastFrame?.fire  && <span style={{ background: "#ff4d5720", border: "1px solid #ff4d5760", borderRadius: 20, color: "#ff4d57", fontSize: "0.75rem", fontWeight: 700, padding: "4px 12px", display: "flex", alignItems: "center", gap: 4 }}><Flame size={12} /> FIRE</span>}
-            {lastFrame?.smoke && <span style={{ background: "#94a3b820", border: "1px solid #94a3b860", borderRadius: 20, color: "#94a3b8", fontSize: "0.75rem", fontWeight: 700, padding: "4px 12px", display: "flex", alignItems: "center", gap: 4 }}><Cloud size={12} /> SMOKE</span>}
+                {(phase === "done" || phase === "error") && (
+                  <button onClick={reset}
+                    style={{ padding: "8px 18px", background: "var(--border-color)", border: "1px solid #2a4060", borderRadius: 8, color: "var(--text-muted)", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                    <RotateCcw size={14} />
+                    Reset
+                  </button>
+                )}
+              </>
+            )}
+
+            {isLive && <span style={{ background: "#18d18f20", border: "1px solid #18d18f40", borderRadius: 20, color: "#18d18f", fontSize: "0.75rem", fontWeight: 700, padding: "5px 12px" }}>● LIVE ANALYSIS</span>}
+            {lastFrame?.fire  && <span style={{ background: "#ff4d5725", border: "1px solid #ff4d5770", borderRadius: 20, color: "#ff4d57", fontSize: "0.75rem", fontWeight: 700, padding: "5px 12px", display: "flex", alignItems: "center", gap: 4 }}><Flame size={13} /> FIRE ALERT</span>}
+            {lastFrame?.smoke && <span style={{ background: "#94a3b825", border: "1px solid #94a3b870", borderRadius: 20, color: "#94a3b8", fontSize: "0.75rem", fontWeight: 700, padding: "5px 12px", display: "flex", alignItems: "center", gap: 4 }}><Cloud size={13} /> SMOKE ALERT</span>}
           </div>
         </div>
 
@@ -709,288 +692,469 @@ export default function VisionMonitoringPage() {
         )}
       </div>
 
-      {/* ── Main grid (3 Columns) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr 300px", gap: 14, alignItems: "start" }}>
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 1: MULTI-FEED CCTV GRID VIEW (Department Surveillance Matrix)
+          ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === "grid" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Horizontal Lab Filter Strip */}
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }} className="scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setGridFilterLabId("all")}
+              style={{
+                padding: "8px 16px", borderRadius: 8, fontSize: "0.82rem", fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer", transition: "all 0.15s",
+                background: gridFilterLabId === "all" ? "var(--cyan, #1dd5e6)" : "var(--bg-card)",
+                color: gridFilterLabId === "all" ? "#0b0f19" : "var(--text-muted)",
+                border: `1px solid ${gridFilterLabId === "all" ? "transparent" : "var(--border-color)"}`
+              }}
+            >
+              All Department Labs ({allStreamsList.length} Feeds)
+            </button>
 
-        {/* COLUMN 1: Lab Sections List & Stream manager */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          
-          {/* Labs list panel */}
-          <div className="panel" style={{ padding: 14 }}>
-            <h3 style={{ margin: "0 0 12px", fontSize: "0.88rem", color: "var(--text)", fontWeight: 700, letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 8 }}><FlaskConical size={16} /> LAB SECTIONS</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {LABS.map(l => {
-                const Icon = l.icon;
-                return (
-                  <button
-                    key={l.id}
-                    className={`lab-btn ${selectedLabId === l.id ? "active" : ""}`}
-                    onClick={() => handleLabChange(l.id)}
-                    disabled={isLive}
-                  >
-                    <Icon size={16} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name.replace(" Laboratory", "")}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* CCTV Feed manager panel */}
-          <div className="panel" style={{ padding: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: "0.88rem", color: "var(--text)", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Video size={16} /> CCTV FEEDS</h3>
-              {!isLive && (
+            {LABS.map(l => {
+              const count = (cctvStreams[l.id] || []).length;
+              const isSelected = gridFilterLabId === l.id;
+              const Icon = l.icon;
+              return (
                 <button
-                  onClick={() => setShowAddForm(!showAddForm)}
-                  style={{ background: "transparent", border: "none", color: "var(--blue)", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600 }}
-                >
-                  {showAddForm ? "Cancel" : "+ Add"}
-                </button>
-              )}
-            </div>
-
-            {/* Add stream form */}
-            {showAddForm && (
-              <form onSubmit={handleAddStream} style={{ background: "var(--bg-app)", padding: 10, borderRadius: 8, border: "1px dashed var(--line)", marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                <input
-                  required
-                  placeholder="Stream Name (e.g. Rack 1)"
-                  value={addStreamName}
-                  onChange={e => setAddStreamName(e.target.value)}
-                  style={{ width: "100%", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 4, padding: "5px 8px", fontSize: "0.8rem", color: "var(--text)" }}
-                />
-                <input
-                  required
-                  placeholder="RTSP / HTTP stream URL"
-                  value={addStreamUrl}
-                  onChange={e => setAddStreamUrl(e.target.value)}
-                  style={{ width: "100%", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 4, padding: "5px 8px", fontSize: "0.8rem", color: "var(--text)" }}
-                />
-                <button
-                  type="submit"
-                  style={{ width: "100%", background: "var(--blue)", border: "none", color: "#fff", borderRadius: 4, padding: "5px 0", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}
-                >
-                  Save Stream
-                </button>
-              </form>
-            )}
-
-            {/* Configured streams list */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {currentStreams.length === 0 && (
-                <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", padding: "10px 0", textAlign: "center" }}>
-                  No cameras configured.
-                </div>
-              )}
-              {currentStreams.map(s => (
-                <div
-                  key={s.id}
-                  className={`stream-item ${activeStreamId === s.id && sourceTab === "cctv" ? "active" : ""}`}
-                  onClick={() => {
-                    if (isLive) return;
-                    setActiveStreamId(s.id);
-                    setCctvUrl(s.url);
-                    setSourceTab("cctv");
-                  }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                    {s.name}
-                  </span>
-                  {!isLive && (
-                    <button
-                      type="button"
-                      className="stream-item-delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteStream(s.id);
-                      }}
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-
-        {/* COLUMN 2: Main video analysis area */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* Drop zone — shown when idle in upload mode */}
-          {(phase === "idle" || phase === "uploading") && sourceTab === "upload" && (
-            <div className="panel" style={{ padding: 0 }}>
-              <div onDrop={onDrop} onDragOver={e => e.preventDefault()}
-                onClick={() => !isLive && document.getElementById("visionFileInput")?.click()}
-                style={{ minHeight: 220, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14,
-                  cursor: "pointer", border: `2px dashed ${file || sampleVideo ? "#3d83f6" : "var(--border-color)"}`, borderRadius: 14, padding: 28,
-                  background: file || sampleVideo ? "#3d83f608" : "transparent", transition: "all 0.2s" }}>
-                <input id="visionFileInput" type="file" accept="video/*" style={{ display: "none" }} onChange={e => {
-                  if (e.target.files?.[0]) {
-                    setFile(e.target.files[0]);
-                    setSampleVideo(null);
-                  }
-                }} />
-                <div style={{ color: "var(--text-muted)" }}><FileVideo size={44} /></div>
-                
-                {file ? (
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#3d83f6", fontWeight: 700, fontSize: "0.95rem" }}>{file.name}</div>
-                    <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>{(file.size / 1e6).toFixed(1)} MB — ready to analyse</div>
-                  </div>
-                ) : sampleVideo ? (
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "#18d18f", fontWeight: 700, fontSize: "0.95rem" }}>Sample Lab Footage Selected</div>
-                    <div style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>{sampleVideo.filename} — ready to analyse</div>
-                  </div>
-                ) : (
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ color: "var(--text-main)", fontWeight: 600 }}>Drop a video or click to browse</div>
-                    <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginTop: 4 }}>MP4, MOV, AVI lab recordings</div>
-                  </div>
-                )}
-
-                {/* Instant Sample Video Button */}
-                {!file && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      loadSampleVideo();
-                    }}
-                    disabled={isSampleLoading}
-                    style={{
-                      marginTop: 4,
-                      padding: "8px 18px",
-                      background: "rgba(61, 131, 246, 0.12)",
-                      border: "1px solid rgba(61, 131, 246, 0.4)",
-                      borderRadius: 8,
-                      color: "#3d83f6",
-                      fontWeight: 600,
-                      fontSize: "0.82rem",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      transition: "all 0.2s"
-                    }}
-                  >
-                    <PlayCircle size={15} />
-                    {isSampleLoading ? "Loading Sample Footage..." : sampleVideo ? "Reload Sample Lab Video" : "Load Sample Lab Video (Instant Test)"}
-                  </button>
-                )}
-
-                {phase === "uploading" && (
-                  <div style={{ width: "100%", maxWidth: 300 }}>
-                    <div style={{ background: "var(--border-color)", borderRadius: 20, height: 8, overflow: "hidden" }}>
-                      <div style={{ width: `${uploadPct}%`, height: "100%", background: "linear-gradient(90deg,#3d83f6,#1dd5e6)", transition: "width 0.3s" }} />
-                    </div>
-                    <div style={{ color: "var(--text-muted)", fontSize: "0.78rem", marginTop: 6, textAlign: "center" }}>{uploadPct}% uploaded</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Idle CCTV/webcam placeholder */}
-          {phase === "idle" && sourceTab !== "upload" && (
-            <div className="panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 220, gap: 14, padding: 32 }}>
-              <div style={{ color: "var(--text-muted)" }}>
-                {sourceTab === "cctv" ? <VideoOff size={44} /> : <Webcam size={44} />}
-              </div>
-              <div style={{ color: "var(--text-main)", fontSize: "0.95rem", fontWeight: 600, textAlign: "center" }}>
-                {sourceTab === "cctv" ? "CCTV Camera Stream" : "Live Device Webcam"}
-              </div>
-              <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", textAlign: "center", maxWidth: 440 }}>
-                {sourceTab === "cctv" ? (
-                  cctvUrl ? `Configured Feed: ${cctvUrl}\nClick Start Analysis above to connect.` : "No feed configured. Select or add a CCTV stream in the left panel."
-                ) : (
-                  "Feed live video from your laptop/desktop webcam or external camera. YOLOv8 people tracking, headcount metrics, and pose skeleton estimation run in real time."
-                )}
-              </div>
-              {sourceTab === "webcam" && (
-                <button
-                  onClick={startLive}
+                  key={l.id}
+                  type="button"
+                  onClick={() => setGridFilterLabId(l.id)}
                   style={{
-                    padding: "9px 22px",
-                    background: "linear-gradient(135deg,#3d83f6,#1dd5e6)",
-                    border: "none",
-                    borderRadius: 8,
-                    color: "#fff",
-                    fontWeight: 700,
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8
+                    display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 8,
+                    fontSize: "0.82rem", fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer", transition: "all 0.15s",
+                    background: isSelected ? "rgba(61, 131, 246, 0.18)" : "var(--bg-card)",
+                    color: isSelected ? "#3d83f6" : "var(--text-main)",
+                    border: `1px solid ${isSelected ? "#3d83f6" : "var(--border-color)"}`
                   }}
                 >
-                  <Webcam size={16} /> Activate Webcam & Start
+                  <Icon size={14} />
+                  <span>{l.shortName}</span>
+                  <span style={{ fontSize: "0.72rem", background: "rgba(0,0,0,0.15)", padding: "1px 6px", borderRadius: 10, opacity: 0.8 }}>
+                    {count}
+                  </span>
                 </button>
-              )}
-            </div>
-          )}
+              );
+            })}
+          </div>
 
-          {/* ── Video panels (side by side) ── */}
-          {(isLive || phase === "done") && (
-            <div style={{ display: "grid", gridTemplateColumns: (sourceTab === "upload" || sourceTab === "webcam") ? "1fr 1fr" : "1fr", gap: 14 }}>
+          {/* CCTV Multi-Camera Video Matrix Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
+            {displayedGridStreams.map(({ lab, cam }, idx) => {
+              const isCurrentAnalyzing = isLive && activeStreamId === cam.id;
+              return (
+                <div
+                  key={cam.id}
+                  style={{
+                    background: "#070b14",
+                    borderRadius: 12,
+                    border: `1.5px solid ${isCurrentAnalyzing ? "#1dd5e6" : "rgba(255,255,255,0.08)"}`,
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    boxShadow: isCurrentAnalyzing ? "0 0 20px rgba(29, 213, 230, 0.2)" : "0 8px 24px rgba(0,0,0,0.3)"
+                  }}
+                >
+                  {/* Camera Top Bar */}
+                  <div style={{ padding: "8px 12px", background: "#0b1220", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 800, background: "#1e293b", color: "#94a3b8", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>
+                        CAM {String(idx + 1).padStart(2, "0")}
+                      </span>
+                      <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>
+                        {cam.name}
+                      </span>
+                    </div>
 
-              {/* LEFT: Live Video (Webcam or original file) */}
-              {(sourceTab === "upload" || sourceTab === "webcam") && (
-                <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 16px", background: "var(--border-color)", borderBottom: "1px solid #2a4060", fontSize: "0.85rem", fontWeight: 700, color: "var(--text-main)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>{sourceTab === "webcam" ? "Live Webcam Feed (Device)" : "Original Video Footage"}</span>
-                    {sourceTab === "webcam" && isLive && (
-                      <span style={{ color: "#18d18f", fontSize: "0.75rem", fontWeight: 600 }}>Streaming @ 10 FPS</span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.7rem", color: "#18d18f", fontWeight: 700, fontFamily: "monospace" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#18d18f", animation: "pulse 1s infinite" }} />
+                        LIVE
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteStream(lab.id, cam.id)}
+                        style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", padding: "2px 4px" }}
+                        title="Delete camera feed"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
-                  <video
-                    ref={videoRef}
-                    src={sourceTab === "upload" ? videoSrcUrl : undefined}
-                    autoPlay
-                    controls={sourceTab === "upload"}
-                    muted
-                    playsInline
-                    style={{ width: "100%", display: "block", background: "#000", maxHeight: 420 }}
-                    onSeeked={e => {
-                      if (sourceTab === "upload" && wsRef.current?.readyState === WebSocket.OPEN) {
-                        wsRef.current.send(JSON.stringify({ seek: (e.target as HTMLVideoElement).currentTime }));
+
+                  {/* CCTV Viewport Preview / CRT Monitor Display */}
+                  <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#020408", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    {/* Simulated security monitor scanline / noise */}
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      backgroundImage: "linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))",
+                      backgroundSize: "100% 3px, 6px 100%", pointerEvents: "none", zIndex: 1
+                    }} />
+
+                    {/* Camera OSD Overlays */}
+                    <div style={{ position: "absolute", top: 8, left: 10, zIndex: 2, fontFamily: "monospace", fontSize: "0.72rem", color: "#38bdf8", textShadow: "0 1px 3px #000" }}>
+                      REC ● {clockTime || "04:32:10.4"}
+                    </div>
+                    <div style={{ position: "absolute", top: 8, right: 10, zIndex: 2, fontFamily: "monospace", fontSize: "0.68rem", color: "rgba(255,255,255,0.7)", background: "rgba(0,0,0,0.5)", padding: "1px 5px", borderRadius: 3 }}>
+                      1080p @ 25 FPS
+                    </div>
+
+                    <div style={{ position: "absolute", bottom: 8, left: 10, zIndex: 2, fontSize: "0.7rem", color: "#cbd5e1", textShadow: "0 1px 3px #000" }}>
+                      📍 {lab.shortName} ({lab.location})
+                    </div>
+
+                    {/* Center CCTV Graphic */}
+                    <div style={{ textAlign: "center", padding: 20, zIndex: 2 }}>
+                      <Video size={36} style={{ color: isCurrentAnalyzing ? "#1dd5e6" : "#475569", margin: "0 auto 8px" }} />
+                      <div style={{ color: "#94a3b8", fontSize: "0.78rem", fontFamily: "monospace", maxWidth: 280, wordBreak: "break-all" }}>
+                        {cam.url}
+                      </div>
+                      {isCurrentAnalyzing && (
+                        <div style={{ marginTop: 8, display: "inline-block", background: "rgba(29, 213, 230, 0.2)", border: "1px solid rgba(29, 213, 230, 0.5)", color: "#1dd5e6", fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: 4 }}>
+                          YOLOv8 AI Tracking Active ({lastFrame?.count ?? 0} Headcount)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Camera Footer Actions */}
+                  <div style={{ padding: "10px 14px", background: "#0b1220", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      RTSP Camera Stream
+                    </span>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLabId(lab.id);
+                          setActiveStreamId(cam.id);
+                          setCctvUrl(cam.url);
+                          setSourceTab("cctv");
+                          setViewMode("focus");
+                        }}
+                        style={{
+                          padding: "5px 10px", background: "rgba(255,255,255,0.06)",
+                          border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "#cbd5e1", fontSize: "0.75rem",
+                          fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 5
+                        }}
+                      >
+                        <Maximize2 size={12} />
+                        <span>Focus</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => launchAnalysisOnCamera(lab.id, cam)}
+                        style={{
+                          padding: "5px 12px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none",
+                          borderRadius: 6, color: "#fff", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 5, boxShadow: "0 2px 8px rgba(61, 131, 246, 0.3)"
+                        }}
+                      >
+                        <Play size={11} />
+                        <span>Analyze with AI</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODE 2: FOCUS & LARGE DUAL VIDEO ANALYSIS VIEW
+          ══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === "focus" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          
+          {/* Top Bar for Focus View: Lab Switcher + Feed Source + View Size */}
+          <div className="panel" style={{ padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            {/* Lab & Camera selection */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Lab:</span>
+                <select
+                  value={selectedLabId}
+                  onChange={e => handleLabChange(Number(e.target.value))}
+                  disabled={isLive}
+                  style={{
+                    background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8,
+                    padding: "6px 12px", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-main)", outline: "none", cursor: isLive ? "not-allowed" : "pointer"
+                  }}
+                >
+                  {LABS.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Source Tabs: CCTV Stream vs Video File (Webcam removed!) */}
+              <div style={{ display: "flex", background: "var(--bg-app)", borderRadius: 8, border: "1px solid var(--border-color)", overflow: "hidden" }}>
+                {(["cctv", "upload"] as const).map(tab => (
+                  <button key={tab} onClick={() => setSourceTab(tab)} disabled={isLive}
+                    style={{
+                      padding: "6px 16px", border: "none", borderRight: tab === "cctv" ? "1px solid var(--border-color)" : "none",
+                      fontWeight: 700, fontSize: "0.8rem", cursor: isLive ? "not-allowed" : "pointer", transition: "all 0.15s",
+                      background: sourceTab === tab ? "rgba(61, 131, 246, 0.15)" : "transparent",
+                      color: sourceTab === tab ? "#3d83f6" : "var(--text-muted)"
+                    }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {tab === "cctv" ? <Video size={13} /> : <FileVideo size={13} />}
+                      {tab === "cctv" ? "CCTV Stream" : "Video File / Sample"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Camera selection dropdown if in CCTV mode */}
+              {sourceTab === "cctv" && currentStreams.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Camera:</span>
+                  <select
+                    value={activeStreamId || ""}
+                    onChange={e => {
+                      if (isLive) return;
+                      const s = currentStreams.find(item => item.id === e.target.value);
+                      if (s) {
+                        setActiveStreamId(s.id);
+                        setCctvUrl(s.url);
                       }
                     }}
-                  />
+                    disabled={isLive}
+                    style={{
+                      background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8,
+                      padding: "6px 12px", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-main)", outline: "none", cursor: isLive ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    {currentStreams.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.url})</option>
+                    ))}
+                  </select>
                 </div>
               )}
+            </div>
 
-              {/* RIGHT: Live Analysis canvas */}
-              <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-                <div style={{ padding: "10px 16px", background: "var(--border-color)", borderBottom: "1px solid #2a4060", fontSize: "0.85rem", fontWeight: 700, color: "#1dd5e6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>Camera Detection Feed</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 600 }}>
-                    {lastFrame?.count ?? 0} {lastFrame?.count === 1 ? "person" : "people"} detected
-                  </span>
-                </div>
-                <div style={{ position: "relative", background: "#000" }}>
-                  <canvas
-                    ref={canvasRef}
-                    style={{ width: "100%", height: "auto", display: "block" }}
-                  />
-                  <AlertToast alerts={alerts} />
-                  {!lastFrame && (
-                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                      Waiting for live camera feed…
+            {/* Layout options: Dual View (Side-by-Side) vs AI-Only vs Original-Only */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-app)", padding: 3, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+              <button
+                type="button"
+                onClick={() => setFocusLayout("dual")}
+                style={{
+                  padding: "5px 12px", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 700, cursor: "pointer",
+                  background: focusLayout === "dual" ? "var(--bg-card)" : "transparent",
+                  color: focusLayout === "dual" ? "#3d83f6" : "var(--text-muted)"
+                }}
+              >
+                Dual View (Side-by-Side)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocusLayout("ai-only")}
+                style={{
+                  padding: "5px 12px", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 700, cursor: "pointer",
+                  background: focusLayout === "ai-only" ? "var(--bg-card)" : "transparent",
+                  color: focusLayout === "ai-only" ? "var(--cyan, #1dd5e6)" : "var(--text-muted)"
+                }}
+              >
+                AI Detection Only
+              </button>
+              <button
+                type="button"
+                onClick={() => setFocusLayout("orig-only")}
+                style={{
+                  padding: "5px 12px", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 700, cursor: "pointer",
+                  background: focusLayout === "orig-only" ? "var(--bg-card)" : "transparent",
+                  color: focusLayout === "orig-only" ? "var(--text-main)" : "var(--text-muted)"
+                }}
+              >
+                Original Only
+              </button>
+            </div>
+          </div>
+
+          {/* ── MASSIVE VIDEO VIEWPORTS (PROPER LARGE SIZE WINDOWS) ── */}
+          <div style={{ width: "100%" }}>
+            
+            {/* Idle / Uploading Video Dropzone if Upload Mode */}
+            {(phase === "idle" || phase === "uploading") && sourceTab === "upload" && (
+              <div className="panel" style={{ padding: 0, marginBottom: 16 }}>
+                <div onDrop={onDrop} onDragOver={e => e.preventDefault()}
+                  onClick={() => !isLive && document.getElementById("visionFileInput")?.click()}
+                  style={{ minHeight: 380, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
+                    cursor: "pointer", border: `2px dashed ${file || sampleVideo ? "#3d83f6" : "var(--border-color)"}`, borderRadius: 14, padding: 36,
+                    background: file || sampleVideo ? "rgba(61, 131, 246, 0.05)" : "transparent", transition: "all 0.2s" }}>
+                  <input id="visionFileInput" type="file" accept="video/*" style={{ display: "none" }} onChange={e => {
+                    if (e.target.files?.[0]) {
+                      setFile(e.target.files[0]);
+                      setSampleVideo(null);
+                    }
+                  }} />
+                  <div style={{ color: "#3d83f6" }}><UploadCloud size={56} /></div>
+                  
+                  {file ? (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ color: "#3d83f6", fontWeight: 700, fontSize: "1.1rem" }}>{file.name}</div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 4 }}>{(file.size / 1e6).toFixed(1)} MB — ready for real-time YOLOv8 analysis</div>
+                    </div>
+                  ) : sampleVideo ? (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ color: "#18d18f", fontWeight: 700, fontSize: "1.1rem" }}>Sample Laboratory Recording Selected</div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 4 }}>{sampleVideo.filename} — ready for analysis</div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ color: "var(--text-main)", fontWeight: 700, fontSize: "1.1rem" }}>Drop laboratory video file here or click to browse</div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 6 }}>Supports MP4, MOV, AVI lab CCTV surveillance recordings</div>
+                    </div>
+                  )}
+
+                  {!file && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        loadSampleVideo();
+                      }}
+                      disabled={isSampleLoading}
+                      style={{
+                        marginTop: 6, padding: "10px 22px", background: "rgba(61, 131, 246, 0.12)", border: "1px solid rgba(61, 131, 246, 0.4)",
+                        borderRadius: 8, color: "#3d83f6", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 8
+                      }}
+                    >
+                      <PlayCircle size={18} />
+                      {isSampleLoading ? "Loading Sample Video..." : sampleVideo ? "Reload Sample Lab Footage" : "Load Sample Lab Video (Instant Test)"}
+                    </button>
+                  )}
+
+                  {phase === "uploading" && (
+                    <div style={{ width: "100%", maxWidth: 360, marginTop: 10 }}>
+                      <div style={{ background: "var(--border-color)", borderRadius: 20, height: 10, overflow: "hidden" }}>
+                        <div style={{ width: `${uploadPct}%`, height: "100%", background: "linear-gradient(90deg,#3d83f6,#1dd5e6)", transition: "width 0.3s" }} />
+                      </div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: 8, textAlign: "center" }}>{uploadPct}% uploaded to vision processing engine</div>
                     </div>
                   )}
                 </div>
               </div>
+            )}
 
-            </div>
-          )}
+            {/* Idle CCTV Placeholder if CCTV Mode & Idle */}
+            {phase === "idle" && sourceTab === "cctv" && (
+              <div className="panel" style={{ padding: 40, minHeight: 380, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 16, background: "#070b14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14 }}>
+                <Video size={56} style={{ color: "#3d83f6" }} />
+                <div style={{ textAlign: "center" }}>
+                  <h3 style={{ margin: "0 0 6px", fontSize: "1.15rem", fontWeight: 700, color: "#f8fafc" }}>
+                    {activeStreamId ? currentStreams.find(s => s.id === activeStreamId)?.name : "Department CCTV Stream"}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8", fontFamily: "monospace" }}>
+                    {cctvUrl || "No camera feed selected"}
+                  </p>
+                  <p style={{ margin: "8px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                    Connected to {currentLab.name} ({currentLab.location})
+                  </p>
+                </div>
 
-          {/* ── Stats row ── */}
+                <button
+                  type="button"
+                  onClick={() => startLive()}
+                  disabled={!cctvUrl}
+                  style={{
+                    marginTop: 8, padding: "11px 28px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none",
+                    borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
+                    boxShadow: "0 4px 16px rgba(61, 131, 246, 0.3)"
+                  }}
+                >
+                  <Play size={16} /> Connect & Start AI Live Analysis
+                </button>
+              </div>
+            )}
+
+            {/* LIVE / DONE DUAL VIEWPORT THEATER */}
+            {(isLive || phase === "done") && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: focusLayout === "dual" ? "1fr 1fr" : "1fr",
+                  gap: 16,
+                  marginBottom: 16
+                }}
+              >
+                {/* 1. ORIGINAL FOOTAGE WINDOW */}
+                {(focusLayout === "dual" || focusLayout === "orig-only") && (
+                  <div className="panel" style={{ padding: 0, overflow: "hidden", background: "#050810", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 }}>
+                    <div style={{ padding: "10px 16px", background: "#0b1220", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#3d83f6" }} />
+                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#f8fafc" }}>
+                          Original Camera Stream / Video Footage
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "0.74rem", fontFamily: "monospace", color: "#94a3b8", background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 4 }}>
+                        {sourceTab === "cctv" ? "RTSP FEED" : "RECORDING"}
+                      </span>
+                    </div>
+
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", minHeight: 440, maxHeight: 560, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <video
+                        ref={videoRef}
+                        src={videoSrcUrl || undefined}
+                        autoPlay
+                        controls={sourceTab === "upload"}
+                        muted
+                        playsInline
+                        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                        onSeeked={e => {
+                          if (sourceTab === "upload" && wsRef.current?.readyState === WebSocket.OPEN) {
+                            wsRef.current.send(JSON.stringify({ seek: (e.target as HTMLVideoElement).currentTime }));
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. REAL-TIME AI DETECTION & POSE CANVAS WINDOW */}
+                {(focusLayout === "dual" || focusLayout === "ai-only") && (
+                  <div className="panel" style={{ padding: 0, overflow: "hidden", background: "#050810", border: "1.5px solid rgba(29, 213, 230, 0.35)", borderRadius: 12, boxShadow: "0 0 24px rgba(29, 213, 230, 0.15)" }}>
+                    <div style={{ padding: "10px 16px", background: "#0b1626", borderBottom: "1px solid rgba(29, 213, 230, 0.2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#1dd5e6", animation: "pulse 1.2s infinite" }} />
+                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--cyan, #1dd5e6)" }}>
+                          AI Detection & Safety Analytics Feed
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ color: "#f8fafc", fontSize: "0.78rem", fontWeight: 700, fontFamily: "monospace", background: "rgba(29, 213, 230, 0.12)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(29, 213, 230, 0.3)" }}>
+                          {lastFrame?.count ?? 0} {lastFrame?.count === 1 ? "person" : "people"} detected
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", minHeight: 440, maxHeight: 560, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <canvas
+                        ref={canvasRef}
+                        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                      />
+                      <AlertToast alerts={alerts} />
+                      {!lastFrame && (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "0.9rem" }}>
+                          Connecting to YOLOv8 inference pipeline…
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── STATS ROW (Positioned below the large video windows) ── */}
           {(isLive || phase === "done") && (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", width: "100%" }}>
               <Stat label="HEADCOUNT (NOW)" value={lastFrame?.count ?? 0}                       color="#1dd5e6" icon={Users} />
               <Stat label="TOTAL ENTERED"   value={totalSeen}                                   color="#3d83f6" icon={UserPlus} />
               <Stat label="PEAK OCCUPANCY"  value={peakOcc}                                     color="#f3ae2a" icon={TrendingUp} />
@@ -999,73 +1163,138 @@ export default function VisionMonitoringPage() {
             </div>
           )}
 
-          {/* ── Activity breakdown ── */}
+          {/* ── DETECTIONS & LOGS 3-COLUMN DASHBOARD (Below the video windows) ── */}
           {(isLive || phase === "done") && (
-            <div className="panel" style={{ padding: "16px 20px" }}>
-              <h3 style={{ margin: "0 0 14px", color: "var(--text-main)", fontSize: "0.95rem" }}>Activity Breakdown</h3>
-              {(["standing", "walking", "running"] as const).map(act => {
-                const total = actCounts.standing + actCounts.walking + actCounts.running || 1;
-                const pct   = Math.round((actCounts[act] / total) * 100);
-                const icons = { standing: "standing", walking: "walking", running: "running" };
-                return (
-                  <div key={act} style={{ marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ color: "var(--text-main)", fontSize: "0.85rem" }}>{act.charAt(0).toUpperCase() + act.slice(1)}</span>
-                      <span style={{ color: ACT_COLOR[act], fontWeight: 700, fontFamily: "monospace" }}>{pct}%</span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.2fr", gap: 16 }}>
+              
+              {/* 1. Live Detections List */}
+              <div className="panel" style={{ padding: 18 }}>
+                <h3 style={{ margin: "0 0 14px", color: "var(--text-main)", fontSize: "0.88rem", fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}><Eye size={16} /> Tracked Detections</span>
+                  <span style={{ color: "#1dd5e6", fontFamily: "monospace", fontSize: "0.95rem" }}>{lastFrame?.detections.length ?? 0}</span>
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 220, overflowY: "auto" }}>
+                  {!lastFrame?.detections.length && <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", textAlign: "center", padding: 24 }}>No persons in camera view…</div>}
+                  {lastFrame?.detections.map(det => (
+                    <div key={det.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg-app)", borderRadius: 8, padding: "8px 12px", border: `1px solid ${ACT_COLOR[det.activity]}40` }}>
+                      <div style={{ width: 9, height: 9, borderRadius: "50%", background: ACT_COLOR[det.activity], flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: "var(--text-main)", fontFamily: "monospace", fontSize: "0.84rem", fontWeight: 700 }}>Person #{det.id}</div>
+                        <div style={{ color: ACT_COLOR[det.activity], fontSize: "0.74rem", fontWeight: 600 }}>{det.activity.toUpperCase()} · {Math.round(det.conf * 100)}% Confidence</div>
+                      </div>
+                      {det.is_new && <span style={{ background: "#18d18f25", border: "1px solid #18d18f50", borderRadius: 20, color: "#18d18f", fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px" }}>NEW</span>}
                     </div>
-                    <div style={{ background: "var(--border-color)", borderRadius: 20, height: 6 }}>
-                      <div style={{ width: `${pct}%`, height: "100%", background: ACT_COLOR[act], borderRadius: 20, transition: "width 0.4s" }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Activity Breakdown */}
+              <div className="panel" style={{ padding: 18 }}>
+                <h3 style={{ margin: "0 0 14px", color: "var(--text-main)", fontSize: "0.88rem", fontWeight: 700 }}>Activity Breakdown</h3>
+                {(["standing", "walking", "running"] as const).map(act => {
+                  const total = actCounts.standing + actCounts.walking + actCounts.running || 1;
+                  const pct   = Math.round((actCounts[act] / total) * 100);
+                  return (
+                    <div key={act} style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                        <span style={{ color: "var(--text-main)", fontSize: "0.84rem", fontWeight: 600 }}>{act.charAt(0).toUpperCase() + act.slice(1)}</span>
+                        <span style={{ color: ACT_COLOR[act], fontWeight: 700, fontFamily: "monospace" }}>{pct}%</span>
+                      </div>
+                      <div style={{ background: "var(--border-color)", borderRadius: 20, height: 7 }}>
+                        <div style={{ width: `${pct}%`, height: "100%", background: ACT_COLOR[act], borderRadius: 20, transition: "width 0.4s" }} />
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+
+              {/* 3. Event & Safety Log */}
+              <div className="panel" style={{ padding: 18 }}>
+                <h3 style={{ margin: "0 0 14px", color: "var(--text-main)", fontSize: "0.88rem", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><ClipboardList size={16} /> Event & Security Log</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+                  {!sessionLog.length && <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", textAlign: "center", padding: 24 }}>Session events and alerts will log here…</div>}
+                  {[...sessionLog].reverse().map((ev, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "var(--bg-app)", padding: "6px 10px", borderRadius: 6 }}>
+                      <span style={{ color: "var(--text-muted)", fontFamily: "monospace", fontSize: "0.72rem", flexShrink: 0, marginTop: 2 }}>{ev.time.toFixed(1)}s</span>
+                      <span style={{ color: ev.color, fontSize: "0.78rem", fontWeight: 600 }}>{ev.event}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
-        </div>
-
-        {/* COLUMN 3: Right sidebar */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* Detection list */}
-          <div className="panel" style={{ padding: 16 }}>
-            <h3 style={{ margin: "0 0 12px", color: "var(--text-main)", fontSize: "0.88rem", display: "flex", justifyContent: "space-between" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8 }}><Eye size={16} /> Detections</span>
-              <span style={{ color: "#1dd5e6", fontFamily: "monospace" }}>{lastFrame?.count ?? 0}</span>
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
-              {!lastFrame?.detections.length && <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", textAlign: "center", padding: 20 }}>No detections yet…</div>}
-              {lastFrame?.detections.map(det => (
-                <div key={det.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-app)", borderRadius: 8, padding: "7px 10px", border: `1px solid ${ACT_COLOR[det.activity]}30` }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: ACT_COLOR[det.activity], flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: "var(--text-main)", fontFamily: "monospace", fontSize: "0.82rem", fontWeight: 600 }}>Person #{det.id}</div>
-                    <div style={{ color: ACT_COLOR[det.activity], fontSize: "0.72rem" }}>{det.activity} · {Math.round(det.conf * 100)}%</div>
-                  </div>
-                  {det.is_new && <span style={{ background: "#18d18f20", border: "1px solid #18d18f40", borderRadius: 20, color: "#18d18f", fontSize: "0.65rem", fontWeight: 700, padding: "1px 7px" }}>NEW</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Event log */}
-          <div className="panel" style={{ padding: 16 }}>
-            <h3 style={{ margin: "0 0 12px", color: "var(--text-main)", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: 8 }}><ClipboardList size={16} /> Event Log</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 280, overflowY: "auto" }}>
-              {!sessionLog.length && <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", textAlign: "center", padding: 20 }}>Events will appear here…</div>}
-              {[...sessionLog].reverse().map((ev, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <span style={{ color: "var(--text-muted)", fontFamily: "monospace", fontSize: "0.72rem", flexShrink: 0, marginTop: 2 }}>{ev.time.toFixed(1)}s</span>
-                  <span style={{ color: ev.color, fontSize: "0.78rem" }}>{ev.event}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-
 
         </div>
+      )}
 
-      </div>
+      {/* ── MODAL: Add New CCTV Camera ── */}
+      {showAddForm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+          <div style={{ width: "100%", maxWidth: 460, background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 24, boxShadow: "0 20px 40px rgba(0,0,0,0.4)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Video size={18} className="text-cyan-400" />
+                <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "var(--text-main)" }}>Add New CCTV Camera Feed</h3>
+              </div>
+              <button onClick={() => setShowAddForm(false)} style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.2rem" }}>×</button>
+            </div>
+
+            <form onSubmit={handleAddStream} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>DEPARTMENT LABORATORY</label>
+                <select
+                  value={addStreamLabId}
+                  onChange={e => setAddStreamLabId(Number(e.target.value))}
+                  style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "9px 12px", fontSize: "0.85rem", color: "var(--text-main)", outline: "none" }}
+                >
+                  {LABS.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>CAMERA NAME / ZONE</label>
+                <input
+                  required
+                  placeholder="e.g. High Voltage Test Bench Cam 2"
+                  value={addStreamName}
+                  onChange={e => setAddStreamName(e.target.value)}
+                  style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "9px 12px", fontSize: "0.85rem", color: "var(--text-main)", outline: "none" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>RTSP / HTTP STREAM URL</label>
+                <input
+                  required
+                  placeholder="rtsp://192.168.1.50:554/ch0"
+                  value={addStreamUrl}
+                  onChange={e => setAddStreamUrl(e.target.value)}
+                  style={{ width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "9px 12px", fontSize: "0.85rem", color: "var(--text-main)", outline: "none", fontFamily: "monospace" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  style={{ padding: "8px 16px", background: "transparent", border: "1px solid var(--border-color)", borderRadius: 8, color: "var(--text-muted)", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: "8px 20px", background: "linear-gradient(135deg,#3d83f6,#1dd5e6)", border: "none", borderRadius: 8, color: "#fff", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer" }}
+                >
+                  Save Camera
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
