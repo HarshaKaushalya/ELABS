@@ -28,6 +28,34 @@ interface ItemDetailsModalProps {
   onItemUpdated?: (updatedItem: any) => void;
 }
 
+const FALLBACK_DATASHEETS: Record<string, string> = {
+  ds1054: "https://www.rigolna.com/products/digital-oscilloscopes/1000z/",
+  tds2024: "https://download.tek.com/manual/TDS2000C-and-TDS1000C-EDU-Digital-Storage-Oscilloscopes-User-Manual-077044400.pdf",
+  "87v": "https://www.fluke.com/en-us/product/electrical-testing/digital-multimeters/fluke-87v",
+  ut61e: "https://meters.uni-trend.com/product/ut61-series/",
+  dp832: "https://www.rigolna.com/products/dc-power-loads/dp800/",
+  dg1022: "https://www.rigolna.com/products/waveform-generators/dg1000z/",
+  fsh8: "https://www.rohde-schwarz.com/en/products/test-and-measurement/handheld-analyzers/rs-fsh-handheld-spectrum-analyzer_63493-9400.html",
+  hakko: "https://www.hakko.com/english/products/hakko_fx951.html",
+  fx951: "https://www.hakko.com/english/products/hakko_fx951.html",
+  arduino: "https://docs.arduino.cc/hardware/uno-rev3/",
+  raspberry: "https://datasheets.raspberrypi.com/rpi4/raspberry-pi-4-datasheet.pdf",
+  basys: "https://digilent.com/reference/programmable-logic/basys-3/reference-manual",
+  usrp: "https://www.ettus.com/all-products/ub210-kit/",
+  variac: "https://en.wikipedia.org/wiki/Autotransformer",
+  multimeter: "https://www.fluke.com/en-us/product/electrical-testing/digital-multimeters/fluke-87v",
+  oscilloscope: "https://www.rigolna.com/products/digital-oscilloscopes/1000z/",
+};
+
+function getFallbackDatasheet(item: any): string | null {
+  if (item?.datasheetUrl) return item.datasheetUrl;
+  const target = `${item?.model || ""} ${item?.name || ""}`.toLowerCase();
+  for (const [key, url] of Object.entries(FALLBACK_DATASHEETS)) {
+    if (target.includes(key)) return url;
+  }
+  return null;
+}
+
 export function ItemDetailsModal({ item, onClose, onItemUpdated }: ItemDetailsModalProps) {
   const router = useRouter();
   const { me } = useAuth();
@@ -50,8 +78,9 @@ export function ItemDetailsModal({ item, onClose, onItemUpdated }: ItemDetailsMo
   ) ?? false;
 
   const handleViewDatasheet = () => {
-    if (localItem.datasheetUrl) {
-      window.open(localItem.datasheetUrl, "_blank", "noopener,noreferrer");
+    const url = getFallbackDatasheet(localItem);
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
     } else {
       alert("No datasheet is linked for this equipment yet. Lab technicians can upload one in Staff Controls.");
     }

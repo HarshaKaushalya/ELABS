@@ -61,24 +61,54 @@ const toMysqlDt = (iso: string | null | undefined): string | null => {
   }
 };
 
+// Ensure media columns exist in production database
+async function ensureInventoryMediaColumns() {
+  try {
+    await pool.query(`ALTER TABLE inventory_items ADD COLUMN image_url VARCHAR(255) NULL`);
+  } catch (_e) {}
+  try {
+    await pool.query(`ALTER TABLE inventory_items ADD COLUMN datasheet_url VARCHAR(255) NULL`);
+  } catch (_e) {}
+}
+ensureInventoryMediaColumns().catch(() => {});
+
 // ── 1. Items List (Open to all authenticated users) ──────────────────────────
 router.get("/items", requireAuth, async (req, res) => {
   const labId = req.query.labId ? Number(req.query.labId) : null;
 
-  const [rows] = await pool.query(
-    `
-    SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
-           i.status, i.condition_note as conditionNote, i.image_url as imageUrl, i.datasheet_url as datasheetUrl,
-           i.updated_at as updatedAt, l.name as labName
-    FROM inventory_items i
-    JOIN labs l ON l.id = i.lab_id
-    WHERE (:labId IS NULL OR i.lab_id = :labId)
-    ORDER BY i.updated_at DESC
-    `,
-    { labId }
-  );
+  let rows: any[] = [];
+  try {
+    const [result] = await pool.query(
+      `
+      SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
+             i.status, i.condition_note as conditionNote, i.image_url as imageUrl, i.datasheet_url as datasheetUrl,
+             i.updated_at as updatedAt, l.name as labName
+      FROM inventory_items i
+      JOIN labs l ON l.id = i.lab_id
+      WHERE (:labId IS NULL OR i.lab_id = :labId)
+      ORDER BY i.updated_at DESC
+      `,
+      { labId }
+    );
+    rows = result as any[];
+  } catch (err: any) {
+    // Resilient fallback if remote production database does not have media columns yet
+    const [result] = await pool.query(
+      `
+      SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
+             i.status, i.condition_note as conditionNote, NULL as imageUrl, NULL as datasheetUrl,
+             i.updated_at as updatedAt, l.name as labName
+      FROM inventory_items i
+      JOIN labs l ON l.id = i.lab_id
+      WHERE (:labId IS NULL OR i.lab_id = :labId)
+      ORDER BY i.updated_at DESC
+      `,
+      { labId }
+    );
+    rows = result as any[];
+  }
 
-  const items = (rows as any[]).map((row) => {
+  const items = rows.map((row) => {
     const ds = findDatasheet(row.model || row.name);
     return {
       ...row,
@@ -131,19 +161,35 @@ router.get("/student-lookup", requireAuth, async (req, res) => {
 // ── 4. Item Barcode Lookup ───────────────────────────────────────────────────
 router.get("/items/barcode/:tag", requireAuth, async (req, res) => {
   const tag = req.params.tag;
-  const [rows] = await pool.query(
-    `
-    SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
-           i.status, i.condition_note as conditionNote, i.image_url as imageUrl, i.datasheet_url as datasheetUrl,
-           i.updated_at as updatedAt, l.name as labName
-    FROM inventory_items i
-    JOIN labs l ON l.id = i.lab_id
-    WHERE i.elabs_tag = :tag
-    `,
-    { tag }
-  );
+  let item: any = null;
+  try {
+    const [rows] = await pool.query(
+      `
+      SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
+             i.status, i.condition_note as conditionNote, i.image_url as imageUrl, i.datasheet_url as datasheetUrl,
+             i.updated_at as updatedAt, l.name as labName
+      FROM inventory_items i
+      JOIN labs l ON l.id = i.lab_id
+      WHERE i.elabs_tag = :tag
+      `,
+      { tag }
+    );
+    item = (rows as any[])[0];
+  } catch (_e) {
+    const [rows] = await pool.query(
+      `
+      SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
+             i.status, i.condition_note as conditionNote, NULL as imageUrl, NULL as datasheetUrl,
+             i.updated_at as updatedAt, l.name as labName
+      FROM inventory_items i
+      JOIN labs l ON l.id = i.lab_id
+      WHERE i.elabs_tag = :tag
+      `,
+      { tag }
+    );
+    item = (rows as any[])[0];
+  }
 
-  const item = (rows as any[])[0];
   if (!item) return res.status(404).json({ error: "Item not found" });
 
   const ds = findDatasheet(item.model || item.name);
