@@ -947,7 +947,7 @@ export default function InventoryPage() {
   const [selectedStatus, setSelectedStatus] = useState("all");
 
   const [isScanning, setIsScanning] = useState(false);
-  const [scannedItem, setScannedItem] = useState<InventoryItem | null>(null);
+  const [scannedItem, setScannedItem] = useState<any | null>(null);
   const [borrowSuccess, setBorrowSuccess] = useState<BorrowSuccess | null>(null);
 
   // Reject modal state
@@ -1400,9 +1400,23 @@ export default function InventoryPage() {
                       <td style={{ textAlign: "right" }}>
                         <button
                           onClick={(e) => { e.stopPropagation(); setScannedItem(item); }}
-                          style={{ padding: "4px 10px", fontSize: "0.78rem", borderRadius: 6, border: "1px solid var(--border-color)", background: "transparent", color: "var(--text-main)", cursor: "pointer" }}
+                          style={{
+                            padding: "5px 12px",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            borderRadius: 6,
+                            border: "1px solid rgba(56, 189, 248, 0.4)",
+                            background: "rgba(56, 189, 248, 0.08)",
+                            color: "#38bdf8",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            transition: "all 0.15s ease",
+                          }}
                         >
-                          Details
+                          <Info size={13} />
+                          <span>View Details</span>
                         </button>
                       </td>
                     </tr>
@@ -1746,7 +1760,23 @@ export default function InventoryPage() {
 
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                       {parsedItems.map((item) => (
-                        <span key={item.elabsTag} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: 6, padding: "4px 10px", fontSize: "0.8rem" }}>
+                        <span
+                          key={item.elabsTag}
+                          onClick={() => setScannedItem(item)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            background: "var(--bg-app)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: 6,
+                            padding: "4px 10px",
+                            fontSize: "0.8rem",
+                            cursor: "pointer",
+                            transition: "border-color 0.15s",
+                          }}
+                          title="Click to view equipment specifications and photo"
+                        >
                           <Check size={12} color="#059669" />
                           <span style={{ color: "#2563eb", fontFamily: "monospace", fontWeight: 600 }}>{item.elabsTag}</span>
                           <span style={{ color: "var(--text-main)" }}>{item.name}</span>
