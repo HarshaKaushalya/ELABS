@@ -714,7 +714,7 @@ export default function VisionMonitoringPage() {
               }}
             >
               <ArrowLeft size={16} />
-              <span>Back to 6-Lab CCTV Grid</span>
+              <span>Back to Grid View</span>
             </button>
           ) : (
             <div
@@ -725,7 +725,7 @@ export default function VisionMonitoringPage() {
               }}
             >
               <Grid size={15} />
-              <span>6-Lab CCTV Matrix (3 × 2 Grid)</span>
+              <span>Grid View</span>
             </div>
           )}
 
