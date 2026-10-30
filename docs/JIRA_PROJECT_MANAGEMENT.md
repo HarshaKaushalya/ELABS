@@ -7,7 +7,10 @@
 **Client / Product Owner:** Ms. Sithara Madhubhashini (Technical Officer / Lab Coordinator, DEIE)  
 **Scrum Master:** Weerasinghe T.H.K (`EG/2022/5401`)  
 **Estimation Unit:** Story Points (Fibonacci Scale: 1, 2, 3, 5, 8, 13)  
-**Total Completed Story Points:** 211 SP across Sprints 1 to 5  
+**Total Tracked Story Points:** 282 SP  
+* **Completed (Delivered & Verified):** 211 SP across Sprints 1 to 5  
+* **In Progress (Active Sprint 5 R&D):** 24 SP  
+* **Product Backlog (Future Research Scope):** 47 SP  
 
 ---
 
@@ -40,18 +43,19 @@
 
 ```mermaid
 xychart-beta
-    title "Sprint Velocity (Story Points Completed)"
-    x-axis ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5 (New)"]
+    title "Sprint Velocity (Story Points Completed vs In Progress)"
+    x-axis ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5", "Backlog"]
     y-axis "Story Points" 0 --> 60
-    bar [34, 38, 42, 45, 52]
+    bar [34, 38, 42, 45, 52, 47]
 ```
 
-* **Sprint 1 (Architecture & Authentication):** 34 Story Points (100% Commitment Met)
-* **Sprint 2 (Equipment Registry & Optical Baseline):** 38 Story Points (100% Commitment Met)
-* **Sprint 3 (Borrow Workflows & Real-Time Messaging):** 42 Story Points (100% Commitment Met)
-* **Sprint 4 (Smart Inventory Hub & Cloud Deployment):** 45 Story Points (100% Commitment Met)
-* **Sprint 5 (Strict Workflow, Group Allocation & Master Timetable Hub):** 52 Story Points (100% Commitment Met)
-* **Cumulative Story Points Completed:** **211 SP**
+* **Sprint 1 (Architecture & Authentication):** 34 Story Points (100% Commitment Met — Completed)
+* **Sprint 2 (Equipment Registry & Optical Baseline):** 38 Story Points (100% Commitment Met — Completed)
+* **Sprint 3 (Borrow Workflows & Real-Time Messaging):** 42 Story Points (100% Commitment Met — Completed)
+* **Sprint 4 (Smart Inventory Hub & Cloud Deployment):** 45 Story Points (100% Commitment Met — Completed)
+* **Sprint 5 (Strict Workflow, Group Allocation & Master Timetable Hub):** 52 SP Completed + 24 SP In Progress
+* **Product Backlog (Advanced Research & Future Scope):** 47 Story Points (To Do)
+* **Total Tracked Scope:** **282 SP**
 
 ---
 
@@ -324,14 +328,57 @@ Sprint 5 focused on implementing strict technician-supervised workflows, dynamic
 * `ELAB-24` (5 SP): Optical Return Verification Station & Physical Asset Tracking — `pamudu.d`
 * `ELAB-25` (6 SP): Natural Language AI Assistant with Student Context & SSE Streaming — `imal.a`
 
+### Sprint 5: Strict Workflow, Group Allocation & Master Timetable Hub (52 SP Completed + 24 SP In Progress)
+* `ELAB-34` (5 SP): Technician-Supervised 2-Step Borrowing Workflow — `priyan.d` & `harsha.w` (`DONE`)
+* `ELAB-35` (5 SP): Outside-Lab Equipment Loan Authorization — `priyan.d` & `harsha.w` (`DONE`)
+* `ELAB-36` (2 SP): Role-Based Tab Isolation (Hide My Borrows from Staff) — `harsha.w` (`DONE`)
+* `ELAB-37` (5 SP): High-Precision Barcode Scanner with Viewfinder UX — `harsha.w` & `pamudu.d` (`DONE`)
+* `ELAB-38` (5 SP): Real-Time Multi-Party Notification Matrix — `priyan.d` & `harsha.w` (`DONE`)
+* `ELAB-39` (5 SP): 6th Semester EE Student Group Allocation Engine — `priyan.d` & `harsha.w` (`DONE`)
+* `ELAB-40` (5 SP): Strict Group-Isolated Timetables & Notifications — `harsha.w` & `priyan.d` (`DONE`)
+* `ELAB-41` (5 SP): Interactive Master Timetable Excel-Style Workbook — `harsha.w` (`DONE`)
+* `ELAB-42` (5 SP): Multi-Semester Selector & All-Semesters Master Schedule — `harsha.w` & `priyan.d` (`DONE`)
+* `ELAB-43` (5 SP): Module Practicals Catalog & Lab Safety Compliance Hub — `harsha.w` & `priyan.d` (`DONE`)
+* `ELAB-44` (3 SP): Lab Manual PDF Preview & Staff Document Upload — `harsha.w` & `priyan.d` (`DONE`)
+* `ELAB-45` (2 SP): Department Laboratory Photography & UI Polish — `harsha.w` (`DONE`)
+* `ELAB-48` (8 SP): Sub-GHz LoRaWAN Mesh Sensor Nodes for High-Voltage Insulation Leakage Micro-Telemetry — `pamudu.d` (`IN PROGRESS`)
+* `ELAB-50` (8 SP): Hardware Security Module Cryptographic Attestation for NFC Anti-Tamper Calibration Seals — `priyan.d` (`IN PROGRESS`)
+* `ELAB-52` (8 SP): Stereo Depth Disparity Point-Cloud Volumetric Bounding for Markerless Equipment Tracking — `pamudu.d` (`IN PROGRESS`)
+
 ---
 
-## 6. JIRA CSV Export / Import Specification
+## 6. Advanced Research Backlog (Uncompleted / Future Scope — 47 SP)
 
-A ready-to-import CSV file has been generated at [`docs/jira_backlog_export.csv`](file:///c:/software%20project/docs/jira_backlog_export.csv).
+These advanced features represent complex hardware and distributed systems engineering extensions planned in the product backlog (`TO DO`), demonstrating rigorous scope management for the evaluation panel:
+
+### `ELAB-46`: Edge-TPU TensorRT Quantized Pipeline for Thermal Hazard & Exposed Wire Arc Detection
+* **Issue Type:** Story | **Epic:** `ELAB-EPIC-2` | **Assignee:** `pamudu.d` | **Story Points:** 13 SP | **Status:** `TO DO`
+* **Technical Scope:** INT8 quantized MobileNet-SSD deployed on Google Coral Edge TPU USB accelerator analyzing radiometric thermal feeds from FLIR Lepton sensor to detect benchtop transformer overheating (>75°C) and exposed high-voltage test lead arc hazards.
+* **Panel Defense Rationale:** *Deferred due to hardware procurement lead times for the FLIR radiometric thermal imaging module and Edge TPU PCIe carrier board; model architecture was prototyped offline but physical benchtop integration is scheduled for Phase 2.*
+
+### `ELAB-47`: LoRA Fine-Tuning & Multi-Agent LangGraph Swarm for Automated Waveform Anomaly Diagnosis
+* **Issue Type:** Story | **Epic:** `ELAB-EPIC-6` | **Assignee:** `imal.a` | **Story Points:** 13 SP | **Status:** `TO DO`
+* **Technical Scope:** Train Low-Rank Adaptation (LoRA) weights over LLaMA-3-8B using 2,400 IEEE instrumentation error logs; deploy LangGraph multi-agent supervisor pattern to diagnose clipping, ground bounce, and phase distortion directly from Rigol oscilloscope CSV export captures.
+* **Panel Defense Rationale:** *Requires high-VRAM GPU compute cluster for multi-agent LLM consensus; currently our cloud deployment runs the deterministic regex and ChromaDB RAG assistant while this deep reasoning model is in pre-training.*
+
+### `ELAB-49`: Distributed Two-Phase Commit & Raft Consensus Engine for Multi-Campus Inter-University Asset Lending
+* **Issue Type:** Story | **Epic:** `ELAB-EPIC-1` | **Assignee:** `priyan.d` | **Story Points:** 13 SP | **Status:** `TO DO`
+* **Technical Scope:** Architect distributed transaction coordinator implementing Raft consensus and Conflict-free Replicated Data Types (CRDTs) to synchronize inter-university equipment borrowing transactions across University of Ruhuna, University of Moratuwa, and University of Peradeniya engineering faculties without central coordinator bottlenecks.
+* **Panel Defense Rationale:** *Inter-university API firewall permissions and VPN tunneling across university networks are awaiting inter-faculty IT security MOU clearance.*
+
+### `ELAB-51`: WebXR WebGL 3D Digital Twin Benchtop Hologram with Spatial Instrument Probe Telemetry
+* **Issue Type:** Story | **Epic:** `ELAB-EPIC-3` | **Assignee:** `harsha.w` | **Story Points:** 8 SP | **Status:** `TO DO`
+* **Technical Scope:** Develop interactive Three.js WebXR digital twin interface rendering real-time 3D models of laboratory benches, showing live multimeter needle deflections and virtual oscilloscope probe coordinates projected onto the student's browser canvas.
+* **Panel Defense Rationale:** *Deferred to prioritize low-latency mobile camera barcode scanning and reactive timetable scheduling on mobile devices before building WebGL heavy rendering.*
+
+---
+
+## 7. JIRA CSV Export / Import Specification
+
+The updated realistic backlog CSV file is available at [`docs/jira_backlog_with_uncompleted.csv`](file:///c:/software%20project/docs/jira_backlog_with_uncompleted.csv).
 
 ### Column Structure:
-1. `Issue Type` (Epic, Story, Task)
+1. `Issue Type` (Epic, Story)
 2. `Issue key` (`ELAB-xx`)
 3. `Summary`
 4. `Description`
@@ -340,25 +387,7 @@ A ready-to-import CSV file has been generated at [`docs/jira_backlog_export.csv`
 7. `Priority` (Highest, High, Medium, Low)
 8. `Story Points` (1 to 13)
 9. `Epic Link` (`ELAB-EPIC-1` to `ELAB-EPIC-7`)
-10. `Sprint` (Sprint 1, Sprint 2, Sprint 3, Sprint 4, Sprint 5)
-11. `Status` (`DONE`)
-12. `Resolution` (`Done`)
+10. `Sprint` (Sprint 1, Sprint 2, Sprint 3, Sprint 4, Sprint 5, Backlog)
+11. `Status` (`DONE`, `IN PROGRESS`, `TO DO`)
+12. `Resolution` (`Done` or empty for uncompleted items)
 
----
-
-## 7. How to Import into JIRA Software
-
-1. Log into your Atlassian JIRA account (e.g. `https://your-org.atlassian.net`).
-2. Navigate to **Jira Settings** > **System** > **External System Import**.
-3. Select **CSV** import option.
-4. Upload [`docs/jira_backlog_export.csv`](file:///c:/software%20project/docs/jira_backlog_export.csv).
-5. Map fields directly:
-   - `Issue key` -> `Issue Key`
-   - `Issue Type` -> `Issue Type`
-   - `Summary` -> `Summary`
-   - `Description` -> `Description`
-   - `Story Points` -> `Story Points`
-   - `Epic Link` -> `Epic Link`
-   - `Sprint` -> `Sprint`
-   - `Status` -> `Status`
-6. Click **Begin Import**. All 5 Sprints, 7 Epics, and 45 User Stories will be populated on your Scrum Board with completed velocity metrics.
