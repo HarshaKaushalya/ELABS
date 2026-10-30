@@ -20,6 +20,7 @@ import timetableRoutes from "./modules/academic/timetable.routes";
 import assessmentRoutes from "./modules/academic/assessments.routes";
 import analyticsRoutes from "./modules/analytics/analytics.routes";
 import aiRoutes from "./modules/ai/ai.routes";
+import feedbackRoutes from "./modules/feedback/feedback.routes";
 
 export const app = express();
 
@@ -57,6 +58,7 @@ app.use("/timetable", timetableRoutes);
 app.use("/academic", assessmentRoutes);
 app.use("/analytics", analyticsRoutes);
 app.use("/ai", aiRoutes);
+app.use("/feedback", feedbackRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Global Error Handler to prevent crashes
