@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -72,8 +73,14 @@ const CATEGORIES = [
   { key: "GENERAL_SUGGESTION", label: "General Improvement Suggestion", icon: Lightbulb, color: "#10b981" },
 ] as const;
 
-export default function FeedbackPage() {
+function FeedbackContent() {
   const { me } = useAuth();
+  const searchParams = useSearchParams();
+  const reportItem = searchParams.get("reportItem");
+  const reportLabId = searchParams.get("labId");
+  const reportItemName = searchParams.get("itemName");
+  const reportModel = searchParams.get("model");
+
   const [tickets, setTickets] = useState<FeedbackTicket[]>([]);
   const [stats, setStats] = useState<FeedbackStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,6 +136,20 @@ export default function FeedbackPage() {
   useEffect(() => {
     fetchTickets();
   }, []);
+
+  // Pre-fill when redirected from Equipment Details modal
+  useEffect(() => {
+    if (reportItem || reportItemName) {
+      if (reportLabId) setFormLabId(Number(reportLabId));
+      setFormCategory("EQUIPMENT_ISSUE");
+      setFormPriority("HIGH");
+      setFormSubject(`[Malfunction] ${reportItemName || "Apparatus"} (${reportItem || ""})`);
+      setFormDescription(
+        `Equipment Tag: ${reportItem || "N/A"}\nApparatus: ${reportItemName || "N/A"}${reportModel ? ` (${reportModel})` : ""}\n\nObserved Malfunction / Defect Description:\n- `
+      );
+      setShowSubmitModal(true);
+    }
+  }, [reportItem, reportLabId, reportItemName, reportModel]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -497,6 +518,18 @@ export default function FeedbackPage() {
               </button>
             </div>
 
+            {reportItem && (
+              <div style={{ background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.3)", color: "#f59e0b", padding: "10px 14px", borderRadius: 8, fontSize: "0.85rem", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+                <Wrench size={18} />
+                <div>
+                  <div style={{ fontWeight: 700 }}>Reporting Defect on Tag {reportItem}</div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-main)", marginTop: 2 }}>
+                    {reportItemName} {reportModel ? `• ${reportModel}` : ""}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {formError && (
               <div style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", padding: "10px 14px", borderRadius: 8, fontSize: "0.85rem", marginBottom: 14 }}>
                 {formError}
@@ -748,5 +781,13 @@ export default function FeedbackPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+export default function FeedbackPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, color: "var(--text-muted)", textAlign: "center" }}>Loading helpdesk portal...</div>}>
+      <FeedbackContent />
+    </Suspense>
   );
 }

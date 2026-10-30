@@ -2096,7 +2096,16 @@ export default function InventoryPage() {
       {isScanning && <BarcodeScanner onScan={handleScan} onClose={() => setIsScanning(false)} />}
 
       {/* Item Details Modal */}
-      {scannedItem && <ItemDetailsModal item={scannedItem} onClose={() => setScannedItem(null)} />}
+      {scannedItem && (
+        <ItemDetailsModal
+          item={scannedItem}
+          onClose={() => setScannedItem(null)}
+          onItemUpdated={(updated) => {
+            setScannedItem(updated);
+            setItems((prev) => prev.map((it) => (it.id === updated.id ? { ...it, ...updated } : it)));
+          }}
+        />
+      )}
     </AppShell>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import {
   X,
   FileText,
@@ -11,144 +11,139 @@ import {
   AlertCircle,
   Calendar,
   Building,
-  Cpu,
-  Layers,
+  Upload,
+  Link as LinkIcon,
+  Check,
   Wrench,
-  ShieldCheck,
   ExternalLink,
-  Barcode,
-  Info,
+  ShieldAlert,
+  Camera,
 } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { apiFetch } from "@/lib/api";
 
 interface ItemDetailsModalProps {
   item: any;
   onClose: () => void;
-  onBorrowRequest?: (item: any) => void;
+  onItemUpdated?: (updatedItem: any) => void;
 }
 
-function getEquipmentImage(item: any): string {
-  const name = (item?.name || "").toLowerCase();
-  const cat = (item?.category || "").toLowerCase();
-  const model = (item?.model || "").toLowerCase();
+export function ItemDetailsModal({ item, onClose, onItemUpdated }: ItemDetailsModalProps) {
+  const router = useRouter();
+  const { me } = useAuth();
+  const [localItem, setLocalItem] = useState<any>(item);
 
-  if (name.includes("oscilloscope") || model.includes("ds1054") || model.includes("tds")) {
-    return "/equipment/oscilloscope.jpg";
-  }
-  if (name.includes("multimeter") || name.includes("clamp") || model.includes("fluke") || model.includes("ut61e")) {
-    return "/equipment/multimeter.jpg";
-  }
-  if (name.includes("power supply") || name.includes("variac") || name.includes("transformer")) {
-    return "/equipment/power-supply.jpg";
-  }
-  if (name.includes("function") || name.includes("signal generator") || model.includes("dg1022")) {
-    return "/equipment/function-generator.jpg";
-  }
-  if (name.includes("spectrum") || name.includes("sdr") || name.includes("rf") || name.includes("antenna") || cat.includes("rf")) {
-    return "/equipment/spectrum-analyzer.jpg";
-  }
-  if (name.includes("solder") || cat.includes("assembly")) {
-    return "/equipment/soldering-station.jpg";
-  }
-  if (name.includes("arduino") || name.includes("raspberry") || name.includes("fpga") || cat.includes("microcontroller")) {
-    return "/equipment/microcontroller.jpg";
-  }
-  if (name.includes("breadboard") || cat.includes("component")) {
-    return "/equipment/breadboard.jpg";
-  }
-  return "/equipment/default-instrument.jpg";
-}
+  // Staff management state
+  const [showStaffPanel, setShowStaffPanel] = useState(false);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedDocFile, setSelectedDocFile] = useState<File | null>(null);
+  const [customDatasheetUrl, setCustomDatasheetUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-function getEquipmentSpecs(item: any): { label: string; value: string }[] {
-  const model = (item?.model || "").toLowerCase();
-  const name = (item?.name || "").toLowerCase();
+  if (!localItem) return null;
 
-  if (model.includes("ds1054z")) {
-    return [
-      { label: "Bandwidth", value: "50 MHz (4 Analog Channels)" },
-      { label: "Sample Rate", value: "1 GSa/s Real-time" },
-      { label: "Memory Depth", value: "24 Mpts standard" },
-      { label: "Display", value: "7.0 inch WVGA (800x480) TFT" },
-    ];
-  }
-  if (model.includes("tds2024c")) {
-    return [
-      { label: "Bandwidth", value: "200 MHz (4 Channels)" },
-      { label: "Sample Rate", value: "2.0 GSa/s on all channels" },
-      { label: "Record Length", value: "2.5k points on all channels" },
-      { label: "Interface", value: "USB 2.0 Host & Device" },
-    ];
-  }
-  if (model.includes("fluke 87v")) {
-    return [
-      { label: "Measurement", value: "True-RMS AC Voltage & Current" },
-      { label: "DC Accuracy", value: "0.05% Basic DC" },
-      { label: "Counts", value: "20,000 counts high resolution" },
-      { label: "Safety Rating", value: "CAT III 1000V / CAT IV 600V" },
-    ];
-  }
-  if (model.includes("ut61e")) {
-    return [
-      { label: "Counts", value: "22,000 counts auto-ranging" },
-      { label: "Bandwidth", value: "45 Hz - 10 kHz True RMS" },
-      { label: "Interface", value: "RS-232 / USB PC connection" },
-      { label: "Safety Rating", value: "CAT III 1000V / CAT IV 600V" },
-    ];
-  }
-  if (model.includes("dp832")) {
-    return [
-      { label: "Channels", value: "3 Isolated Channels (30V/3A, 30V/3A, 5V/3A)" },
-      { label: "Total Power", value: "195 Watts" },
-      { label: "Ripple & Noise", value: "< 350 uVrms / 2 mVpp" },
-      { label: "Over-Protection", value: "OVP, OCP, OTP hardware trip" },
-    ];
-  }
-  if (model.includes("dg1022z")) {
-    return [
-      { label: "Max Frequency", value: "25 MHz Sine / Square" },
-      { label: "Channels", value: "2 Independent Function Channels" },
-      { label: "Sample Rate", value: "200 MSa/s, 14-bit vertical" },
-      { label: "Waveforms", value: "Sine, Square, Ramp, Pulse, Noise, Arb" },
-    ];
-  }
-  if (model.includes("fsh8")) {
-    return [
-      { label: "Frequency Range", value: "9 kHz to 8 GHz" },
-      { label: "Resolution BW", value: "1 Hz to 3 MHz" },
-      { label: "DANL", value: "-161 dBm (preamp on)" },
-      { label: "Type", value: "Handheld Rugged RF Spectrum Analyser" },
-    ];
-  }
+  const isStaff = me?.roles?.some((r) =>
+    ["SYSTEM_ADMIN", "LECTURER", "TECHNICIAN", "MODULE_COORDINATOR"].includes(r)
+  ) ?? false;
 
-  return [
-    { label: "Equipment Category", value: item?.category || "Laboratory Apparatus" },
-    { label: "Hardware Model", value: item?.model || "Standard Issue" },
-    { label: "Operating Lab", value: item?.labName || "DEIE Facility" },
-    { label: "Inspection Status", value: "Verified by Technical Officer" },
-  ];
-}
+  const handleViewDatasheet = () => {
+    if (localItem.datasheetUrl) {
+      window.open(localItem.datasheetUrl, "_blank", "noopener,noreferrer");
+    } else {
+      alert("No datasheet is linked for this equipment yet. Lab technicians can upload one in Staff Controls.");
+    }
+  };
 
-export function ItemDetailsModal({ item, onClose, onBorrowRequest }: ItemDetailsModalProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "specs">("overview");
+  const handleReportBroken = () => {
+    onClose();
+    const query = new URLSearchParams({
+      reportItem: localItem.elabsTag,
+      labId: String(localItem.labId || ""),
+      itemName: localItem.name,
+      model: localItem.model || "",
+    });
+    router.push(`/feedback?${query.toString()}`);
+  };
 
-  if (!item) return null;
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setUploadError(null);
+    }
+  };
 
-  const imgSrc = getEquipmentImage(item);
-  const specs = getEquipmentSpecs(item);
+  const handleDocChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedDocFile(file);
+      setUploadError(null);
+    }
+  };
+
+  const handleSaveMedia = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedImageFile && !selectedDocFile && !customDatasheetUrl.trim()) {
+      setUploadError("Please select an image, a datasheet file, or provide a URL.");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setUploadError(null);
+      setUploadMessage(null);
+
+      const formData = new FormData();
+      if (selectedImageFile) {
+        formData.append("image", selectedImageFile);
+      }
+      if (selectedDocFile) {
+        formData.append("datasheet", selectedDocFile);
+      }
+      if (customDatasheetUrl.trim()) {
+        formData.append("datasheetUrl", customDatasheetUrl.trim());
+      }
+
+      const res = await apiFetch(`/inventory/items/${localItem.id}/media`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to upload media.");
+      }
+
+      const data = await res.json();
+      setUploadMessage("Equipment media updated successfully!");
+      if (data.item) {
+        setLocalItem(data.item);
+        onItemUpdated?.(data.item);
+      }
+
+      setSelectedImageFile(null);
+      setSelectedDocFile(null);
+      setCustomDatasheetUrl("");
+      setTimeout(() => setUploadMessage(null), 3000);
+    } catch (err: any) {
+      setUploadError(err.message || "Failed to update equipment media.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-150">
-      <div
-        className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col"
-        style={{ maxHeight: "90vh" }}
-      >
-        {/* ── TOP HEADER ── */}
-        <div className="flex justify-between items-center px-5 py-4 border-b border-slate-800 bg-slate-900/90">
-          <div className="flex items-center gap-2">
-            <Barcode className="w-5 h-5 text-sky-400" />
-            <h3 className="text-white font-semibold text-base">
-              Laboratory Apparatus Profile
-            </h3>
-          </div>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* ── HEADER ── */}
+        <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-900">
+          <h3 className="text-white font-medium flex items-center gap-2 text-base">
+            Equipment Details
+          </h3>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-800"
@@ -157,166 +152,206 @@ export function ItemDetailsModal({ item, onClose, onBorrowRequest }: ItemDetails
           </button>
         </div>
 
-        {/* ── SCROLLABLE BODY ── */}
-        <div className="overflow-y-auto flex-1 p-5 space-y-5">
-          {/* Real Equipment Image & Badge Banner */}
-          <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-slate-950 aspect-[16/9] shadow-inner group">
-            <Image
-              src={imgSrc}
-              alt={item.name}
-              fill
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
-              sizes="(max-width: 640px) 100vw, 500px"
-              priority
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+        {/* ── CONTENT ── */}
+        <div className="p-6 overflow-y-auto space-y-5">
+          {/* Real Uploaded Photo (ONLY shown if an image was actually uploaded for this equipment) */}
+          {localItem.imageUrl ? (
+            <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-slate-950 aspect-[16/9] shadow-inner">
+              <Image
+                src={localItem.imageUrl}
+                alt={localItem.name}
+                fill
+                className="object-cover"
+                sizes="(max-width: 640px) 100vw, 500px"
+              />
+              <div className="absolute top-2 right-2 bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded border border-slate-700 text-[11px] text-slate-300">
+                Uploaded Photograph
+              </div>
+            </div>
+          ) : null}
 
-            <div className="absolute top-3 left-3 flex gap-2">
-              <span className="font-mono text-xs font-bold text-sky-300 bg-slate-900/90 backdrop-blur-md px-2.5 py-1 rounded-md border border-sky-500/30 shadow-md">
-                {item.elabsTag}
+          {/* Title & Tag Info */}
+          <div>
+            <h2 className="text-2xl font-bold text-white tracking-tight">{localItem.name}</h2>
+            <div className="flex gap-2 items-center mt-2 flex-wrap">
+              <span className="font-mono text-xs text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded font-semibold border border-emerald-400/20">
+                {localItem.elabsTag}
+              </span>
+              <span className="text-sm text-slate-400">
+                {localItem.category} • {localItem.model || "Standard"}
+              </span>
+            </div>
+          </div>
+
+          {/* Properties Grid */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg border border-slate-800/60">
+              <span className="text-slate-400 text-sm">Status</span>
+              {localItem.status === "AVAILABLE" && (
+                <span className="flex items-center gap-1.5 text-emerald-400 text-sm font-medium">
+                  <CheckCircle2 className="w-4 h-4" /> Available (In Service)
+                </span>
+              )}
+              {localItem.status === "BORROWED" && (
+                <span className="flex items-center gap-1.5 text-amber-400 text-sm font-medium">
+                  <AlertCircle className="w-4 h-4" /> Borrowed / In-Use
+                </span>
+              )}
+              {localItem.status === "MAINTENANCE" && (
+                <span className="flex items-center gap-1.5 text-red-400 text-sm font-medium">
+                  <AlertTriangle className="w-4 h-4" /> Under Maintenance / Repair
+                </span>
+              )}
+              {localItem.status === "OUT_OF_SERVICE" && (
+                <span className="flex items-center gap-1.5 text-red-500 text-sm font-medium">
+                  <AlertTriangle className="w-4 h-4" /> Out of Service
+                </span>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg border border-slate-800/60">
+              <span className="text-slate-400 text-sm">Assigned Laboratory</span>
+              <span className="text-slate-200 text-sm font-medium flex items-center gap-1.5">
+                <Building className="w-4 h-4 text-sky-400" />
+                {localItem.labName || "DEIE Facility"}
               </span>
             </div>
 
-            <div className="absolute top-3 right-3">
-              {item.status === "AVAILABLE" && (
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/80 backdrop-blur-md px-2.5 py-1 rounded-md border border-emerald-500/30">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> In Service
-                </span>
-              )}
-              {item.status === "BORROWED" && (
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-300 bg-amber-950/80 backdrop-blur-md px-2.5 py-1 rounded-md border border-amber-500/30">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" /> Issued / In-Use
-                </span>
-              )}
-              {item.status === "MAINTENANCE" && (
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-rose-300 bg-rose-950/80 backdrop-blur-md px-2.5 py-1 rounded-md border border-rose-500/30">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> In Calibration / Repair
-                </span>
-              )}
+            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg border border-slate-800/60">
+              <span className="text-slate-400 text-sm">Serial Identification</span>
+              <span className="text-slate-200 text-sm font-mono">
+                {localItem.serialNo || "N/A"}
+              </span>
             </div>
 
-            <div className="absolute bottom-3 left-3 right-3">
-              <h2 className="text-xl font-bold text-white tracking-tight drop-shadow-md">
-                {item.name}
-              </h2>
-              <div className="text-xs text-slate-300 flex items-center gap-2 mt-0.5 drop-shadow">
-                <span className="font-medium text-sky-400">{item.model || "Standard"}</span>
-                <span>•</span>
-                <span>{item.category}</span>
-              </div>
+            <div className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg border border-slate-800/60">
+              <span className="text-slate-400 text-sm">Last Updated</span>
+              <span className="text-slate-200 text-sm flex items-center gap-1 font-mono">
+                <Calendar className="w-4 h-4 text-slate-400" />
+                {localItem.updatedAt ? new Date(localItem.updatedAt).toLocaleDateString() : "Active"}
+              </span>
             </div>
+
+            {localItem.conditionNote && (
+              <div className="p-3 bg-slate-800/30 rounded-lg border border-slate-800/60 text-xs">
+                <span className="text-slate-400 font-medium block mb-1">Condition Notes:</span>
+                <p className="text-slate-300 italic m-0">&ldquo;{localItem.conditionNote}&rdquo;</p>
+              </div>
+            )}
           </div>
 
-          {/* Nav Tabs */}
-          <div className="flex border-b border-slate-800 text-sm">
+          {/* Primary Action Buttons: View Datasheet & Report Broken */}
+          <div className="flex gap-3 pt-2">
             <button
-              onClick={() => setActiveTab("overview")}
-              className={`pb-2.5 px-3 font-medium transition-colors border-b-2 flex items-center gap-1.5 ${
-                activeTab === "overview"
-                  ? "border-sky-500 text-sky-400"
-                  : "border-transparent text-slate-400 hover:text-slate-200"
-              }`}
+              onClick={handleViewDatasheet}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm shadow-md"
             >
-              <Info className="w-4 h-4" /> Apparatus Details
+              <FileText className="w-4 h-4" />
+              View Datasheet
             </button>
+
             <button
-              onClick={() => setActiveTab("specs")}
-              className={`pb-2.5 px-3 font-medium transition-colors border-b-2 flex items-center gap-1.5 ${
-                activeTab === "specs"
-                  ? "border-sky-500 text-sky-400"
-                  : "border-transparent text-slate-400 hover:text-slate-200"
-              }`}
+              onClick={handleReportBroken}
+              className="flex-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
+              title="Report broken equipment or issue to Lab Helpdesk"
             >
-              <Cpu className="w-4 h-4" /> Technical Specifications
+              <Wrench className="w-4 h-4" />
+              Report Issue / Defect
             </button>
           </div>
 
-          {/* TAB 1: OVERVIEW */}
-          {activeTab === "overview" && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-800 flex flex-col justify-between">
-                  <span className="text-slate-400 font-medium">Assigned Laboratory</span>
-                  <span className="text-slate-200 font-semibold text-sm mt-1 flex items-center gap-1.5">
-                    <Building className="w-4 h-4 text-sky-400 shrink-0" />
-                    <span className="truncate">{item.labName || "DEIE Facility"}</span>
-                  </span>
-                </div>
-
-                <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-800 flex flex-col justify-between">
-                  <span className="text-slate-400 font-medium">Serial Identification</span>
-                  <span className="text-slate-200 font-mono text-sm mt-1 truncate">
-                    {item.serialNo || "DEIE-ENG-CALIB"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-slate-400" />
-                  <span className="text-slate-400 font-medium">Last Inspection / Update</span>
-                </div>
-                <span className="text-slate-200 font-mono">
-                  {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "Active"}
+          {/* ── ADMIN / TECHNICIAN MEDIA UPLOAD SECTION ── */}
+          {isStaff && (
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4" /> Staff Controls: Equipment Media
                 </span>
-              </div>
-
-              {item.conditionNote && (
-                <div className="p-3 bg-slate-800/40 rounded-xl border border-slate-800 text-xs">
-                  <span className="text-slate-400 font-medium block mb-1">Condition & Calibration Notes</span>
-                  <p className="text-slate-300 italic m-0">
-                    &ldquo;{item.conditionNote}&rdquo;
-                  </p>
-                </div>
-              )}
-
-              <div className="p-3 bg-sky-950/30 rounded-xl border border-sky-800/30 text-xs flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-                <div className="text-slate-300 leading-relaxed">
-                  Calibrated according to Department of Electrical and Information Engineering lab safety protocol. Always verify grounding before applying high-voltage or high-frequency excitations.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: SPECS */}
-          {activeTab === "specs" && (
-            <div className="space-y-2.5">
-              {specs.map((s, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-slate-800/50 rounded-xl border border-slate-800/80 flex justify-between items-center text-xs"
+                <button
+                  type="button"
+                  onClick={() => setShowStaffPanel(!showStaffPanel)}
+                  className="text-xs text-slate-400 hover:text-white underline transition-colors"
                 >
-                  <span className="text-slate-400 font-medium">{s.label}</span>
-                  <span className="text-slate-100 font-semibold">{s.value}</span>
-                </div>
-              ))}
-
-              <div className="mt-3 p-3 bg-slate-800/30 rounded-xl border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
-                <span>Standard DEIE Datasheet Archive</span>
-                <span className="font-mono text-sky-400">PDF Document</span>
+                  {showStaffPanel ? "Hide Controls" : "Upload Photo / Datasheet"}
+                </button>
               </div>
+
+              {showStaffPanel && (
+                <form onSubmit={handleSaveMedia} className="p-4 bg-slate-950/70 border border-slate-800 rounded-xl space-y-4">
+                  {uploadMessage && (
+                    <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-lg flex items-center gap-2">
+                      <Check className="w-4 h-4" /> {uploadMessage}
+                    </div>
+                  )}
+
+                  {uploadError && (
+                    <div className="p-2.5 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-lg">
+                      {uploadError}
+                    </div>
+                  )}
+
+                  {/* Upload Image */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Upload Apparatus Photo (.png, .jpg)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer"
+                    />
+                    {imagePreview && (
+                      <div className="mt-2 relative w-24 h-16 rounded overflow-hidden border border-slate-700">
+                        <Image src={imagePreview} alt="Preview" fill className="object-cover" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Datasheet File */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Upload Datasheet Document (.pdf, .doc)
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleDocChange}
+                      className="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Or Enter Web Datasheet URL */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Or External Datasheet URL
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <LinkIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                      <input
+                        type="url"
+                        placeholder="https://example.com/datasheet.pdf"
+                        value={customDatasheetUrl}
+                        onChange={(e) => setCustomDatasheetUrl(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={uploading}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {uploading ? "Saving..." : "Save Media"}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
-        </div>
-
-        {/* ── FOOTER ACTIONS ── */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/95 flex gap-3">
-          <Link
-            href="/feedback"
-            onClick={onClose}
-            className="flex-1 px-3 py-2.5 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
-          >
-            <Wrench className="w-3.5 h-3.5 text-amber-400" />
-            Report Issue / Calibration
-          </Link>
-
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold transition-colors shadow-lg shadow-sky-600/20"
-          >
-            Close Details
-          </button>
         </div>
       </div>
     </div>

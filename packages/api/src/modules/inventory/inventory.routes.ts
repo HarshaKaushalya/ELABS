@@ -1,11 +1,44 @@
 import { Router } from "express";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
 import { z } from "zod";
 import { requireAuth } from "../auth/auth.middleware";
 import { requirePermission } from "../../rbac/requirePermission";
 import { pool } from "../../db/mysql";
 import { createNotification, notifyUsersByRole } from "../notifications/notifications.service";
+import { findDatasheet } from "../ai/datasheets.data";
 
 const router = Router();
+
+// Upload directories for equipment pictures & datasheets
+const equipUploadDir = path.join(process.cwd(), "uploads", "equipment");
+const datasheetUploadDir = path.join(process.cwd(), "uploads", "datasheets");
+try {
+  if (!fs.existsSync(equipUploadDir)) fs.mkdirSync(equipUploadDir, { recursive: true });
+  if (!fs.existsSync(datasheetUploadDir)) fs.mkdirSync(datasheetUploadDir, { recursive: true });
+} catch (e) {
+  console.warn("Could not create media upload directories:", e);
+}
+
+const mediaStorage = multer.diskStorage({
+  destination: (_req, file, cb) => {
+    if (file.fieldname === "image") {
+      cb(null, equipUploadDir);
+    } else {
+      cb(null, datasheetUploadDir);
+    }
+  },
+  filename: (_req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    cb(null, `${Date.now()}-${safeName}`);
+  },
+});
+
+const mediaUpload = multer({
+  storage: mediaStorage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+});
 
 // Helper to get user roles
 async function getUserRoles(userId: number, connOrPool: any): Promise<string[]> {
@@ -35,8 +68,8 @@ router.get("/items", requireAuth, async (req, res) => {
   const [rows] = await pool.query(
     `
     SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
-           i.status, i.condition_note as conditionNote, i.updated_at as updatedAt,
-           l.name as labName
+           i.status, i.condition_note as conditionNote, i.image_url as imageUrl, i.datasheet_url as datasheetUrl,
+           i.updated_at as updatedAt, l.name as labName
     FROM inventory_items i
     JOIN labs l ON l.id = i.lab_id
     WHERE (:labId IS NULL OR i.lab_id = :labId)
@@ -45,7 +78,15 @@ router.get("/items", requireAuth, async (req, res) => {
     { labId }
   );
 
-  res.json({ items: rows });
+  const items = (rows as any[]).map((row) => {
+    const ds = findDatasheet(row.model || row.name);
+    return {
+      ...row,
+      datasheetUrl: row.datasheetUrl || ds?.datasheetUrl || ds?.manualUrl || null,
+    };
+  });
+
+  res.json({ items });
 });
 
 // ── 2. Available Items for a Lab ─────────────────────────────────────────────
@@ -93,8 +134,8 @@ router.get("/items/barcode/:tag", requireAuth, async (req, res) => {
   const [rows] = await pool.query(
     `
     SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
-           i.status, i.condition_note as conditionNote, i.updated_at as updatedAt,
-           l.name as labName
+           i.status, i.condition_note as conditionNote, i.image_url as imageUrl, i.datasheet_url as datasheetUrl,
+           i.updated_at as updatedAt, l.name as labName
     FROM inventory_items i
     JOIN labs l ON l.id = i.lab_id
     WHERE i.elabs_tag = :tag
@@ -104,6 +145,9 @@ router.get("/items/barcode/:tag", requireAuth, async (req, res) => {
 
   const item = (rows as any[])[0];
   if (!item) return res.status(404).json({ error: "Item not found" });
+
+  const ds = findDatasheet(item.model || item.name);
+  item.datasheetUrl = item.datasheetUrl || ds?.datasheetUrl || ds?.manualUrl || null;
 
   res.json({ item });
 });
@@ -899,5 +943,86 @@ router.get("/barcode-events", requireAuth, requirePermission("inventory:borrow")
 
   res.json({ events: rows });
 });
+
+// ── 14. Update Equipment Media (Admin & Technician Only) ──────────────────────
+router.post(
+  "/items/:id/media",
+  requireAuth,
+  mediaUpload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "datasheet", maxCount: 1 },
+  ]),
+  async (req: any, res) => {
+    try {
+      const itemId = Number(req.params.id);
+      if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
+
+      const roles = await getUserRoles(req.user.id, pool);
+      const isStaff = roles.some((r) =>
+        ["SYSTEM_ADMIN", "LECTURER", "TECHNICIAN", "MODULE_COORDINATOR"].includes(r)
+      );
+      if (!isStaff) {
+        return res.status(403).json({ error: "Only lab technicians and administrators can update equipment media" });
+      }
+
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const datasheetUrlInput = req.body?.datasheetUrl;
+
+      let imagePath: string | null = null;
+      let datasheetPath: string | null = null;
+
+      if (files?.["image"]?.[0]) {
+        imagePath = `/uploads/equipment/${files["image"][0].filename}`;
+      }
+      if (files?.["datasheet"]?.[0]) {
+        datasheetPath = `/uploads/datasheets/${files["datasheet"][0].filename}`;
+      } else if (datasheetUrlInput && typeof datasheetUrlInput === "string" && datasheetUrlInput.trim().length > 0) {
+        datasheetPath = datasheetUrlInput.trim();
+      }
+
+      const updates: string[] = [];
+      const params: any = { id: itemId };
+
+      if (imagePath) {
+        updates.push("image_url = :imagePath");
+        params.imagePath = imagePath;
+      }
+      if (datasheetPath) {
+        updates.push("datasheet_url = :datasheetPath");
+        params.datasheetPath = datasheetPath;
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: "No image, datasheet file, or URL provided" });
+      }
+
+      await pool.query(
+        `UPDATE inventory_items SET ${updates.join(", ")} WHERE id = :id`,
+        params
+      );
+
+      const [rows] = await pool.query(
+        `SELECT i.id, i.lab_id as labId, i.elabs_tag as elabsTag, i.name, i.category, i.model, i.serial_no as serialNo,
+                i.status, i.condition_note as conditionNote, i.image_url as imageUrl, i.datasheet_url as datasheetUrl,
+                i.updated_at as updatedAt, l.name as labName
+         FROM inventory_items i
+         JOIN labs l ON l.id = i.lab_id
+         WHERE i.id = :id`,
+        { id: itemId }
+      );
+
+      const item = (rows as any[])[0];
+      if (item) {
+        const ds = findDatasheet(item.model || item.name);
+        item.datasheetUrl = item.datasheetUrl || ds?.datasheetUrl || ds?.manualUrl || null;
+      }
+
+      return res.json({ message: "Equipment media updated successfully", item });
+    } catch (err: any) {
+      console.error("Error updating equipment media:", err);
+      return res.status(500).json({ error: "Failed to update equipment media" });
+    }
+  }
+);
 
 export default router;
