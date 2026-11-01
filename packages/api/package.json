@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx tests/auth.spec.ts && tsx tests/inventory.spec.ts",
+    "test": "tsx tests/auth.spec.ts && tsx tests/inventory.spec.ts && tsx tests/unit_suite.spec.ts",
     "seed": "tsx src/db/seed.ts",
     "db:init": "tsx src/db/init-db.ts"
   },
