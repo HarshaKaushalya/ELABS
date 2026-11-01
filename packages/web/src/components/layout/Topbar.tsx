@@ -189,14 +189,18 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
     }
     setShowNotifications(false);
 
-    if (notif.meta?.url) {
+    if (notif.meta?.url && !notif.meta.url.startsWith("/courses")) {
       router.push(notif.meta.url);
     } else if (notif.type.startsWith("BORROW_")) {
       router.push("/inventory");
     } else if (notif.type.startsWith("ASSIGNMENT_")) {
-      router.push("/courses");
+      if (notif.meta?.moduleId && notif.meta?.assignmentId) {
+        router.push(`/labs/module/${notif.meta.moduleId}/assignment/${notif.meta.assignmentId}`);
+      } else {
+        router.push("/labs");
+      }
     } else if (notif.type === "LAB_REMINDER") {
-      router.push("/academic-calendar");
+      router.push("/dashboard");
     } else if (notif.type === "BROADCAST") {
       router.push("/messages");
     } else {

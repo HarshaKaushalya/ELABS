@@ -6,7 +6,6 @@ const PROTECTED = [
   "/calendar",
   "/labs",
   "/inventory",
-  "/courses",
   "/messages",
   "/notifications",
   "/ai",
@@ -18,6 +17,12 @@ const PROTECTED = [
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  if (pathname === "/courses" || pathname.startsWith("/courses/")) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/labs";
+    return NextResponse.redirect(url);
+  }
 
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();

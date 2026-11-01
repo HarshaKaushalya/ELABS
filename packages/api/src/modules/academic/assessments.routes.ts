@@ -269,7 +269,7 @@ router.patch("/submissions/:id/grade", requireAuth, async (req: AuthedRequest, r
     // Notify student about the grade
     try {
       const [subRows] = await pool.query(
-        `SELECT s.student_id, a.title as assignment_title, m.code as module_code
+        `SELECT s.student_id, s.assignment_id, a.module_id, a.title as assignment_title, m.code as module_code
          FROM assignment_submissions s
          JOIN assignments a ON a.id = s.assignment_id
          JOIN modules m ON m.id = a.module_id
@@ -278,12 +278,16 @@ router.patch("/submissions/:id/grade", requireAuth, async (req: AuthedRequest, r
       );
       const sub = (subRows as any[])[0];
       if (sub?.student_id) {
+        const assignmentUrl = sub.module_id && sub.assignment_id
+          ? `/labs/module/${sub.module_id}/assignment/${sub.assignment_id}`
+          : `/labs`;
+
         await createNotification(
           sub.student_id,
           "ASSIGNMENT_GRADED",
           `Assignment Graded: ${sub.assignment_title}`,
           `Your submission for ${sub.module_code} ("${sub.assignment_title}") has been graded. Score: ${body.score}/100.${body.feedback ? ` Feedback: "${body.feedback}"` : ""}`,
-          { submissionId: id, score: body.score, url: "/courses" }
+          { submissionId: id, score: body.score, moduleId: sub.module_id, assignmentId: sub.assignment_id, url: assignmentUrl }
         );
       }
     } catch (notifErr) {
