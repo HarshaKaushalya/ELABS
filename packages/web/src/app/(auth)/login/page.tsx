@@ -83,7 +83,7 @@ export default function LoginPage() {
     <div className="login-page">
       {/* Full-screen background photo */}
       <div className="login-bg">
-        <img src="/university-bg.png" alt="University of Ruhuna" />
+        <img src="/deie-department-bg.jpg" alt="Department of Electrical & Information Engineering, University of Ruhuna" />
         <div className="login-bg-overlay" />
       </div>
 

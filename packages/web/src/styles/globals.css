@@ -1500,11 +1500,11 @@ tr:hover td {
   inset: 0;
   background: linear-gradient(
     135deg,
-    rgba(5, 12, 29, 0.88) 0%,
-    rgba(10, 23, 50, 0.75) 50%,
-    rgba(5, 12, 29, 0.85) 100%
+    rgba(5, 12, 29, 0.52) 0%,
+    rgba(10, 23, 50, 0.38) 50%,
+    rgba(5, 12, 29, 0.58) 100%
   );
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(0px);
 }
 
 /* Main content grid */
