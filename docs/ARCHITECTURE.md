@@ -27,9 +27,10 @@ flowchart TD
         SCHEDULER["Background Automation Worker<br/>• Overdue Detection & 24h Return Reminders<br/>• Automated Immutable Audit Log Generator"]
     end
 
-    subgraph MICROSERVICES["4. Vision & AI Microservices Tier (Python)"]
-        VISION_SVC["Computer Vision Service (OpenCV / ByteTrack)<br/>• Benchtop Camera Calibration & Tag Detection<br/>• 1D / 2D Barcode & QR Code Decoder<br/>• YOLOv8-Pose Counter Activity & Tracking"]
-        AI_RAG["AI & Natural Language Service (FastAPI)<br/>• Deterministic Parameterized SQL Generator<br/>• RAG Pipeline over PDF Equipment Manuals<br/>• Server-Sent Event (SSE) Chat Streaming"]
+    subgraph MICROSERVICES["4. Vision & AI Microservices Tier"]
+        VISION_SVC["Computer Vision Service (Python / OpenCV)<br/>• Benchtop Camera Calibration & Tag Detection<br/>• 1D / 2D Barcode & QR Code Decoder<br/>• YOLOv8-Pose Counter Activity & ByteTrack"]
+        AI_RAG["AI & Natural Language Service (FastAPI / Express)<br/>• Deterministic Parameterized SQL Generator<br/>• Dynamic Student Context Injection<br/>• Server-Sent Event (SSE) Chat Streaming"]
+        GEMINI["Google Gemini 1.5 Pro / Flash Cloud AI<br/>• High-Precision Conversational Assistant<br/>• Multi-Turn Equipment Manual Q&A<br/>• Zero-Hallucination Lab Assistant"]
     end
 
     subgraph DATA_TIER["5. Persistence & Database Tier"]
@@ -52,6 +53,7 @@ flowchart TD
 
     BIZ_LOGIC --> TIDB
     BIZ_LOGIC --> AI_RAG
+    AI_RAG --> GEMINI
     HW_SCAN -.-> VISION_SVC
     AI_RAG --> CHROMA
     AI_RAG --> TIDB
