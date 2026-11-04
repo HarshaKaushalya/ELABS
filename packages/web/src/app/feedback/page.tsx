@@ -137,6 +137,18 @@ function FeedbackContent() {
     fetchTickets();
   }, []);
 
+  // Prevent background scroll when modal is open
+  useEffect(() => {
+    if (showSubmitModal || selectedTicket) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showSubmitModal, selectedTicket]);
+
   // Pre-fill when redirected from Equipment Details modal
   useEffect(() => {
     if (reportItem || reportItemName) {
@@ -500,8 +512,37 @@ function FeedbackContent() {
 
       {/* ── SUBMIT NEW TICKET MODAL ── */}
       {showSubmitModal && (
-        <div className="modal-backdrop" onClick={() => setShowSubmitModal(false)}>
-          <div className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onClick={() => setShowSubmitModal(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16,
+            overflowY: "auto",
+          }}
+        >
+          <div
+            className="modal"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              borderRadius: 14,
+              padding: 24,
+              width: "100%",
+              maxWidth: 640,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <MessageSquarePlus style={{ color: "#38bdf8" }} />
@@ -660,8 +701,37 @@ function FeedbackContent() {
 
       {/* ── VIEW / RESOLVE TICKET MODAL ── */}
       {selectedTicket && (
-        <div className="modal-backdrop" onClick={() => setSelectedTicket(null)}>
-          <div className="modal" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onClick={() => setSelectedTicket(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16,
+            overflowY: "auto",
+          }}
+        >
+          <div
+            className="modal"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              borderRadius: 14,
+              padding: 24,
+              width: "100%",
+              maxWidth: 640,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
