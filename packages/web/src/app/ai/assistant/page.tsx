@@ -501,12 +501,6 @@ ${p.safetyRules?.map((sr: string) => `  - ${sr}`).join("\n")}
                 <h2 className="text-xl md:text-2xl font-extrabold text-[var(--text-main)] tracking-tight">
                   ELABS Engineering Agent & Practical Guide
                 </h2>
-                <p className="text-xs md:text-sm text-[var(--text-muted)] max-w-xl mx-auto mt-2 leading-relaxed">
-                  Upload a <span className="text-[var(--cyan)] font-semibold">Lab Manual, Datasheet, or Circuit Diagram</span>,
-                  and ask questions based on it. The agent combines your document with the{" "}
-                  <strong className="text-[var(--text-main)]">Department's live inventory database</strong> to generate
-                  practical step-by-step setup guides, wiring schematics, and bench troubleshooting.
-                </p>
 
                 {/* Quick Action Badges */}
                 <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
