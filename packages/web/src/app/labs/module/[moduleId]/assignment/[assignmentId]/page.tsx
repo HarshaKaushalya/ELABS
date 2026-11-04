@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBase, getAccessToken } from "@/lib/api";
 import Link from "next/link";
 import {
   FileText, Calendar, Clock, Award, Upload, Download,
@@ -55,6 +55,16 @@ export default function AssignmentDetailPage() {
   const [gradeScore, setGradeScore] = useState<number>(0);
   const [gradeFeedback, setGradeFeedback] = useState("");
   const [gradingSubmitting, setGradingSubmitting] = useState(false);
+
+  const getSubmissionDownloadUrl = (subId: number, fallbackUrl?: string) => {
+    const token = getAccessToken();
+    const apiBase = getApiBase();
+    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : "";
+    if (subId) {
+      return `${apiBase}/academic/submissions/${subId}/file${tokenQuery}`;
+    }
+    return fallbackUrl ? `${apiBase}${fallbackUrl}` : "#";
+  };
 
   useEffect(() => {
     try {
@@ -265,7 +275,6 @@ export default function AssignmentDetailPage() {
                     </thead>
                     <tbody>
                       {submissions.map((sub) => {
-                        const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:4000";
                         return (
                           <tr key={sub.id} style={{ borderBottom: "1px solid var(--border-color)" }}>
                             <td style={{ padding: "12px 18px" }}>
@@ -275,7 +284,13 @@ export default function AssignmentDetailPage() {
                             <td style={{ padding: "12px 18px", color: "var(--text-muted)", fontWeight: 600 }}>{sub.groupCode || "—"}</td>
                             <td style={{ padding: "12px 18px", color: "var(--text-muted)" }}>{new Date(sub.submittedAt).toLocaleString("en-GB")}</td>
                             <td style={{ padding: "12px 18px" }}>
-                              <a href={`${apiBase}${sub.fileUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: "#3d83f6", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <a
+                                href={getSubmissionDownloadUrl(sub.id, sub.fileUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={sub.fileName}
+                                style={{ color: "#3d83f6", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                              >
                                 <Download size={12} /> {sub.fileName.substring(0, 15)}{sub.fileName.length > 15 ? "..." : ""}
                               </a>
                             </td>
@@ -329,8 +344,14 @@ export default function AssignmentDetailPage() {
                   {studentSubmission && (
                     <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", borderBottom: "1px solid var(--border-color)", paddingBottom: 8 }}>
                       <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Submitted file</span>
-                      <a href={`${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:4000"}${studentSubmission.fileUrl}`} target="_blank" rel="noopener noreferrer" style={{ color: "#3d83f6", textDecoration: "none", fontWeight: 600 }}>
-                        {studentSubmission.fileName}
+                      <a
+                        href={getSubmissionDownloadUrl(studentSubmission.id, studentSubmission.fileUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={studentSubmission.fileName}
+                        style={{ color: "#3d83f6", textDecoration: "none", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}
+                      >
+                        <Download size={14} /> {studentSubmission.fileName}
                       </a>
                     </div>
                   )}

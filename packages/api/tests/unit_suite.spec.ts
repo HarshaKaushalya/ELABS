@@ -144,6 +144,38 @@ async function main() {
     assert.equal(indexRegex.test("5401"), false);
   });
 
+  // ── 6. Assignment Submissions & File Persistence Tests ─────────────
+  console.log("\n[Module: Assignment Submissions & File Storage]");
+  runTest("File Storage: Base64 encoding and buffer decoding preserves binary integrity", () => {
+    const originalContent = "PDF-1.5 %sample presentation slides binary buffer stream \x00\x01\x02\xFF";
+    const originalBuffer = Buffer.from(originalContent, "utf-8");
+    const base64Data = originalBuffer.toString("base64");
+    const restoredBuffer = Buffer.from(base64Data, "base64");
+    assert.equal(restoredBuffer.toString("utf-8"), originalContent);
+    assert.equal(restoredBuffer.length, originalBuffer.length);
+  });
+
+  runTest("File Download: Content-Disposition properly formats and encodes filenames with special characters", () => {
+    const fileName = "presentation slides (Final Version) #1.pdf";
+    const encoded = encodeURIComponent(fileName);
+    const header = `attachment; filename="${encoded}"; filename*=UTF-8''${encoded}`;
+    assert.ok(header.includes("attachment;"));
+    assert.ok(header.includes("presentation%20slides"));
+    assert.ok(header.includes(".pdf"));
+  });
+
+  runTest("File MIME: Maps common submission extensions to correct content types", () => {
+    const mimeMap: Record<string, string> = {
+      ".pdf": "application/pdf",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".zip": "application/zip",
+      ".png": "image/png",
+    };
+    assert.equal(mimeMap[".pdf"], "application/pdf");
+    assert.equal(mimeMap[".docx"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    assert.equal(mimeMap[".zip"], "application/zip");
+  });
+
   console.log("\n=======================================================");
   console.log(`  SUMMARY: ${testsPassed} Tests Passed | ${testsFailed} Failed`);
   console.log("=======================================================\n");

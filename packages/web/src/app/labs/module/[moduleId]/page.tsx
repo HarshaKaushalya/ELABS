@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBase } from "@/lib/api";
 import Link from "next/link";
 import { 
   CheckCircle2, XCircle, Wrench, FlaskConical, Calendar, ClipboardList, 
@@ -817,7 +817,7 @@ function PracticalDetailsModal({
                       const Icon = cfg.icon;
                       const downloadHref = doc.fileUrl.startsWith("http")
                         ? doc.fileUrl
-                        : `${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:4000"}${doc.fileUrl}`;
+                        : `${getApiBase()}${doc.fileUrl}`;
 
                       return (
                         <div

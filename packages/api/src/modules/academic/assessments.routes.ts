@@ -54,6 +54,23 @@ router.post("/quiz-images", requireAuth, requirePermission("admin:manage"), uplo
   res.json({ ok: true, imageUrl, filename: req.file.originalname });
 });
 
+// ─── Helper: ensure submission persistent storage columns exist in DB ─────────
+let submissionColumnsEnsured = false;
+async function ensureSubmissionColumns() {
+  if (submissionColumnsEnsured) return;
+  try {
+    await pool.query(`ALTER TABLE assignment_submissions ADD COLUMN file_data LONGTEXT NULL`);
+  } catch (_e) {}
+  try {
+    await pool.query(`ALTER TABLE assignment_submissions ADD COLUMN file_type VARCHAR(150) NULL`);
+  } catch (_e) {}
+  try {
+    await pool.query(`ALTER TABLE assignment_submissions ADD COLUMN file_size INT NULL`);
+  } catch (_e) {}
+  submissionColumnsEnsured = true;
+}
+ensureSubmissionColumns().catch(() => {});
+
 // ─── Helper: check if user is admin/lecturer ──────────────────────────────────
 async function isInstructor(userId: number): Promise<boolean> {
   const [rows] = await pool.query(
@@ -197,24 +214,150 @@ router.post("/assignments/:id/submit", requireAuth, upload.single("file"), async
   const assignmentId = Number(req.params.id);
   const studentId = req.user!.id;
   try {
+    await ensureSubmissionColumns();
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+    // Read file into base64 buffer for persistent cross-container database storage
+    let fileData: string | null = null;
+    if (req.file.buffer) {
+      fileData = req.file.buffer.toString("base64");
+    } else if (req.file.path && fs.existsSync(req.file.path)) {
+      fileData = fs.readFileSync(req.file.path).toString("base64");
+    }
+
     const fileUrl = `/uploads/submissions/${req.file.filename}`;
-    await pool.query(`
-      INSERT INTO assignment_submissions (assignment_id, student_id, file_url, file_name, submitted_at)
-      VALUES (:assignmentId, :studentId, :fileUrl, :fileName, NOW())
+    const fileType = req.file.mimetype || null;
+    const fileSize = req.file.size || null;
+
+    const [result] = await pool.query(`
+      INSERT INTO assignment_submissions (assignment_id, student_id, file_url, file_name, file_data, file_type, file_size, submitted_at)
+      VALUES (:assignmentId, :studentId, :fileUrl, :fileName, :fileData, :fileType, :fileSize, NOW())
       ON DUPLICATE KEY UPDATE
         file_url     = VALUES(file_url),
         file_name    = VALUES(file_name),
+        file_data    = VALUES(file_data),
+        file_type    = VALUES(file_type),
+        file_size    = VALUES(file_size),
         submitted_at = NOW(),
         score        = NULL,
         graded_by    = NULL,
         graded_at    = NULL,
         feedback     = NULL
-    `, { assignmentId, studentId, fileUrl, fileName: req.file.originalname });
-    res.json({ ok: true, fileUrl, fileName: req.file.originalname });
+    `, {
+      assignmentId,
+      studentId,
+      fileUrl,
+      fileName: req.file.originalname,
+      fileData,
+      fileType,
+      fileSize,
+    }) as any;
+
+    const submissionId = (result as any)?.insertId || null;
+    res.json({ ok: true, fileUrl, fileName: req.file.originalname, submissionId });
   } catch (err) {
-    console.error(err);
+    console.error("Submission failed:", err);
     res.status(500).json({ error: "Submission failed" });
+  }
+});
+
+/** GET /academic/submissions/:id/file — download submission file */
+router.get("/submissions/:id/file", requireAuth, async (req: AuthedRequest, res) => {
+  const submissionId = Number(req.params.id);
+  const userId = req.user!.id;
+  if (!Number.isFinite(submissionId) || submissionId <= 0) {
+    return res.status(400).json({ error: "Invalid submission id" });
+  }
+
+  try {
+    await ensureSubmissionColumns();
+
+    const [rows] = await pool.query(
+      `SELECT s.id, s.assignment_id, s.student_id, s.file_url, s.file_name, s.file_data, s.file_type
+       FROM assignment_submissions s
+       WHERE s.id = :id
+       LIMIT 1`,
+      { id: submissionId }
+    ) as any;
+
+    const sub = (rows as any[])[0];
+    if (!sub) {
+      return res.status(404).json({ error: "Submission not found" });
+    }
+
+    // Permission check: caller must be an instructor/admin or the submitting student
+    const isUserInstructor = await isInstructor(userId);
+    if (!isUserInstructor && sub.student_id !== userId) {
+      return res.status(403).json({ error: "Forbidden: You are not authorized to download this file" });
+    }
+
+    const fileName = sub.file_name || "submission-file";
+    let fileBuffer: Buffer | null = null;
+    let contentType = sub.file_type || "application/octet-stream";
+
+    // 1. First priority: load from persistent database storage
+    if (sub.file_data && typeof sub.file_data === "string" && sub.file_data.trim().length > 0) {
+      fileBuffer = Buffer.from(sub.file_data, "base64");
+    }
+
+    // 2. Second priority: fallback to local / tmp disk
+    if (!fileBuffer && sub.file_url) {
+      const diskFilename = path.basename(sub.file_url);
+      const possiblePaths = [
+        path.join(uploadDir, diskFilename),
+        path.join(process.cwd(), "uploads", "submissions", diskFilename),
+        path.join("/tmp", "uploads", "submissions", diskFilename),
+      ];
+
+      for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+          try {
+            fileBuffer = fs.readFileSync(p);
+            break;
+          } catch (readErr) {
+            console.warn("Could not read submission file from path:", p, readErr);
+          }
+        }
+      }
+    }
+
+    if (!fileBuffer) {
+      return res.status(404).json({
+        error: "File not found",
+        message: "The requested submission file is not available on this server.",
+      });
+    }
+
+    const ext = path.extname(fileName).toLowerCase();
+    const mimeMap: Record<string, string> = {
+      ".pdf": "application/pdf",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".doc": "application/msword",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".zip": "application/zip",
+      ".txt": "text/plain",
+      ".ppt": "application/vnd.ms-powerpoint",
+      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    };
+    if (mimeMap[ext]) {
+      contentType = mimeMap[ext];
+    }
+
+    const encodedFileName = encodeURIComponent(fileName);
+    res.setHeader("Content-Type", contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`
+    );
+    res.setHeader("Content-Length", fileBuffer.length);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+
+    return res.end(fileBuffer);
+  } catch (err) {
+    console.error("Error downloading submission file:", err);
+    return res.status(500).json({ error: "Failed to download submission file" });
   }
 });
 

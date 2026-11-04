@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBase } from "@/lib/api";
 import {
   X,
   ClipboardList,
@@ -743,7 +743,7 @@ export function PracticalDetailsModal({
 
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                             <a
-                              href={doc.fileUrl.startsWith("http") ? doc.fileUrl : `http://localhost:4000${doc.fileUrl}`}
+                              href={doc.fileUrl.startsWith("http") ? doc.fileUrl : `${getApiBase()}${doc.fileUrl}`}
                               target="_blank"
                               rel="noreferrer"
                               download={doc.fileName}
