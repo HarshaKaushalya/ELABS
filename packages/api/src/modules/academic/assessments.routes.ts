@@ -75,7 +75,7 @@ ensureSubmissionColumns().catch(() => {});
 async function isInstructor(userId: number): Promise<boolean> {
   const [rows] = await pool.query(
     `SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
-     WHERE ur.user_id = :userId AND r.name IN ('SYSTEM_ADMIN','LECTURER','LAB_INSTRUCTOR')
+     WHERE ur.user_id = :userId AND r.name IN ('SYSTEM_ADMIN','LECTURER','LAB_INSTRUCTOR','TECHNICIAN','MODULE_COORDINATOR')
      LIMIT 1`,
     { userId }
   ) as any;
@@ -449,7 +449,8 @@ router.get("/assignments/:id/export", requireAuth, async (req: AuthedRequest, re
   if (!instructor) return res.status(403).json({ error: "Forbidden" });
   const assignmentId = Number(req.params.id);
   try {
-    const { default: XLSX } = await import("xlsx");
+    const xlsxModule: any = await import("xlsx");
+    const XLSX = xlsxModule.default || xlsxModule;
     const [asgn] = await pool.query(
       "SELECT title FROM assignments WHERE id = :id",
       { id: assignmentId }
@@ -469,15 +470,29 @@ router.get("/assignments/:id/export", requireAuth, async (req: AuthedRequest, re
       ORDER BY sp.group_code, u.full_name
     `, { assignmentId }) as any;
 
-    const ws = XLSX.utils.json_to_sheet(subs);
+    const exportRows = (subs && subs.length > 0) ? subs : [
+      {
+        "Name": "No submissions recorded yet",
+        "Email": "",
+        "Reg. No.": "",
+        "Group": "",
+        "Submitted At": "",
+        "Score": "",
+        "Graded At": "",
+        "Feedback": "",
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Submissions");
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const safeTitle = (assignment.title || "assignment").replace(/[^a-zA-Z0-9_-]/g, "_");
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${assignment.title.replace(/[^a-z0-9]/gi, "_")}_submissions.xlsx"`);
-    res.send(buf);
+    res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}_submissions.xlsx"; filename*=UTF-8''${encodeURIComponent(safeTitle)}_submissions.xlsx`);
+    res.send(Buffer.from(buf));
   } catch (err) {
-    console.error(err);
+    console.error("Assignment export error:", err);
     res.status(500).json({ error: "Export failed" });
   }
 });
@@ -843,7 +858,8 @@ router.get("/quizzes/:id/export", requireAuth, async (req: AuthedRequest, res) =
   if (!instructor) return res.status(403).json({ error: "Forbidden" });
   const quizId = Number(req.params.id);
   try {
-    const { default: XLSX } = await import("xlsx");
+    const xlsxModule: any = await import("xlsx");
+    const XLSX = xlsxModule.default || xlsxModule;
     const [quizRows] = await pool.query("SELECT title FROM quizzes WHERE id = :quizId", { quizId }) as any;
     const quiz = quizRows[0];
     if (!quiz) return res.status(404).json({ error: "Not found" });
@@ -862,15 +878,30 @@ router.get("/quizzes/:id/export", requireAuth, async (req: AuthedRequest, res) =
       ORDER BY sp.group_code, u.full_name
     `, { quizId }) as any;
 
-    const ws = XLSX.utils.json_to_sheet(attempts);
+    const exportRows = (attempts && attempts.length > 0) ? attempts : [
+      {
+        "Name": "No attempts recorded yet",
+        "Email": "",
+        "Reg. No.": "",
+        "Group": "",
+        "Score": "",
+        "Max Score": "",
+        "Percentage %": "",
+        "Submitted At": "",
+        "Attempt #": "",
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Results");
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const safeTitle = (quiz.title || "quiz").replace(/[^a-zA-Z0-9_-]/g, "_");
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${quiz.title.replace(/[^a-z0-9]/gi, "_")}_results.xlsx"`);
-    res.send(buf);
+    res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}_results.xlsx"; filename*=UTF-8''${encodeURIComponent(safeTitle)}_results.xlsx`);
+    res.send(Buffer.from(buf));
   } catch (err) {
-    console.error(err);
+    console.error("Quiz export error:", err);
     res.status(500).json({ error: "Export failed" });
   }
 });
@@ -898,7 +929,8 @@ router.get("/modules/:id/export-grades", requireAuth, async (req: AuthedRequest,
   const moduleId = Number(req.params.id);
   
   try {
-    const { default: XLSX } = await import("xlsx");
+    const xlsxModule: any = await import("xlsx");
+    const XLSX = xlsxModule.default || xlsxModule;
     
     // Get Module details
     const [modRows] = await pool.query(
@@ -999,12 +1031,13 @@ router.get("/modules/:id/export-grades", requireAuth, async (req: AuthedRequest,
     XLSX.utils.book_append_sheet(wb, ws, "Grades");
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
+    const safeCode = (mod.code || "module").replace(/[^a-zA-Z0-9_-]/g, "_");
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${mod.code}_Grades_Report.xlsx"`);
-    res.send(buf);
+    res.setHeader("Content-Disposition", `attachment; filename="${safeCode}_Grades_Report.xlsx"; filename*=UTF-8''${encodeURIComponent(safeCode)}_Grades_Report.xlsx`);
+    res.send(Buffer.from(buf));
 
   } catch (err) {
-    console.error(err);
+    console.error("Module grades export error:", err);
     res.status(500).json({ error: "Grades report export failed" });
   }
 });

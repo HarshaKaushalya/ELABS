@@ -2040,10 +2040,39 @@ export default function ModulePage() {
     load();
   }, [moduleId]);
 
-  const exportModuleGrades = () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:4000";
-    const token = readStorage("elabs_access_token") || "";
-    window.open(`${apiBase}/academic/modules/${moduleId}/export-grades?token=${encodeURIComponent(token)}`, "_blank");
+  const [exportingGrades, setExportingGrades] = useState(false);
+
+  const exportModuleGrades = async () => {
+    if (exportingGrades) return;
+    try {
+      setExportingGrades(true);
+      const res = await apiFetch(`/academic/modules/${moduleId}/export-grades`);
+      if (!res.ok) {
+        let msg = "Failed to export module grades report";
+        try {
+          const errData = await res.json();
+          if (errData?.error) msg = errData.error;
+        } catch {}
+        alert(msg);
+        return;
+      }
+
+      const blob = await res.blob();
+      const code = (mod?.code || "module").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${code}_Grades_Report.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export error:", err);
+      alert("Failed to export module grades sheet. Please try again.");
+    } finally {
+      setExportingGrades(false);
+    }
   };
 
   const tabStyle = (t: typeof tab, color: string) => ({
@@ -2163,10 +2192,25 @@ export default function ModulePage() {
                 <button
                   type="button"
                   onClick={exportModuleGrades}
-                  style={{ padding: "9px 18px", background: "#10b981", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                  disabled={exportingGrades}
+                  style={{
+                    padding: "9px 18px",
+                    background: exportingGrades ? "#059669" : "#10b981",
+                    border: "none",
+                    borderRadius: 10,
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    cursor: exportingGrades ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    opacity: exportingGrades ? 0.75 : 1,
+                    transition: "all 0.15s ease",
+                  }}
                 >
                   <Download size={14} />
-                  <span>Export Grades</span>
+                  <span>{exportingGrades ? "Exporting..." : "Export Grades"}</span>
                 </button>
                 <button
                   type="button"

@@ -55,6 +55,7 @@ export default function AssignmentDetailPage() {
   const [gradeScore, setGradeScore] = useState<number>(0);
   const [gradeFeedback, setGradeFeedback] = useState("");
   const [gradingSubmitting, setGradingSubmitting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const getSubmissionDownloadUrl = (subId: number, fallbackUrl?: string) => {
     const token = getAccessToken();
@@ -69,7 +70,13 @@ export default function AssignmentDetailPage() {
   useEffect(() => {
     try {
       const u = JSON.parse(localStorage.getItem("elabs_user") ?? sessionStorage.getItem("elabs_user") ?? "{}");
-      setIsAdmin(u?.roles?.includes("SYSTEM_ADMIN") || u?.roles?.includes("LECTURER") || u?.roles?.includes("LAB_INSTRUCTOR"));
+      setIsAdmin(
+        u?.roles?.includes("SYSTEM_ADMIN") ||
+        u?.roles?.includes("LECTURER") ||
+        u?.roles?.includes("LAB_INSTRUCTOR") ||
+        u?.roles?.includes("TECHNICIAN") ||
+        u?.roles?.includes("MODULE_COORDINATOR")
+      );
     } catch {}
   }, []);
 
@@ -196,10 +203,37 @@ export default function AssignmentDetailPage() {
     setGradeFeedback(sub.feedback ?? "");
   };
 
-  const exportExcel = () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:4000";
-    const token = typeof window !== "undefined" ? localStorage.getItem("elabs_access_token") || "" : "";
-    window.open(`${apiBase}/academic/assignments/${assignmentId}/export?token=${encodeURIComponent(token)}`, "_blank");
+  const exportExcel = async () => {
+    if (exporting) return;
+    try {
+      setExporting(true);
+      const res = await apiFetch(`/academic/assignments/${assignmentId}/export`);
+      if (!res.ok) {
+        let msg = "Failed to export Excel report";
+        try {
+          const errData = await res.json();
+          if (errData?.error) msg = errData.error;
+        } catch {}
+        alert(msg);
+        return;
+      }
+
+      const blob = await res.blob();
+      const safeTitle = (assignment?.title || "assignment").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeTitle}_submissions.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export error:", err);
+      alert("Failed to export Excel sheet. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loading) {
@@ -251,8 +285,27 @@ export default function AssignmentDetailPage() {
             <div className="panel" style={{ padding: 0, background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, overflow: "hidden" }}>
               <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ color: "var(--text-main)", fontWeight: 700, fontSize: "0.9rem" }}>Student Submissions ({submissions.length})</span>
-                <button onClick={exportExcel} style={{ padding: "6px 14px", background: "#10b981", border: "none", borderRadius: 8, color: "#fff", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                  <Download size={12} /> Export to Excel
+                <button
+                  type="button"
+                  onClick={exportExcel}
+                  disabled={exporting}
+                  style={{
+                    padding: "6px 14px",
+                    background: exporting ? "#059669" : "#10b981",
+                    border: "none",
+                    borderRadius: 8,
+                    color: "#fff",
+                    fontSize: "0.78rem",
+                    cursor: exporting ? "not-allowed" : "pointer",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    opacity: exporting ? 0.75 : 1,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Download size={12} /> {exporting ? "Exporting..." : "Export to Excel"}
                 </button>
               </div>
 
