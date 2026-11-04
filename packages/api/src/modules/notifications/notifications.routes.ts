@@ -53,8 +53,8 @@ router.patch("/:id/read", requireAuth, async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
-/** PATCH /notifications/read-all */
-router.patch("/read-all", requireAuth, async (req: AuthedRequest, res) => {
+/** PATCH /notifications/read-all or /notifications/mark-all-read */
+router.patch(["/read-all", "/mark-all-read"], requireAuth, async (req: AuthedRequest, res) => {
   const uid = req.user!.id;
   await pool.query(
     `UPDATE notifications SET is_read = 1, read_at = NOW()

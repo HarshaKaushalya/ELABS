@@ -906,6 +906,22 @@ export default function MessagesPage() {
     }
   }, [tab, inbox, sent, activeMsg]);
 
+  // When an unread inbox message is actively viewed in activeMsg, mark it as read immediately
+  useEffect(() => {
+    if (tab === "inbox" && activeMsg && !activeMsg.isRead) {
+      if (activeMsg.id) {
+        apiFetch(`/messages/${activeMsg.id}/read`, { method: "PATCH" }).catch(() => {});
+      }
+      setInbox((prev) => prev.map((m) => (m.id === activeMsg.id ? { ...m, isRead: true } : m)));
+      setActiveMsg((prev) => (prev ? { ...prev, isRead: true } : prev));
+      setUnread((prev) => {
+        const next = Math.max(0, prev - 1);
+        window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: next } }));
+        return next;
+      });
+    }
+  }, [tab, activeMsg?.id, activeMsg?.isRead]);
+
   // Real-time socket listener
   useEffect(() => {
     const off = on("new_message", (msg: Message) => {
@@ -937,10 +953,11 @@ export default function MessagesPage() {
   const handleSelectMessage = (msg: Message) => {
     setActiveMsg(msg);
     if (tab === "inbox" && !msg.isRead) {
-      if (msg.id < 9000) {
+      if (msg.id) {
         apiFetch(`/messages/${msg.id}/read`, { method: "PATCH" }).catch(() => {});
       }
       setInbox((prev) => prev.map((m) => (m.id === msg.id ? { ...m, isRead: true } : m)));
+      setActiveMsg({ ...msg, isRead: true });
       setUnread((prev) => {
         const next = Math.max(0, prev - 1);
         window.dispatchEvent(new CustomEvent("elabs:messages-updated", { detail: { unreadCount: next } }));

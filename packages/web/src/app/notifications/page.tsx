@@ -100,10 +100,19 @@ export default function NotificationsPage() {
       if (r.ok) {
         const data = await r.json();
         const list = data.notifications ?? [];
-        setNotifications(list);
-        const count = typeof data.unreadCount === "number" ? data.unreadCount : list.filter((n: any) => !n.isRead).length;
-        setUnreadCount(count);
-        window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: count } }));
+        const hasUnread = list.some((n: any) => !n.isRead) || (typeof data.unreadCount === "number" && data.unreadCount > 0);
+
+        if (hasUnread) {
+          // Immediately mark notifications as read on backend since the user is viewing them
+          apiFetch("/notifications/read-all", { method: "PATCH" }).catch(() => {});
+          setNotifications(list.map((n: any) => ({ ...n, isRead: true })));
+          setUnreadCount(0);
+          window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: 0 } }));
+        } else {
+          setNotifications(list);
+          setUnreadCount(0);
+          window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: 0 } }));
+        }
       }
     } catch (err) {
       console.warn("Failed to load notifications:", err);

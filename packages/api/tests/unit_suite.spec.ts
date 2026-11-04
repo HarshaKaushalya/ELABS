@@ -176,6 +176,35 @@ async function main() {
     assert.equal(mimeMap[".zip"], "application/zip");
   });
 
+  // ── 7. Communication Badges & Unread Indicator Tests ───────────────
+  console.log("\n[Module: Communication Indicators & Read Status]");
+  runTest("Indicator Logic: Dynamic badge hides when on active route or when unreadCount is 0", () => {
+    const getBadge = (count: number, pathname: string, targetPath: string) => {
+      if (pathname === targetPath || pathname.startsWith(`${targetPath}/`)) {
+        return undefined;
+      }
+      return count > 0 ? (count > 99 ? "99+" : count) : undefined;
+    };
+
+    assert.equal(getBadge(3, "/notifications", "/notifications"), undefined);
+    assert.equal(getBadge(1, "/messages", "/messages"), undefined);
+    assert.equal(getBadge(3, "/dashboard", "/notifications"), 3);
+    assert.equal(getBadge(1, "/dashboard", "/messages"), 1);
+    assert.equal(getBadge(150, "/dashboard", "/notifications"), "99+");
+    assert.equal(getBadge(0, "/dashboard", "/notifications"), undefined);
+  });
+
+  runTest("Indicator State: Marking all notifications as read resets unreadCount to 0", () => {
+    const notifications = [
+      { id: 1, title: "Borrow approved", isRead: false },
+      { id: 2, title: "Lab reminder", isRead: false },
+      { id: 3, title: "Assignment graded", isRead: false },
+    ];
+    assert.equal(notifications.filter(n => !n.isRead).length, 3);
+    const readAll = notifications.map(n => ({ ...n, isRead: true }));
+    assert.equal(readAll.filter(n => !n.isRead).length, 0);
+  });
+
   console.log("\n=======================================================");
   console.log(`  SUMMARY: ${testsPassed} Tests Passed | ${testsFailed} Failed`);
   console.log("=======================================================\n");

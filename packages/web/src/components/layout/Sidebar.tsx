@@ -136,16 +136,24 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       ]);
       if (notifRes.ok) {
         const notifData = await notifRes.json();
-        setUnreadNotifications(Number(notifData.unreadCount ?? 0));
+        if (pathname === "/notifications" || pathname.startsWith("/notifications/")) {
+          setUnreadNotifications(0);
+        } else {
+          setUnreadNotifications(Number(notifData.unreadCount ?? 0));
+        }
       }
       if (msgRes.ok) {
         const msgData = await msgRes.json();
-        setUnreadMessages(Number(msgData.unreadCount ?? 0));
+        if (pathname === "/messages" || pathname.startsWith("/messages/")) {
+          setUnreadMessages(0);
+        } else {
+          setUnreadMessages(Number(msgData.unreadCount ?? 0));
+        }
       }
     } catch (err) {
       console.warn("Failed to fetch unread counts in sidebar:", err);
     }
-  }, [me]);
+  }, [me, pathname]);
 
   // Periodic polling every 15s
   useEffect(() => {
@@ -156,6 +164,12 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
   // Refetch when route changes (e.g. visiting /messages or /notifications)
   useEffect(() => {
+    if (pathname === "/notifications" || pathname.startsWith("/notifications/")) {
+      setUnreadNotifications(0);
+    }
+    if (pathname === "/messages" || pathname.startsWith("/messages/")) {
+      setUnreadMessages(0);
+    }
     fetchCounts();
   }, [pathname, fetchCounts]);
 
@@ -209,11 +223,17 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
   const getDynamicBadge = (href: string): number | string | undefined => {
     if (href === "/notifications") {
+      if (pathname === "/notifications" || pathname.startsWith("/notifications/")) {
+        return undefined;
+      }
       return unreadNotifications > 0
         ? (unreadNotifications > 99 ? "99+" : unreadNotifications)
         : undefined;
     }
     if (href === "/messages") {
+      if (pathname === "/messages" || pathname.startsWith("/messages/")) {
+        return undefined;
+      }
       return unreadMessages > 0
         ? (unreadMessages > 99 ? "99+" : unreadMessages)
         : undefined;

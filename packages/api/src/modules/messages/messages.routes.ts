@@ -141,8 +141,8 @@ router.patch("/:id/read", requireAuth, async (req: AuthedRequest, res, next) => 
   } catch (err) { next(err); }
 });
 
-/** PATCH /messages/mark-all-read — mark all inbox messages as read */
-router.patch("/mark-all-read", requireAuth, async (req: AuthedRequest, res, next) => {
+/** PATCH /messages/mark-all-read or /messages/read-all — mark all inbox messages as read */
+router.patch(["/mark-all-read", "/read-all"], requireAuth, async (req: AuthedRequest, res, next) => {
   try {
     const uid = req.user!.id;
     await pool.query(

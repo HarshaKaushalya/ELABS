@@ -7,7 +7,7 @@ import { useSocket } from "@/hooks/useSocket";
 import { getToken } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Bell,
   CheckCircle2,
@@ -83,6 +83,7 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
   const { me, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
 
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -102,16 +103,21 @@ export function Topbar({ title, subtitle, onToggleSidebar, isSidebarCollapsed }:
         const data = await res.json();
         const list = data.notifications ?? [];
         setNotifications(list);
-        const count = typeof data.unreadCount === "number" ? data.unreadCount : list.filter((n: any) => !n.isRead).length;
-        setUnreadCount(count);
-        window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: count } }));
+        if (pathname === "/notifications" || pathname.startsWith("/notifications/")) {
+          setUnreadCount(0);
+          window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: 0 } }));
+        } else {
+          const count = typeof data.unreadCount === "number" ? data.unreadCount : list.filter((n: any) => !n.isRead).length;
+          setUnreadCount(count);
+          window.dispatchEvent(new CustomEvent("elabs:notifications-updated", { detail: { unreadCount: count } }));
+        }
       }
     } catch (err) {
       console.warn("Failed to fetch notifications:", err);
     } finally {
       setLoadingNotifs(false);
     }
-  }, [me]);
+  }, [me, pathname]);
 
   useEffect(() => {
     if (me) {
